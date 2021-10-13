@@ -1,0 +1,6 @@
+websocket-client==1.2.1
+bson==0.5.10
+backoff==1.11.1
+pathvalidate==2.5.0
+raven==6.10.0
+requests==2.26.0
