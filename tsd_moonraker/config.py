@@ -32,7 +32,7 @@ class MoonrakerConfig:
 
 @dataclasses.dataclass
 class TSDConfig:
-    endpoint_prefix: str = 'https://app.thespaghettidetective.com'
+    url: str = 'https://app.thespaghettidetective.com'
     auth_token: Optional[str] = None
 
     sentry_opt: str = 'out'
@@ -41,10 +41,10 @@ class TSDConfig:
     # video_streaming_compatible_mode: str = 'auto'
 
     def canonical_endpoint_prefix(self):
-        if not self.endpoint_prefix:
+        if not self.url:
             return None
 
-        endpoint_prefix = self.endpoint_prefix.strip()
+        endpoint_prefix = self.url.strip()
         if endpoint_prefix.endswith('/'):
             endpoint_prefix = endpoint_prefix[:-1]
 
@@ -102,8 +102,8 @@ class Config:
         )
 
         tsd_config = TSDConfig(
-            endpoint_prefix=config.get(
-                'thespaghettidetective', 'endpoint_prefix',
+            url=config.get(
+                'thespaghettidetective', 'url',
                 fallback='https://app.thespaghettidetective.com'),
             auth_token=config.get(
                 'thespaghettidetective', 'auth_token',
