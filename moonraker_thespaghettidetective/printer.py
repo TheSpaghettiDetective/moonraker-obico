@@ -1,6 +1,7 @@
 from typing import Optional, Dict
 import dataclasses
 import time
+import pathlib
 
 from .logger import getLogger
 
@@ -8,70 +9,107 @@ logger = getLogger('klippystate')
 
 
 @dataclasses.dataclass
-class KlippyState:
+class PrintEvent:
+    name: str
+    job_state: Optional[Dict]
+
+
+@dataclasses.dataclass
+class PrinterJob:
+    state: Optional[Dict] = None
+    """
+        {
+            "end_time": null,
+            "filament_used": 0.0,
+            "filename": "thespaghettidetective/fast3.gcode",
+            "metadata": {
+                "size": 5231,
+                "modified": 1634198743.233244,
+                "slicer": "Slic3r",
+                "slicer_version": "1.1.4",
+                "layer_height": 0.24,
+                "first_layer_height": 0.3,
+                "first_layer_bed_temp": 90.0,
+                "first_layer_extr_temp": 200.0,
+                "gcode_start_byte": 249,
+                "gcode_end_byte": 446
+            },
+            "print_duration": 0.0,
+            "status": "in_progress",
+            "start_time": 1634198743.6614738,
+            "total_duration": 0.044489051011623815,
+            "job_id": "000002",
+            "exists": true
+        }
+    """
+
+    # def is_printing(self) -> bool:
+    #    return self.state.get('status') == 'in_progress'
+
+
+@dataclasses.dataclass
+class StateChange:
+    prev_state_str: str
+    next_state_str: str
+    print_event_str: Optional[str]
+
+
+@dataclasses.dataclass
+class PrinterState:
     eventtime: float = 0.0
     status: Dict = dataclasses.field(default_factory=dict)
-    current_print_ts: int = -1
-
-    logger = logger
 
     def update(self, data: Dict) -> Optional[str]:
-        cur_status = self.get_printer_state_from(self.status)
-        next_status = self.get_printer_state_from(data['status'])
-        print_event = None
-        current_print_ts = None
+        prev_state_str = self.get_printer_state_str_from(self.status)
+        next_state_str = self.get_printer_state_str_from(data['status'])
+        print_event_str = None
 
-        if next_status == 'Printing':
-            if cur_status == 'Printing':
+        if next_state_str == 'Printing':
+            if prev_state_str == 'Printing':
                 pass
-            elif cur_status == 'Paused':
-                print_event = 'PrintResumed'
+            elif prev_state_str == 'Paused':
+                print_event_str = 'PrintResumed'
             else:
-                print_event = 'PrintStarted'
-                current_print_ts = time.time()
+                print_event_str = 'PrintStarted'
 
-        elif next_status == 'Paused':
-            if cur_status != 'Paused':
-                print_event = 'PrintPaused'
+        elif next_state_str == 'Paused':
+            if prev_state_str != 'Paused':
+                print_event_str = 'PrintPaused'
 
-        elif next_status == 'Error':
-            if cur_status in ('Paused', 'Printing'):
-                print_event = 'PrintFailed'
-                current_print_ts = -1
+        elif next_state_str == 'Error':
+            if prev_state_str in ('Paused', 'Printing'):
+                print_event_str = 'PrintFailed'
 
-        elif next_status == 'Operational':
-            if cur_status in ('Paused', 'Printing'):
+        elif next_state_str == 'Operational':
+            if prev_state_str in ('Paused', 'Printing'):
                 _state = data['status'].get('print_stats', {}).get('state')
                 if _state == 'cancelled':
-                    print_event = 'PrintCancelled'
+                    print_event_str = 'PrintCancelled'
                 elif _state == 'complete':
-                    print_event = 'PrintDone'
+                    print_event_str = 'PrintDone'
                 else:
+                    # FIXME
                     self.logger.error(
-                        'unexpected state "{_state}", please report.')
-                    print_event = 'PrintFailed'
-
-                current_print_ts = -1
-
-        if next_status != cur_status:
-            print_event_disp = f'({print_event})' if print_event else ''
-            self.logger.info(
-                'klipper status changed: '
-                f'{cur_status} -> {next_status} {print_event_disp}'
-            )
+                        f'unexpected state "{_state}", please report.')
 
         self.eventtime = data['eventtime']
         self.status = data['status']
-        if current_print_ts is not None:
-            self.current_print_ts = current_print_ts
-        return print_event
 
-    def is_printing(self):
+        if next_state_str != prev_state_str:
+            return StateChange(
+                prev_state_str=prev_state_str,
+                next_state_str=next_state_str,
+                print_event_str=print_event_str,
+            )
+
+        return None
+
+    def is_printing(self) -> bool:
         return self.status.get(
             'webhooks', {}
         ).get('state') == 'printing'
 
-    def get_printer_state_from(self, data):
+    def get_printer_state_str_from(self, data: Dict) -> str:
         klippy_state = data.get(
             'webhooks', {}
         ).get('state', 'disconnected')
@@ -89,16 +127,27 @@ class KlippyState:
             'cancelled': 'Operational',
         }.get(data.get('print_stats', {}).get('state', 'unknown'), 'Error')
 
-    def to_tsd_state(self):
+    def to_tsd_state(
+            self,
+            job_state: Optional[Dict],
+            print_event: Optional[PrintEvent] = None
+    ) -> Dict:
+        job_state = print_event.job_state if print_event else job_state
+        current_print_ts = (
+            int(job_state.get('start_time', -1)) if job_state else -1
+        )
         data = {
             '_ts': time.time(),
-            'current_print_ts': self.current_print_ts,
-            'octoprint_data': self.to_octoprint_state() if self.status else {},
+            'current_print_ts': current_print_ts,
+            'octoprint_data':
+                self.to_octoprint_state(job_state) if self.status else {},
         }
+        if print_event:
+            data['octoprint_event'] = {'event_type': print_event.name}
         return data
 
-    def to_octoprint_state(self):
-        state = self.get_printer_state_from(self.status)
+    def to_octoprint_state(self, job_state: Dict) -> Dict:
+        state = self.get_printer_state_str_from(self.status)
         print_stats = self.status.get('print_stats') or dict()
         # toolhead = self.status.get('toolhead') or dict()
         display_status = self.status.get('display_status') or dict()
@@ -130,6 +179,8 @@ class KlippyState:
                 'target': data.get('target', 0.),
             }
 
+        filepath = (job_state or {}).get('filename', '')
+        filename = pathlib.Path(filepath).name if filepath else ''
         return {
             'state': {
                 'text': error_text or state,
@@ -147,8 +198,8 @@ class KlippyState:
             'currentZ': None,
             'job': {
                 'file': {
-                    'name': print_stats.get('filename', '').rsplit('/', 1)[1],
-                    'path': print_stats.get('filename', ''),
+                    'name': filename,
+                    'path': filepath,
                     # 'display': "aa.gcode",
                     # 'origin': "local",
                     # 'size': 154006,

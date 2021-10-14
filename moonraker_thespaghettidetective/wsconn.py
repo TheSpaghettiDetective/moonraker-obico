@@ -138,8 +138,9 @@ class WSConn(object):
 
                 if shutdown:
                     self.shutdown = True
-                    self.wsock.close()
-                    continue
+                    if self.wsock:
+                        self.wsock.close()
+                    break
 
                 if as_binary:
                     raw = bson.dumps(data)
