@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import sys
 
 
@@ -7,16 +8,22 @@ def getLogger(name=''):
     return logging.getLogger(_name)
 
 
-def setup_logging(level):
+def setup_logging(filename, level):
     logger = getLogger()
-    logger.setLevel(level)
+    logger.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter(
         "%(asctime)s  %(levelname)8s  %(name)s - %(message)s"
     )
 
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(level)
-    ch.setFormatter(formatter)
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setLevel(level)
+    sh.setFormatter(formatter)
 
-    logger.addHandler(ch)
+    logger.addHandler(sh)
+
+    fh = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=10000000, backupCount=1)
+    fh.setFormatter(formatter)
+
+    logger.addHandler(fh)

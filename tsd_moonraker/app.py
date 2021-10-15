@@ -11,25 +11,26 @@ import requests
 
 
 from .wsconn import WSConn, ConnHandler
+from .version import VERSION
 from .utils import (
     get_tags, FlowTimeout,
     FatalError, Event, DEBUG, resp_to_exception, sanitize_filename)
 from .webcam_capture import capture_jpeg
 from .logger import getLogger, setup_logging
-from .printer import PrinterState, PrinterJob, PrintEvent
+from .printer import PrinterState
 from .config import MoonrakerConfig, TSDConfig, Config
 
 
 logger = getLogger()
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
-REQUEST_KLIPPY_STATE_TICKS = 2
-POST_STATUS_INTERVAL_SECONDS = 50.0
-POST_PIC_INTERVAL_SECONDS = 10.0
+REQUEST_KLIPPY_STATE_TICKS = 10
+POST_STATUS_INTERVAL_SECONDS = 50
+POST_PIC_INTERVAL_SECONDS = 120
 
 if DEBUG:
-    POST_STATUS_INTERVAL_SECONDS = 10.0
-    POST_PIC_INTERVAL_SECONDS = 50.0
+    POST_STATUS_INTERVAL_SECONDS = 10
+    POST_PIC_INTERVAL_SECONDS = 10
 
 
 class MoonrakerConn(ConnHandler):
@@ -54,7 +55,7 @@ class MoonrakerConn(ConnHandler):
 
     def push_event(self, event):
         if self.shutdown:
-            self.logger.debug('is shutdown, dropping event {event}')
+            self.logger.debug(f'is shutdown, dropping event {event}')
             return False
 
         # removing some noise
@@ -74,7 +75,10 @@ class MoonrakerConn(ConnHandler):
 
         if not self.config.api_key:
             self.logger.warning('api key is unset, trying to fetch one')
-            self.config.api_key = self.try_to_fetch_api_key()
+            try:
+                self.config.api_key = self.try_to_fetch_api_key()
+            except Exception as exc:
+                raise FatalError('no api key for moonraker', exc=exc)
 
         self.conn = WSConn(
             name=self.name,
@@ -88,11 +92,11 @@ class MoonrakerConn(ConnHandler):
 
         self.conn.start()
         self.logger.debug('waiting for connection')
-        self.wait_for(self.process_connected)
+        self.wait_for(self._received_connected)
 
         self.logger.debug('requesting websocket_id')
         self.request_websocket_id()
-        self.wait_for(self.process_websocket_id)
+        self.wait_for(self._received_websocket_id)
 
         while True:
             self.logger.info('waiting for klipper ready')
@@ -102,7 +106,7 @@ class MoonrakerConn(ConnHandler):
                     rid = self.request_printer_info()
                     try:
                         self.wait_for(
-                            self.process_printer_ready(rid),
+                            self._received_printer_ready(rid),
                             self.ready_timeout_msecs)
                         break
                     except FlowTimeout:
@@ -110,15 +114,19 @@ class MoonrakerConn(ConnHandler):
 
                 self.logger.debug('requesting printer objects')
                 self.request_printer_objects()
-                self.wait_for(self.process_printer_objects)
+                self.wait_for(self._received_printer_objects)
 
                 self.logger.debug('requesting heaters')
                 self.request_heaters()
-                self.wait_for(self.process_heaters)
+                self.wait_for(self._received_heaters)
 
                 self.logger.debug('subscribing')
                 sub_id = self.request_subscribe()
-                self.wait_for(self.process_subscribe(sub_id))
+                self.wait_for(self._received_subscription(sub_id))
+
+                self.logger.debug('requesting last job')
+                self.request_job_list(order='desc', limit=1)
+                self.wait_for(self._received_last_job)
 
                 self.set_ready()
                 self.logger.info('connection is ready')
@@ -155,11 +163,11 @@ class MoonrakerConn(ConnHandler):
         resp.raise_for_status()
         return resp.json()['result']
 
-    def process_connected(self, event):
+    def _received_connected(self, event):
         if event.name == 'connected':
             return True
 
-    def process_printer_ready(self, id):
+    def _received_printer_ready(self, id):
         def wait_for_id(event):
             if (
                 (
@@ -173,28 +181,36 @@ class MoonrakerConn(ConnHandler):
                 return True
         return wait_for_id
 
-    def process_websocket_id(self, event):
+    def _received_websocket_id(self, event):
         if 'websocket_id' in event.data.get('result', ()):
             self.websocket_id = event.data['result']['websocket_id']
             return True
 
-    def process_printer_objects(self, event):
+    def _received_printer_objects(self, event):
         if 'objects' in event.data.get('result', ()):
             self.printer_objects = event.data['result']['objects']
             self.logger.info(f'printer objects: {self.printer_objects}')
             return True
 
-    def process_heaters(self, event):
+    def _received_heaters(self, event):
         if 'heaters' in event.data.get('result', {}).get('status', {}):
             self.heaters = event.data['result']['status']['heaters']['available_heaters']  # noqa: E501
             self.logger.info(f'heaters: {self.heaters}')
             return True
 
-    def process_subscribe(self, sub_id):
+    def _received_subscription(self, sub_id):
         def wait_for_sub_id(event):
             if 'result' in event.data and event.data.get('id') == sub_id:
                 return True
         return wait_for_sub_id
+
+    def _received_last_job(self, event):
+        if 'jobs' in event.data.get('result', {}):
+            jobs = event.data.get('result', {}).get('jobs', [None])
+            self.on_event(
+                Event(sender=self.name, name='last_job', data=jobs[0])
+            )
+            return True
 
     def _jsonrpc_request(self, method, **params):
         if not self.conn:
@@ -265,7 +281,6 @@ class MoonrakerConn(ConnHandler):
         return self._jsonrpc_request('server.history.list', **kwargs)
 
     def request_job(self, job_id):
-        # kwargs: start before since limit order
         return self._jsonrpc_request('server.history.get_job', uid=job_id)
 
     def upload_gcode_over_http(self, filename, safe_filename, path, fileobj):
@@ -315,12 +330,12 @@ class TSDConn(ConnHandler):
         self.conn.start()
 
         self.logger.debug('waiting for connection')
-        self.wait_for(self.process_connected)
+        self.wait_for(self._received_connected)
 
         self.set_ready()
         self.logger.info('connection is ready')
 
-    def process_connected(self, event):
+    def _received_connected(self, event):
         if event.name == 'connected':
             return True
 
@@ -373,11 +388,12 @@ class App(object):
         remote_status: Dict
         linked_printer: Dict
         printer_state: PrinterState
-        printer_job: PrinterJob
+        last_print: Optional[Dict] = None
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
         downloading_gcode_file: Optional[Dict] = None
+        posting_snapshot: bool = False
 
         def is_printing(self):
             return self.printer_state.is_printing()
@@ -406,6 +422,7 @@ class App(object):
             return False
 
     def start(self):
+        self.logger.info(f'starting tsd_moonraker (v{VERSION})')
         self.tsdconn = TSDConn(
             'tsdconn',
             self.sentry,
@@ -476,17 +493,20 @@ class App(object):
             elif event.sender == 'tsdconn':
                 self._on_tsdconn_event(event)
 
-            elif event.name == 'download_ended':
+            elif event.name == 'download_and_print_done':
                 self.logger.info('clearing downloading flag')
                 self.model.downloading_gcode_file = None
+
+            elif event.name == 'post_snapshot_done':
+                self.logger.info('posting snapshot finished')
+                self.model.posting_snapshot = False
 
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
             # clear app's klippy state
-            self.process_klippy_update(
+            self._received_klippy_update(
                 {
-                    # FIXME
-                    "status": {"webhooks": {"state": "disconnected"}},
+                    "status": {},
                     "eventtime": 0.0
                 }
             )
@@ -496,9 +516,16 @@ class App(object):
             # let's request a full state update
             self.moonrakerconn.request_status_update()
 
+        elif event.name == 'last_job':
+            self._received_last_print(event.data)
+
         elif event.name == 'message':
             if 'error' in event.data:
                 self.logger.debug(f'error response from moonraker, {event}')
+
+            elif event.data.get('result') == "ok":
+                # printer action response
+                self.moonrakerconn.request_status_update()
 
             elif event.data.get('method', '') == 'notify_status_update':
                 # something important has changed,
@@ -507,13 +534,14 @@ class App(object):
 
             elif event.data.get('method', '') == 'notify_history_changed':
                 for item in event.data['params']:
-                    self.process_job_action(item)
+                    self._received_job_action(item)
+                self.moonrakerconn.request_status_update()
 
             elif 'status' in event.data.get('result', ()):
                 # full state update from moonraker
 
                 # force sending status to tsd if current status is empty
-                self.process_klippy_update(event.data['result'])
+                self._received_klippy_update(event.data['result'])
 
     def _on_tsdconn_event(self, event):
         if event.name == 'connected':
@@ -523,7 +551,7 @@ class App(object):
 
         elif event.name == 'message':
             # message from tsd server
-            self.process_server_message(event.data)
+            self._received_server_message(event.data)
 
     def scheduler_loop(self, sleep_secs=1):
         # scheduler for events,
@@ -531,7 +559,7 @@ class App(object):
         loops = (
             self.recurring_klippy_status_request(),
             self.recurring_post_status_update(),
-            self.recurring_post_jpeg(),
+            self.recurring_post_snapshot(),
             # self.recurring_list_jobs_request(),
         )
         while self.shutdown is False:
@@ -560,13 +588,15 @@ class App(object):
 
     def recurring_klippy_status_request(self):
         def enqueue():
-            self.moonrakerconn.request_status_update()
+            if self.moonrakerconn.ready:
+                self.moonrakerconn.request_status_update()
 
         return self._ticks_interval(REQUEST_KLIPPY_STATE_TICKS, enqueue)
 
     def recurring_list_jobs_request(self):
         def enqueue():
-            self.moonrakerconn.request_job_list(limit=3, order='desc')
+            if self.moonrakerconn.ready:
+                self.moonrakerconn.request_job_list(limit=3, order='desc')
 
         return self._ticks_interval(5, enqueue)
 
@@ -584,7 +614,7 @@ class App(object):
 
             yield
 
-    def recurring_post_jpeg(self):
+    def recurring_post_snapshot(self):
         while self.shutdown is False:
             interval_seconds = POST_PIC_INTERVAL_SECONDS
 
@@ -601,7 +631,7 @@ class App(object):
 
                 t = time.time()
                 if self.model.last_jpg_post_ts < t - interval_seconds:
-                    self.post_jpeg()
+                    self.post_snapshot()
 
             yield
 
@@ -619,26 +649,43 @@ class App(object):
             self.push_event(Event(name=done_event_name, data=data))
         return ret
 
-    def post_jpeg(self) -> None:
-        self.model.last_jpg_post_ts = time.time()
+    def post_snapshot(self) -> None:
+        if self.model.posting_snapshot:
+            self.logger.info(
+                'post_snapshot ignored; previous attempt has not finished')
+            return
+
         thread = threading.Thread(
-            target=self._capture_error(self._post_jpeg),
+            target=self._capture_error(
+                self._post_snapshot,
+                done_event_name='post_snapshot_done'),
         )
         thread.daemon = True
         thread.start()
 
+        self.model.last_jpg_post_ts = time.time()
+        self.model.posting_snapshot = True
+
     def download_and_print(self, gcode_file: Dict) -> None:
+        if self.model.downloading_gcode_file:
+            self.logger.info(
+                'download_and_print ignored; previous attempt has not finished'
+            )
+            return
+
         thread = threading.Thread(
             target=self._capture_error(
                 self._download_and_print,
                 args=(gcode_file, ),
-                done_event_name='download_ended',
+                done_event_name='download_and_print_done',
             )
         )
         thread.daemon = True
         thread.start()
 
-    def _post_jpeg(self) -> None:
+        self.model.downloading_gcode_file = gcode_file
+
+    def _post_snapshot(self) -> None:
         self.logger.info('capturing and posting snapshot')
 
         try:
@@ -686,85 +733,117 @@ class App(object):
             f'uploading "{filename}" finished, print starting soon')
 
     def post_status_update(self, data=None):
-        if not data:
-            data = self.model.printer_state.to_tsd_state(
-                self.model.printer_job.state)
+        if not self.tsdconn.ready:
+            return
 
-        self.logger.debug(f'sending status to tsd: {data}')
+        if not data:
+            data = self.model.printer_state.to_tsd_state()
+
+        # self.logger.debug(f'sending status to tsd: {data}')
 
         self.model.status_posted_to_server_ts = time.time()
         self.tsdconn.send_status_update(data)
 
-    def process_job_action(self, data):
-        print_events = []
-        action, job_state = data['action'], data['job']
+    def post_print_event(self, print_event):
+        ts = self.model.printer_state.current_print_ts
+        if ts == -1:
+            return
 
-        if action == 'added':
-            if self.model.printer_job.state:
-                if self.model.printer_job.state['job_id'] != job_state['job_id']:  # noqa: E501:
-                    # FIXME
-                    print_events.append(
-                        PrintEvent('PrintDone', self.model.printer_job.state)
-                    )
-                    print_events.append(
-                        PrintEvent('PrintStarted', job_state)
-                    )
-            else:
-                print_events.append(
-                    PrintEvent('PrintStarted', job_state)
-                )
+        self.logger.info(f'print event: {print_event} ({ts})')
+        self.post_status_update(
+            self.model.printer_state.to_tsd_state(print_event)
+        )
 
-            self.model.printer_job.state = job_state
-        elif action == 'finished':
-            if self.model.printer_job.state['job_id'] != job_state['job_id']:
-                # FIXME
-                print_events.append(
-                    PrintEvent('PrintDone', self.model.printer_job.state)
-                )
+    def _received_job_action(self, data):
+        logger.info(data)
+        self.model.last_print = data['job']
 
-            if job_state['status'] == 'completed':
-                print_events.append(
-                    PrintEvent('PrintDone', job_state)
-                )
-            elif job_state['status'] == 'cancelled':
-                print_events.append(
-                    PrintEvent('PrintCancelled', job_state)
-                )
-                print_events.append(
-                    PrintEvent('PrintFailed', job_state)
-                )
+    def _received_last_print(self, job_data):
+        self.logger.info(f'received last print: {job_data}')
+        self.model.last_print = job_data
+        self.model.printer_state.current_print_ts = int((
+            self.model.last_print or {}
+        ).get('start_time', -1))
 
-            elif job_state['status'] == 'error':
-                print_events.append(
-                    PrintEvent('PrintFailed', job_state)
+    def _received_klippy_update(self, data):
+        printer_state = self.model.printer_state
+
+        prev_state_str = printer_state.get_state_str_from(printer_state.status)
+        next_state_str = printer_state.get_state_str_from(data['status'])
+
+        if prev_state_str != next_state_str:
+            self.logger.info(
+                'detected state change: {} -> {}'.format(
+                    prev_state_str, next_state_str
                 )
-            else:
-                # FIXME
-                pass
-
-            self.model.printer_job.state = None
-
-        if print_events:
+            )
             self.boost_status_update()
-            for print_event in print_events:
-                self.logger.info(f'print event: {print_event}')
-                data = self.model.printer_state.to_tsd_state(
-                    job_state, print_event=print_event)
-                self.post_status_update(data=data)
 
-    def process_klippy_update(self, result):
-        state_change = self.model.printer_state.update(result)
-        if state_change:
-            self.logger.info(f'detected state change: {state_change}')
+        printer_state.eventtime = data['eventtime']
+        printer_state.status = data['status']
 
-    def process_server_message(self, msg):
-        self.logger.info(msg)
+        if next_state_str == 'Printing':
+            if prev_state_str == 'Printing':
+                pass
+            elif prev_state_str == 'Paused':
+                self.post_print_event('PrintResumed')
+            else:
+                ts = int(time.time())
+                last_print = self.model.last_print or {}
+                last_print_ts = int(last_print.get('start_time', 0))
+
+                if (
+                    # if we have data about a very recently started print
+                    last_print and
+                    last_print.get('state') == 'in_progress' and
+                    abs(ts - last_print_ts) < 20
+                ):
+                    # then let's use its timestamp
+                    if ts != last_print_ts:
+                        self.logger.debug(
+                            "choosing moonraker's job start_time "
+                            "as current_print_ts")
+                    ts = last_print_ts
+
+                printer_state.current_print_ts = ts
+                self.post_print_event('PrintStarted')
+
+        elif next_state_str == 'Offline':
+            pass
+
+        elif next_state_str == 'Paused':
+            if prev_state_str != 'Paused':
+                self.post_print_event('PrintPaused')
+
+        elif next_state_str == 'Error':
+            if prev_state_str != 'Error':
+                self.post_print_event('PrintFailed')
+                printer_state.current_print_ts = -1
+
+        elif next_state_str == 'Operational':
+            if prev_state_str in ('Paused', 'Printing'):
+                _state = data['status'].get('print_stats', {}).get('state')
+                if _state == 'cancelled':
+                    self.post_print_event('PrintCancelled')
+                    # somehow failed is expected too
+                    self.post_print_event('PrintFailed')
+                elif _state == 'complete':
+                    self.post_print_event('PrintDone')
+                else:
+                    # FIXME
+                    self.logger.error(
+                        f'unexpected state "{_state}", please report.')
+
+                printer_state.current_print_ts = -1
+
+    def _received_server_message(self, msg):
+        logger.info(f'from tsd: {msg}')
         need_status_boost = False
 
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
-                self.post_jpeg()
+                self.post_snapshot()
             need_status_boost = True
 
         if 'commands' in msg:
@@ -799,7 +878,6 @@ class App(object):
                     not self.model.downloading_gcode_file and
                     not self.model.is_printing()
                 ):
-                    self.model.downloading_gcode_file = gcode_file
                     self.download_and_print(gcode_file)
                     self.tsdconn.send_passthru(
                         {
@@ -827,15 +905,25 @@ class App(object):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('TSD Moonraker Agent')
+    parser = argparse.ArgumentParser('tsd_moonraker')
     parser.add_argument(
         '-c', '--config', dest='config_path', required=True,
         help='Path to config file (ini)'
     )
+    parser.add_argument(
+        '-l', '--log-file', dest='log_path', required=False,
+        default='tsd_moonraker.log',
+        help='Path to log file'
+    )
+    parser.add_argument(
+        '-d', '--debug', dest='debug', required=False,
+        action='store_true', default=False,
+        help='Enable debug logging'
+    )
     args = parser.parse_args()
 
     level = logging.DEBUG
-    setup_logging(level)
+    setup_logging(args.log_path, logging.DEBUG if args.debug else logging.INFO)
 
     config = Config.load_from(args.config_path)
 
@@ -846,7 +934,7 @@ if __name__ == '__main__':
         remote_status={'viewing': False, 'should_watch': False},
         linked_printer=DEFAULT_LINKED_PRINTER,
         printer_state=PrinterState(),
-        printer_job=PrinterJob(state=None)
+        last_print=None,
     )
     app = App(model)
     app.start()
