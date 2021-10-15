@@ -1,11 +1,16 @@
 from __future__ import absolute_import
-from io import StringIO
+import io
 import re
 from urllib.request import urlopen
 from urllib.parse import urlparse
 from contextlib import closing
 import requests
 import backoff
+
+from .logger import getLogger
+
+
+logger = getLogger('webcam')
 
 
 def webcam_full_url(url):
@@ -29,6 +34,7 @@ def capture_jpeg(webcam_config):
     if snapshot_url:
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
 
+        logger.debug(f'GET {snapshot_url}')
         r = requests.get(snapshot_url, stream=True, timeout=5,
                          verify=snapshot_validate_ssl)
         r.raise_for_status()
@@ -40,6 +46,7 @@ def capture_jpeg(webcam_config):
             webcam_config.stream_url or '/webcam/?action=stream'
         )
 
+        logger.debug(f'GET {stream_url}')
         with closing(urlopen(stream_url)) as res:
             chunker = MjpegStreamChunker()
 
@@ -49,7 +56,7 @@ def capture_jpeg(webcam_config):
                 if mjpg:
                     res.close()
 
-                    mjpeg_headers_index = mjpg.find('\r\n'*2)
+                    mjpeg_headers_index = mjpg.find(b'\r\n'*2)
                     if mjpeg_headers_index > 0:
                         return mjpg[mjpeg_headers_index+4:]
                     else:
@@ -60,7 +67,7 @@ class MjpegStreamChunker:
 
     def __init__(self):
         self.boundary = None
-        self.current_chunk = StringIO()
+        self.current_chunk = io.BytesIO()
 
     def findMjpegChunk(self, line):
         # Return: mjpeg chunk if found
