@@ -123,10 +123,16 @@ class WSConn(object):
             on_close=on_ws_close,
             on_error=on_ws_error,
             header=[self.auth_header_fmt.format(self.token), ],
-            subprotocols=self.subprotocols
+            subprotocols=self.subprotocols,
         )
 
-        wst = threading.Thread(target=self.wsock.run_forever)
+        wst = threading.Thread(
+            target=self.wsock.run_forever,
+            kwargs=dict(
+                ping_interval=20,
+                ping_timeout=10,
+            )
+        )
         wst.daemon = True
         wst.start()
 
