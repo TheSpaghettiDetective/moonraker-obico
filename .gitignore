@@ -1,0 +1,12 @@
+*.pyc
+*.swp
+.idea
+.vscode
+*.iml
+*.log
+*.log.*
+build
+dist
+*.egg*
+.DS_Store
+*.ini
