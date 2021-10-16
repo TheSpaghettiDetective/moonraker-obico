@@ -908,6 +908,12 @@ class App(object):
                     not self.model.downloading_gcode_file and
                     not self.model.is_printing()
                 ):
+                    self.tsdconn.send_passthru(
+                        {
+                            'ref': ack_ref,
+                            'ret': {'target_path': gcode_file['filename']},
+                        }
+                    )
                     self.download_and_print(ack_ref, gcode_file)
                 else:
                     self.tsdconn.send_passthru(
