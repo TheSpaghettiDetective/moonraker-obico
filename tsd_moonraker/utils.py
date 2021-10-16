@@ -127,6 +127,10 @@ class SentryWrapper:
         if self.sentryClient:
             self.sentryClient.user_context(*args, **kwargs)
 
+    def tags_context(self, *args, **kwargs):
+        if self.sentryClient:
+            self.sentryClient.tags_context(*args, **kwargs)
+
     def captureMessage(self, *args, **kwargs):
         if self.sentryClient:
             self.sentryClient.captureMessage(*args, **kwargs)

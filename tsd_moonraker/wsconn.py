@@ -233,7 +233,10 @@ class ConnHandler(object):
             try:
                 self.flow()
             except FlowError as err:
-                self.logger.error(f'got error ({err}), reconnecting')
+                if hasattr(err, 'exc'):
+                    self.logger.error(f'{err} ({err.exc}), reconnecting')
+                else:
+                    self.logger.error(f'got error ({err}), reconnecting')
                 self.reconn_backoff.more(err)
             except FlowTimeout as err:
                 self.logger.error('got flow related timeout, reconnecting')

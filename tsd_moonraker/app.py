@@ -13,7 +13,7 @@ import requests
 from .wsconn import WSConn, ConnHandler
 from .version import VERSION
 from .utils import (
-    get_tags, FlowTimeout,
+    get_tags, FlowTimeout, FlowError,
     FatalError, Event, DEBUG, resp_to_exception, sanitize_filename)
 from .webcam_capture import capture_jpeg
 from .logger import getLogger, setup_logging
@@ -321,6 +321,12 @@ class TSDConn(ConnHandler):
         if self.conn:
             self.conn.close()
 
+        self.logger.debug('fetching printer data')
+        linked_printer = self._get_linked_printer()
+        self.on_event(
+            Event(sender=self.name, name='linked_printer', data=linked_printer)
+        )
+
         self.conn = WSConn(
             name=self.name,
             auth_header_fmt='authorization: bearer {}',
@@ -338,6 +344,24 @@ class TSDConn(ConnHandler):
 
         self.set_ready()
         self.logger.info('connection is ready')
+
+    def _get_linked_printer(self):
+        try:
+            resp = self.send_http_request(
+                'GET',
+                '/api/v1/octo/printer/',
+            )
+        except requests.exceptions.HTTPError as exc:
+            if (
+                exc.response is not None and
+                exc.response.status_code == 401
+            ):
+                raise FatalError('auth_token is invalid', exc=exc)
+            raise FlowError('failed to fetch printer', exc=exc)
+        except Exception as exc:
+            raise FlowError('failed to fetch printer', exc=exc)
+
+        return resp.json()['printer']
 
     def _received_connected(self, event):
         if event.name == 'connected':
@@ -464,6 +488,7 @@ class App(object):
         try:
             thread.join()
         except Exception:
+            self.sentry.captureException()
             self.logger.exception('ops')
 
     def stop(self, cause=None):
@@ -546,10 +571,14 @@ class App(object):
                 self._received_klippy_update(event.data['result'])
 
     def _on_tsdconn_event(self, event):
-        if event.name == 'connected':
-            # post latest klippy status when server gets connected
-            # TODO add some delay?
+        if event.name == 'tsdconn_ready':
+            # tsd connection is up and initalized,
+            # let's sendt a state update
             self.post_status_update()
+
+        elif event.name == 'linked_printer':
+            self.model.linked_printer = event.data
+            self.logger.info(f'linked printer: {self.model.linked_printer}')
 
         elif event.name == 'message':
             # message from tsd server

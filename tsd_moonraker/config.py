@@ -5,7 +5,7 @@ from configparser import ConfigParser
 
 import raven
 from .version import VERSION
-from .utils import SentryWrapper
+from .utils import SentryWrapper, get_tags
 
 
 @dataclasses.dataclass
@@ -146,4 +146,9 @@ class Config:
             ignore_exceptions=[]
         ) if self.sentry_opt == 'in' else None
         sentry = SentryWrapper(sentryClient)
+        sentry.tags_context(get_tags())
+        if self.thespaghettidetective.auth_token:
+            sentry.user_context(
+                {'id': self.thespaghettidetective.auth_token}
+            )
         return sentry
