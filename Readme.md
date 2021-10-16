@@ -1,7 +1,7 @@
 Standalone application for moonraker integration
 ------------------------------------------------
 
-Alpha version. Don't use it for production.
+Alpha version, for development only. Don't use it in production.
 
 
 How to run
@@ -15,7 +15,7 @@ How to run
     # requires python3; install python3 packages
 
     virtualenv venv
-    source venv/.bin/activate
+    source venv/bin/activate
     pip install -r requirements.txt
     
     # fill in essential configuration;
