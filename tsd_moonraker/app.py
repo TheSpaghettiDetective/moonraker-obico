@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 import argparse
 import dataclasses
 import time
@@ -298,6 +298,10 @@ class MoonrakerConn(ConnHandler):
             }
         )
 
+        if resp.status_code == 403:
+            if b'File is loaded, upload not permitted' in resp.content:
+                logger.error('got "file is loaded, upload not permitted"')
+
         resp.raise_for_status()
         return resp.json()
 
@@ -392,7 +396,7 @@ class App(object):
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
-        downloading_gcode_file: Optional[Dict] = None
+        downloading_gcode_file: Optional[Tuple[str, Dict]] = None
         posting_snapshot: bool = False
 
         def is_printing(self):
@@ -523,7 +527,7 @@ class App(object):
             if 'error' in event.data:
                 self.logger.debug(f'error response from moonraker, {event}')
 
-            elif event.data.get('result') == "ok":
+            elif event.data.get('result') == 'ok':
                 # printer action response
                 self.moonrakerconn.request_status_update()
 
@@ -539,8 +543,6 @@ class App(object):
 
             elif 'status' in event.data.get('result', ()):
                 # full state update from moonraker
-
-                # force sending status to tsd if current status is empty
                 self._received_klippy_update(event.data['result'])
 
     def _on_tsdconn_event(self, event):
@@ -557,10 +559,10 @@ class App(object):
         # scheduler for events,
         # lightweight tasks only!
         loops = (
-            self.recurring_klippy_status_request(),
-            self.recurring_post_status_update(),
-            self.recurring_post_snapshot(),
-            # self.recurring_list_jobs_request(),
+            self._recurring_klippy_status_request(),
+            self._recurring_post_status_update(),
+            self._recurring_post_snapshot(),
+            # self._recurring_list_jobs_request(),
         )
         while self.shutdown is False:
             for loop in loops:
@@ -583,24 +585,24 @@ class App(object):
 
             yield
 
-    def schedule_after_ticks(self, ticks, fn):
+    def _schedule_after_ticks(self, ticks, fn):
         return self._ticks_interval(ticks, fn, times=1, cur_counter=ticks)
 
-    def recurring_klippy_status_request(self):
+    def _recurring_klippy_status_request(self):
         def enqueue():
             if self.moonrakerconn.ready:
                 self.moonrakerconn.request_status_update()
 
         return self._ticks_interval(REQUEST_KLIPPY_STATE_TICKS, enqueue)
 
-    def recurring_list_jobs_request(self):
+    def _recurring_list_jobs_request(self):
         def enqueue():
             if self.moonrakerconn.ready:
                 self.moonrakerconn.request_job_list(limit=3, order='desc')
 
         return self._ticks_interval(5, enqueue)
 
-    def recurring_post_status_update(self):
+    def _recurring_post_status_update(self):
         while self.shutdown is False:
             interval_seconds = POST_STATUS_INTERVAL_SECONDS
             if self.model.status_update_booster > 0:
@@ -609,12 +611,11 @@ class App(object):
 
             t = time.time()
             if self.model.status_posted_to_server_ts < t - interval_seconds:
-                self.model.status_posted_to_server_ts = time.time()
                 self.post_status_update()
 
             yield
 
-    def recurring_post_snapshot(self):
+    def _recurring_post_snapshot(self):
         while self.shutdown is False:
             interval_seconds = POST_PIC_INTERVAL_SECONDS
 
@@ -666,7 +667,7 @@ class App(object):
         self.model.last_jpg_post_ts = time.time()
         self.model.posting_snapshot = True
 
-    def download_and_print(self, gcode_file: Dict) -> None:
+    def download_and_print(self, ref: str, gcode_file: Dict) -> None:
         if self.model.downloading_gcode_file:
             self.logger.info(
                 'download_and_print ignored; previous attempt has not finished'
@@ -683,7 +684,7 @@ class App(object):
         thread.daemon = True
         thread.start()
 
-        self.model.downloading_gcode_file = gcode_file
+        self.model.downloading_gcode_file = (ref, gcode_file)
 
     def _post_snapshot(self) -> None:
         self.logger.info('capturing and posting snapshot')
@@ -878,13 +879,7 @@ class App(object):
                     not self.model.downloading_gcode_file and
                     not self.model.is_printing()
                 ):
-                    self.download_and_print(gcode_file)
-                    self.tsdconn.send_passthru(
-                        {
-                            'ref': ack_ref,
-                            'ret': {'target_path': gcode_file['filename']},
-                        }
-                    )
+                    self.download_and_print(ack_ref, gcode_file)
                 else:
                     self.tsdconn.send_passthru(
                         {

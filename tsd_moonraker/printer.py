@@ -44,8 +44,7 @@ class PrinterState:
     ) -> Dict:
         data = {
             'current_print_ts': self.current_print_ts,
-            'octoprint_data': self.to_octoprint_state() if self.status else {},
-            '_ts': time.time(),
+            'octoprint_data': self.to_octoprint_state(),
             '_from': {
                 'plugin': 'tsd_moonraker',
                 'version': VERSION,
@@ -95,6 +94,7 @@ class PrinterState:
             return {}
 
         return {
+            '_ts': time.time(),
             'state': {
                 'text': error_text or state,
                 'flags': {
