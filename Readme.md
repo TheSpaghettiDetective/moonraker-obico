@@ -67,4 +67,4 @@ How to run
     python -m tsd_moonraker.link -c config.ini
 
     # start app
-    python -m tsd_moonraker.app -c config.ini
+    python -m tsd_moonraker.app -c config.ini -l tsd_moonraker.log
