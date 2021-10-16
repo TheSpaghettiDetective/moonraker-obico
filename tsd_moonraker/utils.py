@@ -13,7 +13,7 @@ import threading
 import socket
 from contextlib import closing
 
-# from sarge import run, Capture
+from sarge import run, Capture
 from pathvalidate import sanitize_filename as sfn
 import backoff
 import requests

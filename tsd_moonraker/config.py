@@ -35,7 +35,6 @@ class TSDConfig:
     url: str = 'https://app.thespaghettidetective.com'
     auth_token: Optional[str] = None
 
-    sentry_opt: str = 'out'
     # disable_video_streaming: bool = False
     # pi_cam_resolution: str = 'medium'
     # video_streaming_compatible_mode: str = 'auto'
@@ -72,6 +71,8 @@ class Config:
 
     _config_path: str
     _config: ConfigParser
+
+    sentry_opt: str = 'out'
 
     def write(self) -> None:
         with open(self._config_path, 'w') as f:
@@ -123,12 +124,19 @@ class Config:
                 fallback='http://127.0.0.1:8080/?action=stream'
             ),
         )
+
+        sentry_opt = config.get(
+            'thespaghettidetective', 'sentry_opt',
+            fallback='out'
+        )
+
         return Config(
             moonraker=moonraker_config,
             thespaghettidetective=tsd_config,
             webcam=webcam_config,
             _config=config,
             _config_path=config_path,
+            sentry_opt=sentry_opt,
         )
 
     def get_sentry(self):
@@ -136,6 +144,6 @@ class Config:
             'https://89fc4cf9318d46b1bfadc03c9d34577c@sentry.thespaghettidetective.com/8',  # noqa
             release=VERSION,
             ignore_exceptions=[]
-        ) if self.thespaghettidetective.sentry_opt == 'in' else None
+        ) if self.sentry_opt == 'in' else None
         sentry = SentryWrapper(sentryClient)
         return sentry
