@@ -6,6 +6,7 @@ import time
 import logging
 import threading
 import queue
+import re
 
 import requests
 
@@ -58,10 +59,6 @@ class MoonrakerConn(ConnHandler):
             self.logger.debug(f'is shutdown, dropping event {event}')
             return False
 
-        # removing some noise
-        if event.data.get('method') == 'notify_proc_stat_update':
-            return False
-
         return super().push_event(event)
 
     def prepare(self) -> None:
@@ -88,6 +85,7 @@ class MoonrakerConn(ConnHandler):
             token=self.config.api_key,
             on_event=self.push_event,
             logger=getLogger(f'{self.name}.ws'),
+            ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
         )
 
         self.conn.start()

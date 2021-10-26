@@ -18,7 +18,7 @@ class WSConn(object):
 
     def __init__(
         self, name, sentry, url, token, on_event, auth_header_fmt,
-        subprotocols=None, logger=logger
+        subprotocols=None, logger=logger, ignore_pattern=None
     ):
         self.shutdown = False
         self.id = name
@@ -31,6 +31,7 @@ class WSConn(object):
         self.auth_header_fmt = auth_header_fmt
         self.subprotocols = subprotocols
         self.logger = logger
+        self.ignore_pattern = ignore_pattern
 
     def send(self, data, is_binary=False):
         try:
@@ -105,6 +106,12 @@ class WSConn(object):
                     self.sentry.captureException(with_tags=True)
 
         def on_ws_message(ws, raw):
+            if (
+                self.ignore_pattern and
+                self.ignore_pattern.search(raw) is not None
+            ):
+                return
+
             self.logger.debug(f'receiving {raw}')
             try:
                 self.on_event(
