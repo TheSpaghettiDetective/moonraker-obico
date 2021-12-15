@@ -48,23 +48,30 @@ snapshot_url = <defaults to http://127.0.0.1:8080/?action=snapshot>
 How to run
 ----------
 
-    # pull
-
-    git pull https://github.com/TheSpaghettiDetective/tsd-moonraker
-    cd tsd-moonraker
-    
     # requires python3; install python3 packages
-
-    virtualenv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
     
+    sudo apt-get install python3 python3-pip python3-venv
+
+    # clone repo
+    
+    git clone https://github.com/TheSpaghettiDetective/tsd-moonraker.git
+
+    # setup virtual environment
+
+    python3 -m venv tsd-moonraker/
+    cd tsd-moonraker
+    source venv/bin/activate
+    pip3 install -r requirements.txt
+
     # fill in essential configuration
+
     cp config.sample.ini config.ini
-    vim config.ini
+    nano config.ini
 
     # link printer (grab tsd auth token)
-    python -m tsd_moonraker.link -c config.ini
+
+    python3 -m tsd_moonraker.link -c config.ini
 
     # start app
-    python -m tsd_moonraker.app -c config.ini -l tsd_moonraker.log
+
+    python3 -m tsd_moonraker.app -c config.ini -l tsd_moonraker.log
