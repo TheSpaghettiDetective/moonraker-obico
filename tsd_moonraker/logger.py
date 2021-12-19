@@ -23,7 +23,7 @@ def setup_logging(filename, level):
     logger.addHandler(sh)
 
     fh = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=10000000, backupCount=1)
+        filename, maxBytes=100000000, backupCount=5)
     fh.setFormatter(formatter)
 
     logger.addHandler(fh)
