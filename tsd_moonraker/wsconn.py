@@ -17,11 +17,11 @@ logger = getLogger('utils')
 class WSConn(object):
 
     def __init__(
-        self, name, sentry, url, token, on_event, auth_header_fmt,
+        self, id, sentry, url, token, on_event, auth_header_fmt,
         subprotocols=None, logger=logger, ignore_pattern=None
     ):
         self.shutdown = False
-        self.id = name
+        self.id = id
         self.sentry = sentry
         self.url = url
         self.token = token
@@ -213,9 +213,9 @@ class ConnHandler(object):
     max_backoff_secs: int = 300
     flow_step_timeout_msecs: int = 2000
 
-    def __init__(self, name, sentry, on_event):
-        self.name = name
-        self.logger = getLogger(self.name)
+    def __init__(self, id, sentry, on_event):
+        self.id = id
+        self.logger = getLogger(self.id)
         self.sentry = sentry
         self._on_event = on_event
         self.shutdown: bool = False
@@ -255,7 +255,7 @@ class ConnHandler(object):
                 self.logger.error(f'got fatal error ({exc})')
                 self.on_event(
                     Event(
-                        sender=self.name, name='fatal_error',
+                        sender=self.id, name='fatal_error',
                         data={'exc': exc}
                     )
                 )
@@ -296,6 +296,9 @@ class ConnHandler(object):
                 if not loop_forever:
                     return
 
+    def loop_forever(self, process_fn):
+        self.wait_for(process_fn, timeout_msecs=None, loop_forever=True)
+
     def _wait_for(self, event, process_fn, timeout_msecs):
         if event.name == 'shutdown':
             self.shutdown = True
@@ -312,7 +315,7 @@ class ConnHandler(object):
                 hasattr(exc, 'status_code') and
                 exc.status_code in (401, 403)
             ):
-                raise FatalError(f'{self.name} failed to authenticate', exc)
+                raise FatalError(f'{self.id} failed to authenticate', exc)
 
             message = str(exc) if exc else 'connection error'
             raise FlowError(message, exc=exc)
@@ -333,10 +336,6 @@ class ConnHandler(object):
 
         return None
 
-    def prepare(self):
-        raise NotImplementedError
-
     def flow(self):
-        self.prepare()
         self.set_ready()
-        self.wait_for(self.on_event, None, loop_forever=True)
+        self.loop_forever(self.on_event)

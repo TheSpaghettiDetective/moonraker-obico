@@ -27,11 +27,16 @@ logger = getLogger()
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
 REQUEST_KLIPPY_STATE_TICKS = 10
 POST_STATUS_INTERVAL_SECONDS = 50
-POST_PIC_INTERVAL_SECONDS = 120
+POST_PIC_INTERVAL_SECONDS = 10
 
 if DEBUG:
     POST_STATUS_INTERVAL_SECONDS = 10
     POST_PIC_INTERVAL_SECONDS = 10
+
+
+def fix_timestamp(cur_ts, now_ts):
+    # force resetting timestamp when time skews
+    return 0 if cur_ts > now_ts else cur_ts
 
 
 class MoonrakerConn(ConnHandler):
@@ -42,8 +47,8 @@ class MoonrakerConn(ConnHandler):
     class KlippyGone(Exception):
         pass
 
-    def __init__(self, name, sentry, moonraker_config, on_event):
-        super().__init__(name, sentry, on_event)
+    def __init__(self, id, sentry, moonraker_config, on_event):
+        super().__init__(id, sentry, on_event)
         self._next_id: int = 0
         self.config: MoonrakerConfig = moonraker_config
         self.websocket_id: Optional[int] = None
@@ -61,8 +66,7 @@ class MoonrakerConn(ConnHandler):
 
         return super().push_event(event)
 
-    def prepare(self) -> None:
-        # preparing and initalizing connection
+    def flow(self) -> None:
         self.timer.reset(None)
         self.ready = False
         self.websocket_id = None
@@ -78,13 +82,13 @@ class MoonrakerConn(ConnHandler):
                 raise FatalError('no api key for moonraker', exc=exc)
 
         self.conn = WSConn(
-            name=self.name,
+            id=self.id,
             auth_header_fmt='X-Api-Key: {}',
             sentry=self.sentry,
             url=self.config.ws_url(),
             token=self.config.api_key,
             on_event=self.push_event,
-            logger=getLogger(f'{self.name}.ws'),
+            logger=getLogger(f'{self.id}.ws'),
             ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
         )
 
@@ -129,11 +133,11 @@ class MoonrakerConn(ConnHandler):
                 self.set_ready()
                 self.logger.info('connection is ready')
                 self.on_event(
-                    Event(sender=self.name, name=f'{self.name}_ready', data={})
+                    Event(sender=self.id, name=f'{self.id}_ready', data={})
                 )
 
                 # forwarding events
-                self.wait_for(self.on_event, None, loop_forever=True)
+                self.loop_forever(self.on_event)
             except self.KlippyGone:
                 self.logger.warning('klipper got disconnected')
                 continue
@@ -142,7 +146,7 @@ class MoonrakerConn(ConnHandler):
         if (
             event.data.get('method') == 'notify_klippy_disconnected'
         ):
-            self.on_event(Event(sender=self.name, name='klippy_gone', data={}))
+            self.on_event(Event(sender=self.id, name='klippy_gone', data={}))
             raise self.KlippyGone
 
         return super(MoonrakerConn, self)._wait_for(
@@ -154,7 +158,7 @@ class MoonrakerConn(ConnHandler):
         resp = requests.get(url, timeout=5)
         if resp.status_code in (401, 403):
             raise FatalError(
-                f'{self.name} failed to fetch api key '
+                f'{self.id} failed to fetch api key '
                 f'(HTTP {resp.status_code})',
                 exc=resp_to_exception(resp))
 
@@ -206,7 +210,7 @@ class MoonrakerConn(ConnHandler):
         if 'jobs' in event.data.get('result', {}):
             jobs = event.data.get('result', {}).get('jobs', [None])
             self.on_event(
-                Event(sender=self.name, name='last_job', data=jobs[0])
+                Event(sender=self.id, name='last_job', data=jobs[0])
             )
             return True
 
@@ -308,11 +312,11 @@ class TSDConn(ConnHandler):
     max_backoff_secs = 300
     flow_step_timeout_msecs = 5000
 
-    def __init__(self, name, sentry, tsd_config, on_event):
-        super().__init__(name, sentry, on_event)
+    def __init__(self, id, sentry, tsd_config, on_event):
+        super().__init__(id, sentry, on_event)
         self.config: TSDConfig = tsd_config
 
-    def prepare(self):
+    def flow(self):
         self.timer.reset(None)
         self.ready = False
 
@@ -322,17 +326,17 @@ class TSDConn(ConnHandler):
         self.logger.debug('fetching printer data')
         linked_printer = self._get_linked_printer()
         self.on_event(
-            Event(sender=self.name, name='linked_printer', data=linked_printer)
+            Event(sender=self.id, name='linked_printer', data=linked_printer)
         )
 
         self.conn = WSConn(
-            name=self.name,
+            id=self.id,
             auth_header_fmt='authorization: bearer {}',
             sentry=self.sentry,
             url=self.config.ws_url(),
             token=self.config.auth_token,
             on_event=self.push_event,
-            logger=getLogger(f'{self.name}.ws'),
+            logger=getLogger(f'{self.id}.ws'),
         )
 
         self.conn.start()
@@ -342,6 +346,8 @@ class TSDConn(ConnHandler):
 
         self.set_ready()
         self.logger.info('connection is ready')
+
+        self.loop_forever(self.on_event)
 
     def _get_linked_printer(self):
         try:
@@ -631,35 +637,44 @@ class App(object):
 
     def _recurring_post_status_update(self):
         while self.shutdown is False:
+            now = time.time()
+
+            self.model.status_posted_to_server_ts = fix_timestamp(
+                self.model.status_posted_to_server_ts,
+                now,
+            )
+
             interval_seconds = POST_STATUS_INTERVAL_SECONDS
             if self.model.status_update_booster > 0:
                 self.model.status_update_booster -= 1
                 interval_seconds /= 10
 
-            t = time.time()
-            if self.model.status_posted_to_server_ts < t - interval_seconds:
+            if self.model.status_posted_to_server_ts < now - interval_seconds:
                 self.post_status_update()
 
             yield
 
     def _recurring_post_snapshot(self):
         while self.shutdown is False:
+            now = time.time()
+
+            self.model.last_jpg_post_ts = fix_timestamp(
+                self.model.last_jpg_post_ts,
+                now
+            )
+
             interval_seconds = POST_PIC_INTERVAL_SECONDS
 
             if (
-                self.model.is_configured() and
-                self.model.is_printing()
+                not self.model.is_printing() and
+                not self.model.remote_status['viewing'] and
+                not self.model.remote_status['should_watch']
             ):
-                if (
-                    not self.model.remote_status['viewing'] and
-                    not self.model.remote_status['should_watch']
-                ):
-                    # slow down jpeg posting if needed
-                    interval_seconds *= 12
+                # slow down jpeg posting if needed
+                interval_seconds *= 12
 
-                t = time.time()
-                if self.model.last_jpg_post_ts < t - interval_seconds:
-                    self.post_snapshot()
+            if self.model.last_jpg_post_ts < now - interval_seconds:
+                self.post_snapshot()
 
             yield
 
