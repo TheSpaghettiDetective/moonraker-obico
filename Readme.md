@@ -1,7 +1,7 @@
 Standalone application for TheSpaghettiDetective - moonraker integration
 ------------------------------------------------------------------------
 
-Alpha version, with limited functionality and for development only. 
+Alpha version, with limited functionality and for development only.
 
 Please don't use it in production and be careful while using it!
 
@@ -9,7 +9,7 @@ Please don't use it in production and be careful while using it!
 Preparing Moonraker
 -------------------
 
-Folowing sections are mandatory in moonraker config file:
+Following sections are mandatory in moonraker config file:
 
 ```
 [virtual_sdcard]
@@ -49,11 +49,11 @@ How to run
 ----------
 
     # requires python3; install python3 packages
-    
+
     sudo apt-get install python3 python3-pip python3-venv
 
     # clone repo
-    
+
     git clone https://github.com/TheSpaghettiDetective/tsd-moonraker.git
 
     # setup virtual environment
