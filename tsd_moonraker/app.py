@@ -420,12 +420,12 @@ class App(object):
         remote_status: Dict
         linked_printer: Dict
         printer_state: PrinterState
+        force_snapshot: threading.Event
         last_print: Optional[Dict] = None
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
         downloading_gcode_file: Optional[Tuple[str, Dict]] = None
-        posting_snapshot: bool = False
 
         def is_printing(self):
             return self.printer_state.is_printing()
@@ -476,6 +476,11 @@ class App(object):
 
         thread = threading.Thread(
             target=self.moonrakerconn.start)
+        thread.daemon = True
+        thread.start()
+
+        thread = threading.Thread(
+            target=self.snapshot_loop)
         thread.daemon = True
         thread.start()
 
@@ -532,7 +537,6 @@ class App(object):
 
             elif event.name == 'post_snapshot_done':
                 self.logger.info('posting snapshot finished')
-                self.model.posting_snapshot = False
 
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
@@ -579,6 +583,7 @@ class App(object):
             # tsd connection is up and initalized,
             # let's sendt a state update
             self.post_status_update()
+            self.post_snapshot()
 
         elif event.name == 'linked_printer':
             self.model.linked_printer = event.data
@@ -693,21 +698,18 @@ class App(object):
         return ret
 
     def post_snapshot(self) -> None:
-        if self.model.posting_snapshot:
-            self.logger.info(
-                'post_snapshot ignored; previous attempt has not finished')
-            return
+        if self.tsdconn.ready:
+            self.model.force_snapshot.set()
 
-        thread = threading.Thread(
-            target=self._capture_error(
-                self._post_snapshot,
-                done_event_name='post_snapshot_done'),
-        )
-        thread.daemon = True
-        thread.start()
-
-        self.model.last_jpg_post_ts = time.time()
-        self.model.posting_snapshot = True
+    def snapshot_loop(self):
+        while self.shutdown is False:
+            if self.model.force_snapshot.wait(2) is True:
+                self.model.force_snapshot.clear()
+                self.model.last_jpg_post_ts = time.time()
+                self._capture_error(
+                    self._post_snapshot,
+                    done_event_name='post_snapshot_done',
+                )
 
     def download_and_print(self, ref: str, gcode_file: Dict) -> None:
         if self.model.downloading_gcode_file:
@@ -978,6 +980,7 @@ if __name__ == '__main__':
         linked_printer=DEFAULT_LINKED_PRINTER,
         printer_state=PrinterState(),
         last_print=None,
+        force_snapshot=threading.Event(),
     )
     app = App(model)
     app.start()
