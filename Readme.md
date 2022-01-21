@@ -60,7 +60,7 @@ How to run
 
     python3 -m venv tsd-moonraker/
     cd tsd-moonraker
-    source venv/bin/activate
+    source ./bin/activate
     pip3 install -r requirements.txt
 
     # fill in essential configuration
