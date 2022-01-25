@@ -6,12 +6,13 @@ Alpha version, with limited functionality and for development only.
 Please don't use it in production and be careful while using it!
 
 
-Preparing Moonraker
--------------------
+Preparing Klipper and Moonraker
+-------------------------------
 
-Following sections are mandatory in moonraker config file:
+Following sections are mandatory in printer.cfg (of Klipper):
 
 ```
+
 [virtual_sdcard]
 path: <path to existing dir>
 
@@ -19,11 +20,18 @@ path: <path to existing dir>
 
 [pause_resume]
 
+```
+
+Following sections are mandatory in Moonraker's config file:
+
+```
+
 [history]
 
 ```
 
 Grab moonraker api key from ```/access/api_key```.
+If TSD agent connects from a [trusted host](https://moonraker.readthedocs.io/en/latest/configuration/#authorization), you can skip this.
 
 
 config.ini
