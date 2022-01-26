@@ -1,4 +1,4 @@
-#!/bin/bash
+i#!/bin/bash
 # This script installs TheSpaghettiDetective Moonraker Plugin
 set -eu
 
@@ -87,7 +87,7 @@ WantedBy=multi-user.target
 [Service]
 Type=simple
 User=${CURRENT_USER}
-ExecStart=${MOONRAKER_BOT_ENV}/bin/python3 -m ${MOONRAKER_BOT_DIR}/tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${MOONRAKER_BOT_LOG}/tsd-moonraker.log
+ExecStart=${MOONRAKER_BOT_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${MOONRAKER_BOT_LOG}/tsd-moonraker.log
 Restart=always
 RestartSec=5
 EOF
