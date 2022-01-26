@@ -71,6 +71,7 @@ create_virtualenv() {
   virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
   export TMPDIR=${HOME}/space
   "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_ENV}"/requirements.txt
+  mv -r "${MOONRAKER_BOT_DIR}" "${MOONRAKER_BOT_ENV}"/bin/
 }
 
 create_service() {
