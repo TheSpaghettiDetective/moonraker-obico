@@ -28,7 +28,7 @@ Following sections are mandatory in Moonraker's config file:
 
 [history]
 
-[update_manager service_name]
+[update_manager tsd-moonraker]
 type: git_repo
 path: ~/tsd-moonraker
 origin: https://github.com/TheSpaghettiDetective/tsd-moonraker.git
@@ -78,6 +78,7 @@ How to run
     # when the process is done, run the install script:
     
     cd tsd-moonraker
+    chmod +x install.sh
     ./install.sh
 
     # fill in essential configuration
