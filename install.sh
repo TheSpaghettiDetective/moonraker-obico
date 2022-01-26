@@ -37,7 +37,7 @@ create_initial_config() {
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
 
     report_status "Creating base config file"
-    cp -n "${MOONRAKER_BOT_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
+    cp -n "${MOONRAKER_BOT_ENV}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
 
     sed -i "s+some_log_path+${MOONRAKER_BOT_LOG}+g" "${KLIPPER_CONF_DIR}"/config.ini
   fi
