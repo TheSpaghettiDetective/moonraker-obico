@@ -11,14 +11,14 @@ CURRENT_USER=${USER}
 
 # Helper functions
 report_status() {
-  echo -e "\n\n###### $1"
+  echo -e "\n###### $1"
 }
 
 # Main functions
 init_config_path() {
   if [ -z ${klipper_cfg_loc+x} ]; then
     report_status "Selecting config path"
-    echo -e "\n\n\n"
+    echo -e "\n"
     read -p "Enter your klipper configs path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
     KLIPPER_CONF_DIR=${klip_conf_dir}
   else
@@ -70,7 +70,7 @@ create_virtualenv() {
   mkdir -p "${HOME}"/space
   virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
   export TMPDIR=${HOME}/space
-  "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_DIR}"/requirements.txt
+  "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_ENV}"/requirements.txt
 }
 
 create_service() {
