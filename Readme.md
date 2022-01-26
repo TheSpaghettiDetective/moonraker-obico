@@ -28,6 +28,17 @@ Following sections are mandatory in Moonraker's config file:
 
 [history]
 
+[update_manager service_name]
+type: git_repo
+path: ~/tsd-moonraker
+origin: https://github.com/TheSpaghettiDetective/tsd-moonraker.git
+primary_branch: main
+env: ~/tsd-moonraker/bin/python3
+requirements: requirements.txt
+install_script: install.sh
+is_system_service: True
+
+
 ```
 
 Grab moonraker api key from ```/access/api_key```.
