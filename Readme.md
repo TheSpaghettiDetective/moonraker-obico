@@ -87,7 +87,7 @@ How to run
 
     # link printer (grab tsd auth token)
 
-    python3 -m tsd_moonraker.link -c config.ini
+    python3 -m tsd_moonraker.link -c ~/klipper_config/config.ini
 
     # start service
 
