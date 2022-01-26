@@ -16,13 +16,16 @@ report_status() {
 
 # Main functions
 init_config_path() {
-  if [ -z ${klipper_cfg_loc+x} ]; then
-    report_status "Selecting config path"
-    echo -e "\n"
-    read -p "Enter your klipper configs path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
-    KLIPPER_CONF_DIR=${klip_conf_dir}
-  else
-    KLIPPER_CONF_DIR=${klipper_cfg_loc}
+  # check in config exists!
+  if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
+    if [ -z ${klipper_cfg_loc+x} ]; then
+      report_status "Selecting config path"
+      echo -e "\n"
+      read -p "Enter your klipper configs path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
+      KLIPPER_CONF_DIR=${klip_conf_dir}
+    else
+      KLIPPER_CONF_DIR=${klipper_cfg_loc}
+	  fi
   fi
   report_status "Using configs from ${KLIPPER_CONF_DIR}"
 }
@@ -72,8 +75,10 @@ create_virtualenv() {
 }
 
 create_service() {
-  ### create systemd service file
-  sudo /bin/sh -c "cat > ${SYSTEMDDIR}/tsd-moonraker.service" <<EOF
+  # check in config exists!
+  if [[ ! -f "${SYSTEMDDIR}"/tsd-moonraker.service ]]; then
+    ### create systemd service file
+    sudo /bin/sh -c "cat > ${SYSTEMDDIR}/tsd-moonraker.service" <<EOF
 #Systemd service file for TheSpaghettiDetective Moonraker Plugin
 [Unit]
 Description=Starts TheSpaghettiDetective Moonraker Plugin on startup
@@ -91,10 +96,10 @@ Restart=always
 RestartSec=5
 EOF
 
-  ### enable instance
-  sudo systemctl enable tsd-moonraker.service
-  report_status "Single TheSpaghettiDetective Moonraker Plugin instance created!"
-
+    ### enable instance
+    sudo systemctl enable tsd-moonraker.service
+    report_status "Single TheSpaghettiDetective Moonraker Plugin instance created!"
+  fi
   ### launching instance
   report_status "Launching TheSpaghettiDetective Moonraker Plugin instance ..."
   sudo systemctl start tsd-moonraker
