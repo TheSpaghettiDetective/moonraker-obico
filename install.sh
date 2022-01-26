@@ -1,4 +1,4 @@
-i#!/bin/bash
+#!/bin/bash
 # This script installs TheSpaghettiDetective Moonraker Plugin
 set -eu
 
@@ -11,7 +11,7 @@ CURRENT_USER=${USER}
 
 # Helper functions
 report_status() {
-  echo -e "\n###### $1"
+  echo -e "###### $1"
 }
 
 # Main functions
@@ -31,7 +31,7 @@ create_initial_config() {
   # check in config exists!
   if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
     report_status "Selecting log path"
-    echo -e "\n\n\n"
+    echo -e "\n"
     read -p "Enter your bot log file: " -e -i "${MOONRAKER_BOT_LOG}" bot_log_path
     MOONRAKER_BOT_LOG=${bot_log_path}
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
@@ -67,11 +67,8 @@ install_packages() {
 create_virtualenv() {
   report_status "Installing python virtual environment..."
 
-  mkdir -p "${HOME}"/space
   virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
-  export TMPDIR=${HOME}/space
   "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_ENV}"/requirements.txt
-  mv -r "${MOONRAKER_BOT_DIR}" "${MOONRAKER_BOT_ENV}"/bin/
 }
 
 create_service() {
@@ -88,6 +85,7 @@ WantedBy=multi-user.target
 [Service]
 Type=simple
 User=${CURRENT_USER}
+WorkingDirectory=${MOONRAKER_BOT_ENV}
 ExecStart=${MOONRAKER_BOT_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${MOONRAKER_BOT_LOG}/tsd-moonraker.log
 Restart=always
 RestartSec=5
