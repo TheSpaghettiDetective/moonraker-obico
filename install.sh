@@ -3,8 +3,8 @@
 set -eu
 
 SYSTEMDDIR="/etc/systemd/system"
-MOONRAKER_BOT_ENV="${HOME}/tsd-moonraker"
-MOONRAKER_BOT_DIR="${HOME}/tsd-moonraker/tsd_moonraker"
+MOONRAKER_BOT_ENV="${HOME}/tsd-moonraker-env"
+MOONRAKER_BOT_DIR="${HOME}/tsd-moonraker"
 MOONRAKER_BOT_LOG="${HOME}/klipper_logs"
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
 CURRENT_USER=${USER}
@@ -40,7 +40,7 @@ create_initial_config() {
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
 
     report_status "Creating base config file"
-    cp -n "${MOONRAKER_BOT_ENV}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
+    cp -n "${MOONRAKER_BOT_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
 
     sed -i "s+some_log_path+${MOONRAKER_BOT_LOG}+g" "${KLIPPER_CONF_DIR}"/config.ini
   fi
@@ -71,7 +71,7 @@ create_virtualenv() {
   report_status "Installing python virtual environment..."
 
   virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
-  "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_ENV}"/requirements.txt
+  "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_DIR}"/requirements.txt
 }
 
 create_service() {
