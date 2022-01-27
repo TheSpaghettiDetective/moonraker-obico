@@ -33,7 +33,7 @@ type: git_repo
 path: ~/tsd-moonraker
 origin: https://github.com/TheSpaghettiDetective/tsd-moonraker.git
 primary_branch: main
-env: ~/tsd-moonraker/bin/python3
+env: ~/tsd-moonraker-env/bin/python3
 requirements: requirements.txt
 install_script: install.sh
 is_system_service: True
@@ -68,6 +68,7 @@ How to run
 ----------
 
     # clone repo
+    
     cd ~
     git clone https://github.com/TheSpaghettiDetective/tsd-moonraker.git
     
@@ -75,15 +76,17 @@ How to run
     
     cd tsd-moonraker
     ./install.sh
-
+    
     # fill in essential configuration
-
+    
     nano ~/klipper_config/config.ini
-
+    
     # link printer (grab tsd auth token)
-
+    
     python3 -m tsd_moonraker.link -c ~/klipper_config/config.ini
-
+    
     # start service
-
+    
     sudo systemctl start tsd-moonraker
+    
+    
