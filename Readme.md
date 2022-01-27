@@ -67,18 +67,13 @@ snapshot_url = <defaults to http://127.0.0.1:8080/?action=snapshot>
 How to run
 ----------
 
-    # go to home directory
-    
-    cd ~
-    
     # clone repo
-
+    cd ~
     git clone https://github.com/TheSpaghettiDetective/tsd-moonraker.git
     
     # when the process is done, run the install script:
     
     cd tsd-moonraker
-    chmod +x install.sh
     ./install.sh
 
     # fill in essential configuration
