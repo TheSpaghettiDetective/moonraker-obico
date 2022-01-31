@@ -208,7 +208,7 @@ class MoonrakerConn(ConnHandler):
 
     def _received_last_job(self, event):
         if 'jobs' in event.data.get('result', {}):
-            jobs = event.data.get('result', {}).get('jobs', [None])
+            jobs = event.data.get('result', {}).get('jobs', [None]) or [None]
             self.on_event(
                 Event(sender=self.id, name='last_job', data=jobs[0])
             )
