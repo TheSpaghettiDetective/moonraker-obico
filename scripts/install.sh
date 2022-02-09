@@ -38,6 +38,10 @@ create_initial_config() {
     read -p "Enter your bot log file: " -e -i "${MOONRAKER_BOT_LOG}" bot_log_path
     MOONRAKER_BOT_LOG=${bot_log_path}
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
+    
+    if [[ ! -d "${MOONRAKER_BOT_LOG}" ]]; then
+    	mkdir "${MOONRAKER_BOT_LOG}"
+    fi
 
     report_status "Creating base config file"
     cp -n "${MOONRAKER_BOT_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
