@@ -25,20 +25,24 @@ init_config_path() {
       KLIPPER_CONF_DIR=${klip_conf_dir}
     else
       KLIPPER_CONF_DIR=${klipper_cfg_loc}
-	  fi
+    fi
+    # check if dir exists!
+    if [[ ! -d "${KLIPPER_CONF_DIR}" ]]; then
+    	mkdir "${KLIPPER_CONF_DIR}"
+    fi
   fi
   report_status "Using configs from ${KLIPPER_CONF_DIR}"
 }
 
 create_initial_config() {
-  # check in config exists!
+  # check if config exists!
   if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
     report_status "Selecting log path"
     echo -e "\n"
     read -p "Enter your bot log file: " -e -i "${MOONRAKER_BOT_LOG}" bot_log_path
     MOONRAKER_BOT_LOG=${bot_log_path}
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
-    
+    # check if dir exists!
     if [[ ! -d "${MOONRAKER_BOT_LOG}" ]]; then
     	mkdir "${MOONRAKER_BOT_LOG}"
     fi
@@ -73,13 +77,17 @@ install_packages() {
 
 create_virtualenv() {
   report_status "Installing python virtual environment..."
+  # check if dir exists!
+  if [[ ! -d "${MOONRAKER_BOT_ENV}" ]]; then
+    mkdir "${MOONRAKER_BOT_ENV}"
+  fi
 
   virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
   "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_DIR}"/requirements.txt
 }
 
 create_service() {
-  # check in config exists!
+  # check if config exists!
   if [[ ! -f "${SYSTEMDDIR}"/tsd-moonraker.service ]]; then
     ### create systemd service file
     sudo /bin/sh -c "cat > ${SYSTEMDDIR}/tsd-moonraker.service" <<EOF
