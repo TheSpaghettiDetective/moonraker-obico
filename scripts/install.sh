@@ -28,7 +28,7 @@ init_config_path() {
     fi
     # check if dir exists!
     if [[ ! -d "${KLIPPER_CONF_DIR}" ]]; then
-    	mkdir "${KLIPPER_CONF_DIR}"
+      mkdir "${KLIPPER_CONF_DIR}"
     fi
   fi
   report_status "Using configs from ${KLIPPER_CONF_DIR}"
@@ -44,7 +44,7 @@ create_initial_config() {
     report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
     # check if dir exists!
     if [[ ! -d "${MOONRAKER_BOT_LOG}" ]]; then
-    	mkdir "${MOONRAKER_BOT_LOG}"
+      mkdir "${MOONRAKER_BOT_LOG}"
     fi
 
     report_status "Creating base config file"
