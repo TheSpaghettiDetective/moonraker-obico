@@ -35,18 +35,28 @@ Configuration
 Create plugin's config.ini with following content:
 
 ```
+# uncomment what you need to customize
+
 [thespaghettidetective]
-url = <by default it connects to TSD Cloud, optional>
-auth_token = <filled in by link command, see bellow>
+# -- by default plugin connects to TSD Cloud
+# url = https://app.thespaghettidetective.com
+# auth_token = <filled in by link command, see installation section>
 
 [moonraker]
-url = <url for moonraker api, default is http://127.0.0.1:7125>
-api_key = <grab it from moonraker, visit /access/api_key from trusted host>
+# url = http://127.0.0.1:7125
+# api_key = <grab it from moonraker, visit /access/api_key from trusted host>
 
 [webcam]
-snapshot_url = <defaults to http://127.0.0.1:8080/?action=snapshot>
-# or
 # stream_url = http://127.0.0.1:8080/?action=stream
+# -- set snapshot_url if you want to use the snapshot action
+# snapshot_url = http://127.0.0.1:8080/?action=snapshot #
+# -- whether to flip the webcam horizontally/vertically
+# flip_h = false
+# flip_v = false
+# -- whether to rotate the webcam 90° counter clockwise
+# rotate_90 = false
+-- set when aspect ratio is 16:9 (instead of 4:3)
+# aspect_ratio_169 = false
 ```
 
 You can grab Moonraker api key from ```/access/api_key```.

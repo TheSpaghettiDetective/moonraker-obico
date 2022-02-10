@@ -8,7 +8,7 @@ import threading
 import queue
 import re
 
-import requests
+import requests  # type: ignore
 
 
 from .wsconn import WSConn, ConnHandler
@@ -439,7 +439,7 @@ class App(object):
         self.sentry = self.model.config.get_sentry()
         self.tsdconn = None
         self.moonrakerconn = None
-        self.q = queue.Queue(maxsize=1000)
+        self.q : queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
         if self.shutdown:
@@ -582,7 +582,7 @@ class App(object):
         if event.name == 'tsdconn_ready':
             # tsd connection is up and initalized,
             # let's sendt a state update
-            self.post_status_update()
+            self.post_status_update(config=self.model.config)
             self.post_snapshot()
 
         elif event.name == 'linked_printer':
@@ -777,26 +777,26 @@ class App(object):
         self.logger.info(
             f'uploading "{filename}" finished, print starting soon')
 
-    def post_status_update(self, data=None):
+    def post_status_update(self, data=None, config=None):
         if not self.tsdconn.ready:
             return
 
         if not data:
-            data = self.model.printer_state.to_tsd_state()
+            data = self.model.printer_state.to_tsd_state(config=config)
 
         # self.logger.debug(f'sending status to tsd: {data}')
 
         self.model.status_posted_to_server_ts = time.time()
         self.tsdconn.send_status_update(data)
 
-    def post_print_event(self, print_event):
+    def post_print_event(self, print_event, config=None):
         ts = self.model.printer_state.current_print_ts
         if ts == -1:
             return
 
         self.logger.info(f'print event: {print_event} ({ts})')
         self.post_status_update(
-            self.model.printer_state.to_tsd_state(print_event)
+            self.model.printer_state.to_tsd_state(print_event, config=config)
         )
 
     def _received_job_action(self, data):
