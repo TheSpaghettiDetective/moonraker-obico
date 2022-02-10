@@ -346,6 +346,9 @@ class TSDConn(ConnHandler):
 
         self.set_ready()
         self.logger.info('connection is ready')
+        self.on_event(
+            Event(sender=self.id, name=f'{self.id}_ready', data={})
+        )
 
         self.loop_forever(self.on_event)
 
