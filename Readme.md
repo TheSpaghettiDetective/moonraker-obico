@@ -42,20 +42,28 @@ Create plugin's config.ini with following content:
 # url = https://app.thespaghettidetective.com
 # auth_token = <filled in by link command, see installation section>
 
+# -- (TSD cloud) error reporting is disabled by default
+# -- Uncomment next line to help team detecting bugs sooner
+# sentry_opt = in
+
 [moonraker]
 # url = http://127.0.0.1:7125
 # api_key = <grab it from moonraker, visit /access/api_key from trusted host>
 
 [webcam]
 # stream_url = http://127.0.0.1:8080/?action=stream
+
 # -- set snapshot_url if you want to use the snapshot action
 # snapshot_url = http://127.0.0.1:8080/?action=snapshot #
+
 # -- whether to flip the webcam horizontally/vertically
 # flip_h = false
 # flip_v = false
+
 # -- whether to rotate the webcam 90° counter clockwise
 # rotate_90 = false
--- set when aspect ratio is 16:9 (instead of 4:3)
+
+# -- set when aspect ratio is 16:9 (instead of 4:3)
 # aspect_ratio_169 = false
 ```
 
