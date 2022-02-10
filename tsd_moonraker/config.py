@@ -3,7 +3,7 @@ from typing import Optional
 import re
 from configparser import ConfigParser
 
-import raven
+import raven  # type: ignore
 from .version import VERSION
 from .utils import SentryWrapper, get_tags
 
@@ -61,6 +61,10 @@ class WebcamConfig:
     snapshot_url: str = ''
     snapshot_ssl_validation: bool = False
     stream_url: str = ''
+    flip_h: bool = False
+    flip_v: bool = False
+    rotate_90: bool = False
+    aspect_ratio_169: bool = False
 
 
 @dataclasses.dataclass
@@ -123,6 +127,22 @@ class Config:
                 'webcam', 'stream_url',
                 fallback='http://127.0.0.1:8080/?action=stream'
             ),
+            flip_h=config.getboolean(
+                'webcam', 'flip_h',
+                fallback=False
+            ),
+            flip_v=config.getboolean(
+                'webcam', 'flip_v',
+                fallback=False
+            ),
+            rotate_90=config.getboolean(
+                'webcam', 'rotate_90',
+                fallback=False
+            ),
+            aspect_ratio_169=config.getboolean(
+                'webcam', 'aspect_ratio_169',
+                fallback=False
+            )
         )
 
         sentry_opt = config.get(

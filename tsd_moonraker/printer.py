@@ -3,6 +3,7 @@ import dataclasses
 import time
 import pathlib
 
+from .config import Config
 from .version import VERSION
 from .logger import getLogger
 
@@ -39,8 +40,7 @@ class PrinterState:
         }.get(data.get('print_stats', {}).get('state', 'unknown'), 'Error')
 
     def to_tsd_state(
-            self,
-            print_event: Optional[str] = None
+        self, print_event: Optional[str] = None, config: Optional[Config] = None
     ) -> Dict:
         data = {
             'current_print_ts': self.current_print_ts,
@@ -52,6 +52,16 @@ class PrinterState:
         }
         if print_event:
             data['octoprint_event'] = {'event_type': print_event}
+
+        if config:
+            data["octoprint_settings"] = dict(
+                webcam=dict(
+                    flipV=config.webcam.flip_v,
+                    flipH=config.webcam.flip_h,
+                    rotate90=config.webcam.rotate_90,
+                    streamRatio="16:9" if config.webcam.aspect_ratio_169 else "4:3",
+                ),
+            )
         return data
 
     def to_octoprint_state(self) -> Dict:
