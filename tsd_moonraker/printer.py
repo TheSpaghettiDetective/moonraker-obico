@@ -133,7 +133,7 @@ class PrinterState:
                 'user': None,
             },
             'progress': {
-                'completion': display_status.get('progress', 0.0),
+                'completion': display_status.get('progress', 0.0) * 100,
                 'filepos': virtual_sdcard.get('file_position', 0),
                 'printTime': print_stats.get('total_duration', 0.0),
                 'printTimeLeft': None,
