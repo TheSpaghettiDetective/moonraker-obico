@@ -424,7 +424,6 @@ class App(object):
         linked_printer: Dict
         printer_state: PrinterState
         force_snapshot: threading.Event
-        last_print: Optional[Dict] = None
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
@@ -442,7 +441,7 @@ class App(object):
         self.sentry = self.model.config.get_sentry()
         self.tsdconn = None
         self.moonrakerconn = None
-        self.q : queue.Queue = queue.Queue(maxsize=1000)
+        self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
         if self.shutdown:
@@ -803,14 +802,14 @@ class App(object):
         )
 
     def _received_job_action(self, data):
-        logger.info(data)
-        self.model.last_print = data['job']
+        self.logger.info(f'received print: {data["job"]}')
+        self.model.printer_state.last_print = data['job']
 
     def _received_last_print(self, job_data):
         self.logger.info(f'received last print: {job_data}')
-        self.model.last_print = job_data
+        self.model.printer_state.last_print = job_data
         self.model.printer_state.current_print_ts = int((
-            self.model.last_print or {}
+            self.model.printer_state.last_print or {}
         ).get('start_time', -1))
 
     def _received_klippy_update(self, data):
@@ -837,7 +836,7 @@ class App(object):
                 self.post_print_event('PrintResumed')
             else:
                 ts = int(time.time())
-                last_print = self.model.last_print or {}
+                last_print = self.model.printer_state.last_print or {}
                 last_print_ts = int(last_print.get('start_time', 0))
 
                 if (
@@ -982,7 +981,6 @@ if __name__ == '__main__':
         remote_status={'viewing': False, 'should_watch': False},
         linked_printer=DEFAULT_LINKED_PRINTER,
         printer_state=PrinterState(),
-        last_print=None,
         force_snapshot=threading.Event(),
     )
     app = App(model)
