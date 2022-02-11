@@ -34,6 +34,7 @@ class MoonrakerConfig:
 class TSDConfig:
     url: str = 'https://app.thespaghettidetective.com'
     auth_token: Optional[str] = None
+    upload_dir: str = ''  # relative to virtual sdcard
 
     # disable_video_streaming: bool = False
     # pi_cam_resolution: str = 'medium'
@@ -112,7 +113,10 @@ class Config:
                 fallback='https://app.thespaghettidetective.com'),
             auth_token=config.get(
                 'thespaghettidetective', 'auth_token',
-                fallback=None)
+                fallback=None),
+            upload_dir=config.get(
+                'thespaghettidetective', 'upload_dir',
+                fallback='thespaghettidetective').strip().lstrip('/').rstrip('/'),
         )
 
         webcam_config = WebcamConfig(

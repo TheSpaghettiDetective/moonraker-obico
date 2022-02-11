@@ -46,6 +46,9 @@ Create plugin's config.ini with following content:
 # -- Uncomment next line to help team detecting bugs sooner
 # sentry_opt = in
 
+# -- TSD upload directory, relative to klipper's virtual sdcard
+# upload_dir = thespaghettidetective
+
 [moonraker]
 # url = http://127.0.0.1:7125
 # api_key = <grab it from moonraker, visit /access/api_key from trusted host>
