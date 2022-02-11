@@ -757,7 +757,7 @@ class App(object):
             f'downloading "{filename}" from {gcode_file["url"]}')
 
         safe_filename = sanitize_filename(filename)
-        path = 'thespaghettidetective'
+        path = self.model.config.thespaghettidetective.upload_dir
 
         r = requests.get(
             gcode_file['url'],
