@@ -36,6 +36,12 @@ class TSDConfig:
     auth_token: Optional[str] = None
     upload_dir: str = ''  # relative to virtual sdcard
 
+    # feedrates for printer control, mm/s
+    DEFAULT_FEEDRATE_XY = 100
+    DEFAULT_FEEDRATE_Z = 10
+    feedrate_xy : int = DEFAULT_FEEDRATE_XY
+    feedrate_z : int = DEFAULT_FEEDRATE_Z
+
     # disable_video_streaming: bool = False
     # pi_cam_resolution: str = 'medium'
     # video_streaming_compatible_mode: str = 'auto'
@@ -117,6 +123,14 @@ class Config:
             upload_dir=config.get(
                 'thespaghettidetective', 'upload_dir',
                 fallback='thespaghettidetective').strip().lstrip('/').rstrip('/'),
+            feedrate_xy=config.getint(
+                'thespaghettidetective', 'feedrate_xy',
+                fallback=TSDConfig.DEFAULT_FEEDRATE_XY,
+            ),
+            feedrate_z=config.getint(
+                'thespaghettidetective', 'feedrate_z',
+                fallback=TSDConfig.DEFAULT_FEEDRATE_Z,
+            )
         )
 
         webcam_config = WebcamConfig(

@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 from typing import Optional, Dict, List, Tuple
+from numbers import Number
 import argparse
 import dataclasses
 import time
@@ -7,6 +8,7 @@ import logging
 import threading
 import collections
 import queue
+import json
 import re
 
 import requests  # type: ignore
@@ -33,6 +35,9 @@ POST_PIC_INTERVAL_SECONDS = 10
 if DEBUG:
     POST_STATUS_INTERVAL_SECONDS = 10
     POST_PIC_INTERVAL_SECONDS = 10
+
+
+ACKREF_EXPIRE_SECS = 300
 
 
 def fix_timestamp(cur_ts, now_ts):
@@ -309,6 +314,32 @@ class MoonrakerConn(ConnHandler):
         resp.raise_for_status()
         return resp.json()
 
+    def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
+        # TODO check axes
+        command = "G0 {}".format(
+            " ".join([
+                "{}{}".format(axis.upper(), amt)
+                for axis, amt in axes_dict.items()
+            ])
+        )
+
+        if feedrate:
+            command += " F{}".format(feedrate * 60)
+
+        commands = ["G91", command]
+        if not is_relative:
+            commands.append("G90")
+
+        script = "\n".join(commands)
+        return self._jsonrpc_request('printer.gcode.script', script=script)
+
+    def request_home(self, axes) -> Dict:
+        # TODO check axes
+        script = "G28 %s" % " ".join(
+            map(lambda x: "%s0" % x.upper(), axes)
+        )
+        return self._jsonrpc_request('printer.gcode.script', script=script)
+
 
 class TSDConn(ConnHandler):
     max_backoff_secs = 300
@@ -427,6 +458,7 @@ class App(object):
         printer_state: PrinterState
         force_snapshot: threading.Event
         seen_refs: collections.deque
+        pending_ack_refs_by_event_id: Dict[int, Tuple[str, float]]
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
@@ -437,6 +469,17 @@ class App(object):
 
         def is_configured(self):
             return True  # FIXME
+
+        def set_event_id_for_ack_ref(self, event_id: int, ack_ref: str) -> None:
+            t = time.time()
+            self.pending_ack_refs_by_event_id = {
+                k: v
+                for k, v in self.pending_ack_refs_by_event_id.items()
+                if t < v[1] or abs(t - v[1]) < ACKREF_EXPIRE_SECS
+            }
+            self.pending_ack_refs_by_event_id[event_id] = (
+                ack_ref, time.time() + ACKREF_EXPIRE_SECS
+            )
 
     def __init__(self, model: Model):
         self.shutdown = False
@@ -520,28 +563,33 @@ class App(object):
     def event_loop(self):
         # processes app events
         # alters state of app
-
         while self.shutdown is False:
-            event = self.q.get()
+            try:
+                event = self.q.get()
+                self._process_event(event)
+            except Exception:
+                self.sentry.captureException()
+                self.logger.exception(f'error processing event {event}')
 
-            if event.name == 'fatal_error':
-                self.stop(cause=event.data.get('exc'))
+    def _process_event(self, event):
+        if event.name == 'fatal_error':
+            self.stop(cause=event.data.get('exc'))
 
-            elif event.name == 'shutdown':
-                self.stop()
+        elif event.name == 'shutdown':
+            self.stop()
 
-            elif event.sender == 'moonrakerconn':
-                self._on_moonrakerconn_event(event)
+        elif event.sender == 'moonrakerconn':
+            self._on_moonrakerconn_event(event)
 
-            elif event.sender == 'tsdconn':
-                self._on_tsdconn_event(event)
+        elif event.sender == 'tsdconn':
+            self._on_tsdconn_event(event)
 
-            elif event.name == 'download_and_print_done':
-                self.logger.info('clearing downloading flag')
-                self.model.downloading_gcode_file = None
+        elif event.name == 'download_and_print_done':
+            self.logger.info('clearing downloading flag')
+            self.model.downloading_gcode_file = None
 
-            elif event.name == 'post_snapshot_done':
-                self.logger.info('posting snapshot finished')
+        elif event.name == 'post_snapshot_done':
+            self.logger.info('posting snapshot finished')
 
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
@@ -560,6 +608,33 @@ class App(object):
 
         elif event.name == 'last_job':
             self._received_last_print(event.data)
+
+        elif 'id' in event.data and event.data['id'] in self.model.pending_ack_refs_by_event_id:
+            ack_ref = self.model.pending_ack_refs_by_event_id.pop(event.data['id'])[0]
+            if ack_ref and self.tsdconn:
+                if 'error' in event.data:
+                    error = event.data['error']
+                    self.logger.warning(f'got error for ack_ref {ack_ref} ({error})')
+                    try:
+                        # moonraker's WebRequestError is a weird json lookalike, probing
+                        error = json.loads(error['message'].replace("'", '"'))
+                    except Exception:
+                        self.logger.exception("p")
+                        pass
+
+                    self.tsdconn.send_passthru({
+                        'ref': ack_ref,
+                        'ret': {
+                            'error': f"{error.get('message', error)}",
+                        },
+                    })
+                else:
+                    self.tsdconn.send_passthru({
+                        'ref': ack_ref,
+                        'ret': {
+                            'success': event.data['result']
+                        }
+                    })
 
         elif event.name == 'message':
             if 'error' in event.data:
@@ -937,26 +1012,13 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == ('file_downloader', 'download'):
-                gcode_file = args[0]
-                if (
-                    not self.model.downloading_gcode_file and
-                    not self.model.is_printing()
-                ):
-                    self.tsdconn.send_passthru(
-                        {
-                            'ref': ack_ref,
-                            'ret': {'target_path': gcode_file['filename']},
-                        }
-                    )
-                    self.download_and_print(ack_ref, gcode_file)
-                else:
-                    self.tsdconn.send_passthru(
-                        {
-                            'ref': ack_ref,
-                            'ret': {
-                                'error': 'Currently downloading or printing!'}
-                        }
-                    )
+                self._process_download_message(ack_ref, gcode_file=args[0])
+
+            elif target == ('_printer', 'jog'):
+                self._process_jog_message(ack_ref, axes_dict=args[0])
+
+            elif target == ('_printer', 'home'):
+                self._process_home_message(ack_ref, axes=args[0])
 
         # if msg.get('janus') and self.janus:
         #    self.janus.pass_to_janus(msg.get('janus'))
@@ -966,6 +1028,81 @@ class App(object):
 
     def boost_status_update(self):
         self.model.status_update_booster = 20
+
+    def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
+        if not self.tsdconn or not self.tsdconn.ready:
+            return
+
+        if (
+            not self.model.downloading_gcode_file and
+            not self.model.is_printing()
+        ):
+            self.tsdconn.send_passthru(
+                {
+                    'ref': ack_ref,
+                    'ret': {'target_path': gcode_file['filename']},
+                }
+            )
+            self.download_and_print(ack_ref, gcode_file)
+        else:
+            self.tsdconn.send_passthru(
+                {
+                    'ref': ack_ref,
+                    'ret': {
+                        'error': 'Currently downloading or printing!'}
+                }
+            )
+
+    def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
+        if not self.moonrakerconn or not self.moonrakerconn.ready:
+            if self.tsdconn and self.tsdconn.ready:
+                self.tsdconn.send_passthru(
+                    {
+                        'ref': ack_ref,
+                        'ret': {
+                            'error': 'Printer is not connected!',
+                        }
+                    }
+                )
+            return
+
+        gcode_move = self.model.printer_state.status['gcode_move']
+        is_relative = not gcode_move['absolute_coordinates']
+        has_z = 'z' in {axis.lower() for axis in axes_dict.keys()}
+        feedrate = (
+            self.model.config.thespaghettidetective.feedrate_z
+            if has_z
+            else self.model.config.thespaghettidetective.feedrate_xy
+        )
+
+        self.logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
+
+        self.model.set_event_id_for_ack_ref(
+            self.moonrakerconn.request_jog(
+                axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
+            ),
+            ack_ref,
+        )
+
+    def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
+        if not self.moonrakerconn or not self.moonrakerconn.ready:
+            if self.tsdconn and self.tsdconn.ready:
+                self.tsdconn.send_passthru(
+                    {
+                        'ref': ack_ref,
+                        'ret': {
+                            'error': 'Printer is not connected!',
+                        }
+                    }
+                )
+            return
+
+        self.logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
+
+        self.model.set_event_id_for_ack_ref(
+            self.moonrakerconn.request_home(axes=axes),
+            ack_ref,
+        )
 
 
 if __name__ == '__main__':
@@ -1000,6 +1137,7 @@ if __name__ == '__main__':
         printer_state=PrinterState(),
         force_snapshot=threading.Event(),
         seen_refs=collections.deque(maxlen=100),
+        pending_ack_refs_by_event_id={},
     )
     app = App(model)
     app.start()
