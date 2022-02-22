@@ -690,6 +690,7 @@ class App(object):
         ret, data = None, {}
         try:
             ret = fn(*args, **(kwargs if kwargs is not None else {}))
+            data['ret'] = ret
         except Exception as exc:
             data['exc'] = exc
             self.logger.exception(
