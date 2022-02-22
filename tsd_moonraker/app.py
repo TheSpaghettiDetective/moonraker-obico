@@ -262,6 +262,7 @@ class MoonrakerConn(ConnHandler):
                 "heaters": None,
                 "toolhead": None,
                 "extruder": None,
+                "gcode_move": None,
             }
 
             for heater in (self.heaters or ()):
