@@ -702,7 +702,7 @@ class App(object):
         return ret
 
     def post_snapshot(self) -> None:
-        if self.tsdconn.ready:
+        if self.tsdconn and self.tsdconn.ready:
             self.model.force_snapshot.set()
 
     def snapshot_loop(self):
@@ -735,6 +735,9 @@ class App(object):
         self.model.downloading_gcode_file = (ref, gcode_file)
 
     def _post_snapshot(self) -> None:
+        if not self.tsdconn:
+            return
+
         self.logger.info('capturing and posting snapshot')
 
         try:
