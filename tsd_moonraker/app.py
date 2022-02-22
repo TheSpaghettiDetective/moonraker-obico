@@ -5,6 +5,7 @@ import dataclasses
 import time
 import logging
 import threading
+import collections
 import queue
 import re
 
@@ -425,6 +426,7 @@ class App(object):
         linked_printer: Dict
         printer_state: PrinterState
         force_snapshot: threading.Event
+        seen_refs: collections.deque
         status_update_booster: int = 0
         status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
@@ -924,6 +926,16 @@ class App(object):
             target = (passthru.get('target'), passthru.get('func'))
             args = passthru.get('args', ())
             ack_ref = passthru.get('ref')
+
+            if ack_ref is not None:
+                # same msg may arrive through both ws and datachannel
+                if ack_ref in self.model.seen_refs:
+                    self.logger.debug('Ignoring already processed passthru message')
+                    return
+                # no need to remove item or check size
+                # as deque manages that when maxlen is set
+                self.model.seen_refs.append(ack_ref)
+
             if target == ('file_downloader', 'download'):
                 gcode_file = args[0]
                 if (
@@ -987,6 +999,7 @@ if __name__ == '__main__':
         linked_printer=DEFAULT_LINKED_PRINTER,
         printer_state=PrinterState(),
         force_snapshot=threading.Event(),
+        seen_refs=collections.deque(maxlen=100),
     )
     app = App(model)
     app.start()
