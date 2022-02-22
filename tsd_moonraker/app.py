@@ -843,7 +843,7 @@ class App(object):
                 self.post_print_event('PrintResumed')
             else:
                 ts = int(time.time())
-                last_print = self.model.printer_state.last_print or {}
+                last_print = printer_state.last_print or {}
                 last_print_ts = int(last_print.get('start_time', 0))
 
                 if (
