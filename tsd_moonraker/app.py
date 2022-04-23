@@ -82,7 +82,7 @@ class MoonrakerConn(ConnHandler):
             url,
             headers=headers,
             data=post_params,
-            files=None
+            files=files,
         )
         resp.raise_for_status()
         return resp.json()
@@ -302,28 +302,6 @@ class MoonrakerConn(ConnHandler):
 
     def request_job(self, job_id):
         return self._jsonrpc_request('server.history.get_job', uid=job_id)
-
-    def upload_gcode_over_http(self, filename, safe_filename, path, fileobj):
-        url = f'{self.config.canonical_endpoint_prefix()}/server/files/upload'
-        self.logger.debug('POST {url}')
-        resp = requests.post(
-            url,
-            headers={'X-Api-Key': self.config.api_key},
-            data={
-                'path': path,
-                'print': 'true'
-            },
-            files={
-                'file': (filename, fileobj, 'application/octet-stream'),
-            }
-        )
-
-        if resp.status_code == 403:
-            if b'File is loaded, upload not permitted' in resp.content:
-                logger.error('got "file is loaded, upload not permitted"')
-
-        resp.raise_for_status()
-        return resp.json()
 
     def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
         # TODO check axes
@@ -861,17 +839,17 @@ class App(object):
         r.raise_for_status()
 
         self.logger.info(f'uploading "{filename}" to moonraker')
-        resp_data = self.moonrakerconn.upload_gcode_over_http(
-            filename, safe_filename, path, r.content
+        resp_data = self.moonrakerconn.api_post(
+                'server/files/upload',
+                filename=filename,
+                fileobj=r.content,
+                path=path,
+                print='true',
         )
-        # if resp.status_code == 403:
-        #     self.logger.info(f'got 403, upload might be loaded already')
-        #     self.moonrakerconn.request_print(filename=f'{dirname}/{filename}')
-        # else:
 
         self.logger.debug(f'upload response: {resp_data}')
         self.logger.info(
-            f'uploading "{filename}" finished, print starting soon')
+            f'uploading "{filename}" finished.')
 
     def post_status_update(self, data=None, config=None):
         if not self.tsdconn.ready:
