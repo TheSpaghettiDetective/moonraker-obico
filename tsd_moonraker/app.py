@@ -62,10 +62,30 @@ class MoonrakerConn(ConnHandler):
         self.heaters: Optional[List[str]] = None
 
     def api_get(self, mr_method, timeout=5, **params):
+        self.logger.debug('GET {url}')
         url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
-        resp = requests.get(url, timeout=timeout)
+        headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
+        resp = requests.get(
+                url,
+                headers=headers,
+                timeout=timeout,
+        )
         resp.raise_for_status()
         return resp.json()['result']
+
+    def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
+        self.logger.debug('POST {url}')
+        url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
+        files={'file': (filename, fileobj, 'application/octet-stream')} if filename and fileobj else None
+        resp = requests.post(
+            url,
+            headers=headers,
+            data=post_params,
+            files=None
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
@@ -114,6 +134,7 @@ class MoonrakerConn(ConnHandler):
             self.ready = False
             try:
                 while True:
+                    #self._jsonrpc_request('server.database.get_item', namespace='webcams')
                     rid = self.request_printer_info()
                     try:
                         self.wait_for(
