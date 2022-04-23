@@ -45,6 +45,13 @@ def fix_timestamp(cur_ts, now_ts):
     return 0 if cur_ts > now_ts else cur_ts
 
 
+def moonraker_get(mr_config, mr_method, timeout=5, **params):
+    url = f'{mr_config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()['result']
+
+
 class MoonrakerConn(ConnHandler):
     max_backoff_secs = 30
     flow_step_timeout_msecs = 2000
@@ -83,7 +90,8 @@ class MoonrakerConn(ConnHandler):
         if not self.config.api_key:
             self.logger.warning('api key is unset, trying to fetch one')
             try:
-                self.config.api_key = self.try_to_fetch_api_key()
+                self.config.api_key = moonraker_get(self.config, 'access/api_key')
+
             except Exception as exc:
                 raise FatalError('no api key for moonraker', exc=exc)
 
@@ -157,19 +165,6 @@ class MoonrakerConn(ConnHandler):
 
         return super(MoonrakerConn, self)._wait_for(
             event, process_fn, timeout_msecs)
-
-    def try_to_fetch_api_key(self):
-        url = f'{self.config.canonical_endpoint_prefix()}/access/api_key'
-        self.logger.debug(f'GET {url}')
-        resp = requests.get(url, timeout=5)
-        if resp.status_code in (401, 403):
-            raise FatalError(
-                f'{self.id} failed to fetch api key '
-                f'(HTTP {resp.status_code})',
-                exc=resp_to_exception(resp))
-
-        resp.raise_for_status()
-        return resp.json()['result']
 
     def _received_connected(self, event):
         if event.name == 'connected':
