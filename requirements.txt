@@ -5,3 +5,4 @@ pathvalidate==2.5.0
 raven==6.10.0
 requests==2.26.0
 sarge==0.1.6
+ipdb=0.13.9
