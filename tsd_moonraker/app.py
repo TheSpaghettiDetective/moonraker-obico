@@ -45,13 +45,6 @@ def fix_timestamp(cur_ts, now_ts):
     return 0 if cur_ts > now_ts else cur_ts
 
 
-def moonraker_get(mr_config, mr_method, timeout=5, **params):
-    url = f'{mr_config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
-    resp = requests.get(url, timeout=timeout)
-    resp.raise_for_status()
-    return resp.json()['result']
-
-
 class MoonrakerConn(ConnHandler):
     max_backoff_secs = 30
     flow_step_timeout_msecs = 2000
@@ -67,6 +60,12 @@ class MoonrakerConn(ConnHandler):
         self.websocket_id: Optional[int] = None
         self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
+
+    def api_get(self, mr_method, timeout=5, **params):
+        url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()['result']
 
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
@@ -89,11 +88,7 @@ class MoonrakerConn(ConnHandler):
 
         if not self.config.api_key:
             self.logger.warning('api key is unset, trying to fetch one')
-            try:
-                self.config.api_key = moonraker_get(self.config, 'access/api_key')
-
-            except Exception as exc:
-                raise FatalError('no api key for moonraker', exc=exc)
+            self.config.api_key = self.api_get('access/api_key')
 
         self.conn = WSConn(
             id=self.id,
@@ -498,6 +493,7 @@ class App(object):
 
     def start(self):
         self.logger.info(f'starting tsd_moonraker (v{VERSION})')
+        self.logger.debug(self.model.config.thespaghettidetective)
         self.tsdconn = TSDConn(
             'tsdconn',
             self.sentry,
