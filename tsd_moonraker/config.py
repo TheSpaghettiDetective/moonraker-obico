@@ -2,6 +2,7 @@ import dataclasses
 from typing import Optional
 import re
 from configparser import ConfigParser
+from urllib.parse import urlparse
 
 import raven  # type: ignore
 from .version import VERSION
@@ -73,6 +74,27 @@ class WebcamConfig:
     rotate_90: bool = False
     aspect_ratio_169: bool = False
 
+    def update_from_moonraker(self, mr_conn):
+        result = mr_conn.api_get('server.database.item', namespace='webcams')
+
+        # TODO: Just pick the last webcam before we have a way to support multiple cameras
+        for cfg in result.get('value', {}).values():
+            self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
+            self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
+            self.flip_h = cfg.get('flipX', False)
+            self.flip_v = cfg.get('flipY', False)
+
+    @classmethod
+    def webcam_full_url(cls, url):
+        if not url or not url.strip():
+            return ''
+
+        full_url = url.strip()
+        if not urlparse(full_url).scheme:
+            full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+
+        return full_url
+
 
 @dataclasses.dataclass
 class Config:
@@ -133,35 +155,7 @@ class Config:
             )
         )
 
-        webcam_config = WebcamConfig(
-            snapshot_url=config.get(
-                'webcam', 'snapshot_url',
-                fallback=''),
-            snapshot_ssl_validation=config.getboolean(
-                'webcam', 'snapshot_ssl_validation',
-                fallback=False
-            ),
-            stream_url=config.get(
-                'webcam', 'stream_url',
-                fallback='http://127.0.0.1:8080/?action=stream'
-            ),
-            flip_h=config.getboolean(
-                'webcam', 'flip_h',
-                fallback=False
-            ),
-            flip_v=config.getboolean(
-                'webcam', 'flip_v',
-                fallback=False
-            ),
-            rotate_90=config.getboolean(
-                'webcam', 'rotate_90',
-                fallback=False
-            ),
-            aspect_ratio_169=config.getboolean(
-                'webcam', 'aspect_ratio_169',
-                fallback=False
-            )
-        )
+        webcam_config = WebcamConfig()
 
         sentry_opt = config.get(
             'thespaghettidetective', 'sentry_opt',

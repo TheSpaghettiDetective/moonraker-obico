@@ -53,29 +53,33 @@ class MoonrakerConn(ConnHandler):
     class KlippyGone(Exception):
         pass
 
-    def __init__(self, id, sentry, moonraker_config, on_event):
+    def __init__(self, id, app_config, sentry, on_event):
         super().__init__(id, sentry, on_event)
         self._next_id: int = 0
-        self.config: MoonrakerConfig = moonraker_config
+        self.app_config: Config = app_config
+        self.config: MoonrakerConfig = app_config.moonraker
         self.websocket_id: Optional[int] = None
         self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
 
     def api_get(self, mr_method, timeout=5, **params):
-        self.logger.debug('GET {url}')
         url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        self.logger.debug('GET {url}')
+
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         resp = requests.get(
                 url,
                 headers=headers,
+                params=params,
                 timeout=timeout,
         )
         resp.raise_for_status()
         return resp.json()['result']
 
     def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
-        self.logger.debug('POST {url}')
         url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        self.logger.debug('POST {url}')
+
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         files={'file': (filename, fileobj, 'application/octet-stream')} if filename and fileobj else None
         resp = requests.post(
@@ -129,12 +133,13 @@ class MoonrakerConn(ConnHandler):
         self.request_websocket_id()
         self.wait_for(self._received_websocket_id)
 
+        self.app_config.webcam.update_from_moonraker(self)
+
         while True:
             self.logger.info('waiting for klipper ready')
             self.ready = False
             try:
                 while True:
-                    #self._jsonrpc_request('server.database.get_item', namespace='webcams')
                     rid = self.request_printer_info()
                     try:
                         self.wait_for(
@@ -502,8 +507,8 @@ class App(object):
 
         self.moonrakerconn = MoonrakerConn(
             'moonrakerconn',
+            self.model.config,
             self.sentry,
-            self.model.config.moonraker,
             self.push_event,
         )
 
