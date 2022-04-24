@@ -120,10 +120,7 @@ class Config:
     def load_from(cls, config_path: str) -> 'Config':
         config = ConfigParser()
         config.read([config_path, ])
-        return cls.from_config(config, config_path)
 
-    @classmethod
-    def from_config(cls, config: ConfigParser, config_path: str) -> 'Config':
         moonraker_config = MoonrakerConfig(
             url=config.get(
                 'moonraker', 'url',
