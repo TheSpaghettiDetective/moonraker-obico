@@ -1,12 +1,14 @@
 #!/bin/bash
-# This script installs TheSpaghettiDetective Moonraker Plugin
-set -eu
+
+# Copied from get.rvm.io
+shopt -s extglob
+set -o errtrace
+set -o errexit
+set -o pipefail
+
 
 SYSTEMDDIR="/etc/systemd/system"
-MOONRAKER_BOT_ENV="${HOME}/tsd-moonraker-env"
-MOONRAKER_BOT_DIR="${HOME}/tsd-moonraker"
-MOONRAKER_BOT_LOG="${HOME}/klipper_logs"
-KLIPPER_CONF_DIR="${HOME}/klipper_config"
+OBICO_DIR="${HOME}/tsd-moonraker"
 CURRENT_USER=${USER}
 
 # Helper functions
@@ -14,24 +16,67 @@ report_status() {
   echo -e "###### $1"
 }
 
-# Main functions
-init_config_path() {
-  # check in config exists!
-  if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
-    if [ -z ${klipper_cfg_loc+x} ]; then
-      report_status "Selecting config path"
-      echo -e "\n"
-      read -p "Enter your klipper configs path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
+# Set up config
+
+klipper_conf_dir_valid() {
+  [[ -d "${KLIPPER_CONF_DIR}" ]]
+  return $?
+}
+
+ensure_klipper_conf_dir() {
+  KLIPPER_CONF_DIR="${HOME}/klipper_config"
+  if klipper_conf_dir_valid ; then
+    report_status "Locating Klipper config dir... found!"
+  else
+    while ! klipper_conf_dir_valid ; do
+      read -p "Enter your klipper config directory path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
       KLIPPER_CONF_DIR=${klip_conf_dir}
-    else
-      KLIPPER_CONF_DIR=${klipper_cfg_loc}
-    fi
-    # check if dir exists!
-    if [[ ! -d "${KLIPPER_CONF_DIR}" ]]; then
-      mkdir "${KLIPPER_CONF_DIR}"
-    fi
+    done
   fi
-  report_status "Using configs from ${KLIPPER_CONF_DIR}"
+}
+
+moonraker_config_valid() {
+  [[ -f "${MOONRAKER_CONFIG}" ]]
+  return $?
+}
+
+ensure_moonraker_config() {
+  MOONRAKER_CONFIG="${KLIPPER_CONF_DIR}/moonraker.conf"
+  if moonraker_config_valid ; then
+    report_status "Locating Moonraker config file... found!"
+  else
+    while ! moonraker_config_valid ; do
+      read -p "Enter your Moonraker config file path: " -e -i "${MOONRAKER_CONFIG}" mr_config
+      MOONRAKER_CONFIG="${mr_config}"
+    done
+  fi
+}
+
+ensure_venv() {
+  if [[ -f "${HOME}/moonraker-env/bin/activate" ]] ; then
+    OBICO_ENV="${HOME}/moonraker-env"
+  else
+    OBICO_ENV="${HOME}/obico-env"
+
+    report_status "Installing required system packages..."
+    PKGLIST="python3 python3-pip python3-venv"
+    sudo apt-get update --allow-releaseinfo-change
+    sudo apt-get install --yes ${PKGLIST}
+
+    report_status "Creating python virtual environment for TSD..."
+    mkdir -p "${OBICO_ENV}"
+    virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
+    "${OBICO_ENV}"/bin/pip3 install -r "${OBICO_DIR}"/requirements.txt
+  fi
+}
+
+ensure_log_dir() {
+  if [[ -w "${HOME}/klipper_logs" ]] ; then
+    LOG_DIR="${HOME}/klipper_logs"
+  else
+    LOG_DIR="${HOME}/obico_logs"
+    mkdir -p "${LOG_DIR}"
+  fi
 }
 
 create_initial_config() {
@@ -39,18 +84,18 @@ create_initial_config() {
   if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
     report_status "Selecting log path"
     echo -e "\n"
-    read -p "Enter your bot log file: " -e -i "${MOONRAKER_BOT_LOG}" bot_log_path
-    MOONRAKER_BOT_LOG=${bot_log_path}
-    report_status "Writing bot logs to ${MOONRAKER_BOT_LOG}"
+    read -p "Enter your bot log file: " -e -i "${LOG_DIR}" bot_log_path
+    LOG_DIR=${bot_log_path}
+    report_status "Writing bot logs to ${LOG_DIR}"
     # check if dir exists!
-    if [[ ! -d "${MOONRAKER_BOT_LOG}" ]]; then
-      mkdir "${MOONRAKER_BOT_LOG}"
+    if [[ ! -d "${LOG_DIR}" ]]; then
+      mkdir "${LOG_DIR}"
     fi
 
     report_status "Creating base config file"
-    cp -n "${MOONRAKER_BOT_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
+    cp -n "${OBICO_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
 
-    sed -i "s+some_log_path+${MOONRAKER_BOT_LOG}+g" "${KLIPPER_CONF_DIR}"/config.ini
+    sed -i "s+some_log_path+${LOG_DIR}+g" "${KLIPPER_CONF_DIR}"/config.ini
   fi
 }
 
@@ -63,27 +108,6 @@ stop_sevice() {
   else
     report_status "$serviceName service does not exist or not running."
   fi
-}
-
-install_packages() {
-  PKGLIST="python3 python3-pip python3-venv"
-
-  report_status "Running apt-get update..."
-  sudo apt-get update --allow-releaseinfo-change
-
-  report_status "Installing packages..."
-  sudo apt-get install --yes ${PKGLIST}
-}
-
-create_virtualenv() {
-  report_status "Installing python virtual environment..."
-  # check if dir exists!
-  if [[ ! -d "${MOONRAKER_BOT_ENV}" ]]; then
-    mkdir "${MOONRAKER_BOT_ENV}"
-  fi
-
-  virtualenv -p /usr/bin/python3 --system-site-packages "${MOONRAKER_BOT_ENV}"
-  "${MOONRAKER_BOT_ENV}"/bin/pip3 install -r "${MOONRAKER_BOT_DIR}"/requirements.txt
 }
 
 create_service() {
@@ -102,8 +126,8 @@ WantedBy=multi-user.target
 [Service]
 Type=simple
 User=${CURRENT_USER}
-WorkingDirectory=${MOONRAKER_BOT_DIR}
-ExecStart=${MOONRAKER_BOT_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${MOONRAKER_BOT_LOG}/tsd-moonraker.log
+WorkingDirectory=${OBICO_DIR}
+ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${LOG_DIR}/tsd-moonraker.log
 Restart=always
 RestartSec=5
 EOF
@@ -117,9 +141,14 @@ EOF
   sudo systemctl start tsd-moonraker
 }
 
-init_config_path
-create_initial_config
-stop_sevice
-install_packages
-create_virtualenv
-create_service
+#init_config_path
+#create_initial_config
+#stop_sevice
+#install_packages
+#create_virtualenv
+#create_service
+
+ensure_klipper_conf_dir
+ensure_moonraker_config
+ensure_venv
+ensure_log_dir
