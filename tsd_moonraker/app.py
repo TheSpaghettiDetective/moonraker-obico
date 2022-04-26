@@ -62,7 +62,7 @@ class MoonrakerConn(ConnHandler):
         self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
 
-    def api_get(self, mr_method, timeout=5, **params):
+    def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
         self.logger.debug('GET {url}')
 
@@ -73,8 +73,11 @@ class MoonrakerConn(ConnHandler):
                 params=params,
                 timeout=timeout,
         )
-        resp.raise_for_status()
-        return resp.json()['result']
+
+        if raise_for_status:
+            resp.raise_for_status()
+
+        return resp.json().get('result')
 
     def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
         url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'

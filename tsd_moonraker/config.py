@@ -75,14 +75,36 @@ class WebcamConfig:
     aspect_ratio_169: bool = False
 
     def update_from_moonraker(self, mr_conn):
-        result = mr_conn.api_get('server.database.item', namespace='webcams')
 
-        # TODO: Just pick the last webcam before we have a way to support multiple cameras
-        for cfg in result.get('value', {}).values():
-            self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
-            self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
-            self.flip_h = cfg.get('flipX', False)
-            self.flip_v = cfg.get('flipY', False)
+        # Check for the standard namespace for webcams
+        result = mr_conn.api_get('server.database.item', raise_for_status=False, namespace='webcams')
+
+        if result:
+            # TODO: Just pick the last webcam before we have a way to support multiple cameras
+            for cfg in result.get('value', {}).values():
+                self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
+                self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
+                self.flip_h = cfg.get('flipX', False)
+                self.flip_v = cfg.get('flipY', False)
+
+            return
+
+        # webcam configs not found in the standard location. Try fluidd's flavor
+        result = mr_conn.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
+        if result:
+            # TODO: Just pick the last webcam before we have a way to support multiple cameras
+            for cfg in result.get('value', {}).get('cameras', []):
+                if not cfg.get('enabled', False):
+                    continue
+
+                self.stream_url = self.webcam_full_url(cfg.get('url', None))
+                self.flip_h = cfg.get('flipX', False)
+                self.flip_v = cfg.get('flipY', False)
+
+            return
+
+        #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+
 
     @classmethod
     def webcam_full_url(cls, url):
