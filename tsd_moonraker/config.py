@@ -174,7 +174,35 @@ class Config:
             )
         )
 
-        webcam_config = WebcamConfig()
+        webcam_config = WebcamConfig(
+            snapshot_url=config.get(
+                'webcam', 'snapshot_url',
+                fallback=''),
+            snapshot_ssl_validation=config.getboolean(
+                'webcam', 'snapshot_ssl_validation',
+                fallback=False
+            ),
+            stream_url=config.get(
+                'webcam', 'stream_url',
+                fallback='http://127.0.0.1:8080/?action=stream'
+            ),
+            flip_h=config.getboolean(
+                'webcam', 'flip_h',
+                fallback=False
+            ),
+            flip_v=config.getboolean(
+                'webcam', 'flip_v',
+                fallback=False
+            ),
+            rotate_90=config.getboolean(
+                'webcam', 'rotate_90',
+                fallback=False
+            ),
+            aspect_ratio_169=config.getboolean(
+                'webcam', 'aspect_ratio_169',
+                fallback=False
+            )
+        )
 
         sentry_opt = config.get(
             'thespaghettidetective', 'sentry_opt',
