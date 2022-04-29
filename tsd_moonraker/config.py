@@ -11,24 +11,17 @@ from .utils import SentryWrapper, get_tags
 
 @dataclasses.dataclass
 class MoonrakerConfig:
-    url: str = 'http://127.0.0.1:7125'
+    host: str = '127.0.0.1'
+    port: int = 7125
     api_key: Optional[str] = None
 
-    def canonical_endpoint_prefix(self):
-        if not self.url:
+    def http_address(self):
+        if not self.host or not self.port:
             return None
-
-        endpoint_prefix = self.url.strip()
-        if endpoint_prefix.endswith('/'):
-            endpoint_prefix = endpoint_prefix[:-1]
-
-        return endpoint_prefix
-
-    def canonical_ws_prefix(self):
-        return re.sub(r'^http', 'ws', self.canonical_endpoint_prefix())
+        return f'http://{self.host}:{self.port}'
 
     def ws_url(self):
-        return f'{self.canonical_ws_prefix()}/websocket'
+        return f'ws://{self.host}:{self.port}/websocket'
 
 
 @dataclasses.dataclass
@@ -144,9 +137,13 @@ class Config:
         config.read([config_path, ])
 
         moonraker_config = MoonrakerConfig(
-            url=config.get(
-                'moonraker', 'url',
-                fallback='http://127.0.0.1:7125'
+            host=config.get(
+                'moonraker', 'host',
+                fallback='127.0.0.1'
+            ),
+            port=config.get(
+                'moonraker', 'port',
+                fallback=7125
             ),
             api_key=config.get(
                 'moonraker', 'api_key',

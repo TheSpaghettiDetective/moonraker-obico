@@ -63,7 +63,7 @@ class MoonrakerConn(ConnHandler):
         self.heaters: Optional[List[str]] = None
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
-        url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
         self.logger.debug('GET {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
@@ -80,7 +80,7 @@ class MoonrakerConn(ConnHandler):
         return resp.json().get('result')
 
     def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
-        url = f'{self.config.canonical_endpoint_prefix()}/{mr_method.replace(".", "/")}'
+        url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
         self.logger.debug('POST {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
