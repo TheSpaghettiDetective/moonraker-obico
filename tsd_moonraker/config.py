@@ -25,8 +25,8 @@ class MoonrakerConfig:
 
 
 @dataclasses.dataclass
-class TSDConfig:
-    url: str = 'https://app.thespaghettidetective.com'
+class ServerConfig:
+    url: str = 'https://app.obico.io'
     auth_token: Optional[str] = None
     upload_dir: str = ''  # relative to virtual sdcard
 
@@ -114,7 +114,7 @@ class WebcamConfig:
 @dataclasses.dataclass
 class Config:
     moonraker: MoonrakerConfig
-    server: TSDConfig
+    server: ServerConfig
     webcam: WebcamConfig
 
     _config_path: str
@@ -151,23 +151,23 @@ class Config:
             ),
         )
 
-        tsd_config = TSDConfig(
+        tsd_config = ServerConfig(
             url=config.get(
                 'server', 'url',
-                fallback='https://app.thespaghettidetective.com'),
+                fallback='https://app.obico.io'),
             auth_token=config.get(
                 'server', 'auth_token',
                 fallback=None),
             upload_dir=config.get(
                 'server', 'upload_dir',
-                fallback='thespaghettidetective').strip().lstrip('/').rstrip('/'),
+                fallback='Obico_Upload').strip().lstrip('/').rstrip('/'),
             feedrate_xy=config.getint(
                 'server', 'feedrate_xy',
-                fallback=TSDConfig.DEFAULT_FEEDRATE_XY,
+                fallback=ServerConfig.DEFAULT_FEEDRATE_XY,
             ),
             feedrate_z=config.getint(
                 'server', 'feedrate_z',
-                fallback=TSDConfig.DEFAULT_FEEDRATE_Z,
+                fallback=ServerConfig.DEFAULT_FEEDRATE_Z,
             )
         )
 
@@ -217,7 +217,7 @@ class Config:
 
     def get_sentry(self):
         sentryClient = raven.Client(
-            'https://89fc4cf9318d46b1bfadc03c9d34577c@sentry.thespaghettidetective.com/8',  # noqa
+            'https://89fc4cf9318d46b1bfadc03c9d34577c@sentry.obico.io/8',  # noqa
             release=VERSION,
             ignore_exceptions=[]
         ) if self.sentry_opt == 'in' else None

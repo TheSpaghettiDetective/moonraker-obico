@@ -4,7 +4,7 @@ import sys
 
 
 def getLogger(name=''):
-    _name = 'main' if not name else f'main.{name}'
+    _name = 'obico' if not name else f'obico.{name}'
     return logging.getLogger(_name)
 
 

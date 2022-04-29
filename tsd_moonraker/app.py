@@ -22,7 +22,7 @@ from .utils import (
 from .webcam_capture import capture_jpeg
 from .logger import getLogger, setup_logging
 from .printer import PrinterState
-from .config import MoonrakerConfig, TSDConfig, Config
+from .config import MoonrakerConfig, ServerConfig, Config
 
 
 logger = getLogger()
@@ -344,7 +344,7 @@ class TSDConn(ConnHandler):
 
     def __init__(self, id, sentry, tsd_config, on_event):
         super().__init__(id, sentry, on_event)
-        self.config: TSDConfig = tsd_config
+        self.config: ServerConfig = tsd_config
 
     def flow(self):
         self.timer.reset(None)
