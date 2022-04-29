@@ -500,11 +500,11 @@ class App(object):
 
     def start(self):
         self.logger.info(f'starting tsd_moonraker (v{VERSION})')
-        self.logger.debug(self.model.config.thespaghettidetective)
+        self.logger.debug(self.model.config.server)
         self.tsdconn = TSDConn(
             'tsdconn',
             self.sentry,
-            self.model.config.thespaghettidetective,
+            self.model.config.server,
             self.push_event,
         )
 
@@ -837,7 +837,7 @@ class App(object):
             f'downloading "{filename}" from {gcode_file["url"]}')
 
         safe_filename = sanitize_filename(filename)
-        path = self.model.config.thespaghettidetective.upload_dir
+        path = self.model.config.server.upload_dir
 
         r = requests.get(
             gcode_file['url'],
@@ -1068,9 +1068,9 @@ class App(object):
         is_relative = not gcode_move['absolute_coordinates']
         has_z = 'z' in {axis.lower() for axis in axes_dict.keys()}
         feedrate = (
-            self.model.config.thespaghettidetective.feedrate_z
+            self.model.config.server.feedrate_z
             if has_z
-            else self.model.config.thespaghettidetective.feedrate_xy
+            else self.model.config.server.feedrate_xy
         )
 
         self.logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
@@ -1107,7 +1107,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('tsd_moonraker')
     parser.add_argument(
         '-c', '--config', dest='config_path', required=True,
-        help='Path to config file (ini)'
+        help='Path to config file (cfg)'
     )
     parser.add_argument(
         '-l', '--log-file', dest='log_path', required=False,

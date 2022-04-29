@@ -114,7 +114,7 @@ class WebcamConfig:
 @dataclasses.dataclass
 class Config:
     moonraker: MoonrakerConfig
-    thespaghettidetective: TSDConfig
+    server: TSDConfig
     webcam: WebcamConfig
 
     _config_path: str
@@ -127,8 +127,8 @@ class Config:
             self._config.write(f)
 
     def update_tsd_auth_token(self, auth_token: str):
-        self.thespaghettidetective.auth_token = auth_token
-        self._config.set('thespaghettidetective', 'auth_token', auth_token)
+        self.server.auth_token = auth_token
+        self._config.set('server', 'auth_token', auth_token)
         self.write()
 
     @classmethod
@@ -153,20 +153,20 @@ class Config:
 
         tsd_config = TSDConfig(
             url=config.get(
-                'thespaghettidetective', 'url',
+                'server', 'url',
                 fallback='https://app.thespaghettidetective.com'),
             auth_token=config.get(
-                'thespaghettidetective', 'auth_token',
+                'server', 'auth_token',
                 fallback=None),
             upload_dir=config.get(
-                'thespaghettidetective', 'upload_dir',
+                'server', 'upload_dir',
                 fallback='thespaghettidetective').strip().lstrip('/').rstrip('/'),
             feedrate_xy=config.getint(
-                'thespaghettidetective', 'feedrate_xy',
+                'server', 'feedrate_xy',
                 fallback=TSDConfig.DEFAULT_FEEDRATE_XY,
             ),
             feedrate_z=config.getint(
-                'thespaghettidetective', 'feedrate_z',
+                'server', 'feedrate_z',
                 fallback=TSDConfig.DEFAULT_FEEDRATE_Z,
             )
         )
@@ -202,13 +202,13 @@ class Config:
         )
 
         sentry_opt = config.get(
-            'thespaghettidetective', 'sentry_opt',
+            'server', 'sentry_opt',
             fallback='out'
         )
 
         return Config(
             moonraker=moonraker_config,
-            thespaghettidetective=tsd_config,
+            server=tsd_config,
             webcam=webcam_config,
             _config=config,
             _config_path=config_path,
@@ -223,8 +223,8 @@ class Config:
         ) if self.sentry_opt == 'in' else None
         sentry = SentryWrapper(sentryClient)
         sentry.tags_context(get_tags())
-        if self.thespaghettidetective.auth_token:
+        if self.server.auth_token:
             sentry.user_context(
-                {'id': self.thespaghettidetective.auth_token}
+                {'id': self.server.auth_token}
             )
         return sentry

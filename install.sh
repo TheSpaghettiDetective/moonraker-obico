@@ -81,7 +81,7 @@ ensure_log_dir() {
 
 create_initial_config() {
   # check if config exists!
-  if [[ ! -f "${KLIPPER_CONF_DIR}"/config.ini ]]; then
+  if [[ ! -f "${KLIPPER_CONF_DIR}"/obico.cfg ]]; then
     report_status "Selecting log path"
     echo -e "\n"
     read -p "Enter your bot log file: " -e -i "${LOG_DIR}" bot_log_path
@@ -93,9 +93,9 @@ create_initial_config() {
     fi
 
     report_status "Creating base config file"
-    cp -n "${OBICO_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/config.ini
+    cp -n "${OBICO_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/obico.cfg
 
-    sed -i "s+some_log_path+${LOG_DIR}+g" "${KLIPPER_CONF_DIR}"/config.ini
+    sed -i "s+some_log_path+${LOG_DIR}+g" "${KLIPPER_CONF_DIR}"/obico.cfg
   fi
 }
 
@@ -127,7 +127,7 @@ WantedBy=multi-user.target
 Type=simple
 User=${CURRENT_USER}
 WorkingDirectory=${OBICO_DIR}
-ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/config.ini -l ${LOG_DIR}/tsd-moonraker.log
+ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/obico.cfg -l ${LOG_DIR}/tsd-moonraker.log
 Restart=always
 RestartSec=5
 EOF

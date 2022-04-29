@@ -19,11 +19,11 @@ if __name__ == '__main__':
 
     print('Hi!')
 
-    if config.thespaghettidetective.auth_token:
+    if config.server.auth_token:
         print('\nWARNING: Current tsd authentication token '
               'is going to be overwritten!\n')
 
-    endpoint_prefix = config.thespaghettidetective.canonical_endpoint_prefix()
+    endpoint_prefix = config.server.canonical_endpoint_prefix()
     print(
         f'Visit\n\n    {endpoint_prefix}/printers/\n\n'
         'or the mobile app and start linking '
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         'You need to find a verification code and paste it bellow.'
     )
 
-    url = f'{config.thespaghettidetective.url}/api/v1/octo/verify/'
+    url = f'{config.server.url}/api/v1/octo/verify/'
     while True:
         code = input('\nEnter verification code (or leave it empty to quit): ')
         if not code.strip():
