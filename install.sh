@@ -10,10 +10,59 @@ set -o pipefail
 SYSTEMDDIR="/etc/systemd/system"
 OBICO_DIR="${HOME}/tsd-moonraker"
 CURRENT_USER=${USER}
+JSON_PARSE_PY="/tmp/json_parse.py"
 
 # Helper functions
 report_status() {
   echo -e "###### $1"
+}
+
+discover_moonraker() {
+  mr_port=$1
+  if ! mr_database=$(curl -s "http://127.0.0.1:${mr_port}/server/database/list") ; then
+    return 1
+  fi
+
+  if echo $mr_database | grep -i 'mainsail' >/dev/null ; then
+    has_mainsail=true
+  fi
+
+  if echo $mr_database | grep -i 'fluidd' >/dev/null ; then
+    has_fluidd=true
+  fi
+
+  if [[ "${has_mainsail}" = true && "${has_fluidd}" = true ]] ; then
+    return 1
+  fi
+
+  if ! mr_info=$(curl -s "http://127.0.0.1:${mr_port}/server/config") ; then
+    return 1
+  fi
+
+  if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
+    return 1
+  fi
+
+  if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
+    return 1
+  fi
+
+  if [[ "${has_mainsail}" = true ]] ; then
+    toolchain_msg='Mainsail/Moonraker/Klipper'
+  fi
+
+  if [[ "${has_mainsail}" = true ]] ; then
+    toolchain_msg='Fluidd/Moonraker/Klipper'
+  fi
+
+  read -p "${toolchain_msg} is detected. Moonraker is on port: ${mr_port}. Is this correct? [Y/n]: " -e -i "Y" correct
+
+  if [[ "${correct^^}" == "Y" ]] ; then
+    echo "${mr_config_path}"
+    echo "${mr_log_path}"
+    return 0
+  fi
+  return 1
 }
 
 # Set up config
@@ -141,6 +190,32 @@ EOF
   sudo systemctl start tsd-moonraker
 }
 
+ensure_json_parser() {
+cat <<EOF > ${JSON_PARSE_PY}
+def find(element, json):
+    try:
+        keys = element.split('.')
+        rv = json
+        for key in keys:
+            try:
+                key = int(key)
+            except:
+                pass
+            rv = rv[key]
+        return rv
+    except:
+        return None
+
+if __name__ == '__main__':
+    import sys, json
+    ret = find(sys.argv[1], json.load(sys.stdin))
+    if ret is None:
+        sys.exit(1)
+
+    print(ret)
+EOF
+}
+
 #init_config_path
 #create_initial_config
 #stop_sevice
@@ -148,7 +223,12 @@ EOF
 #create_virtualenv
 #create_service
 
-ensure_klipper_conf_dir
-ensure_moonraker_config
 ensure_venv
-ensure_log_dir
+ensure_json_parser
+
+if results=($(discover_moonraker 7125)) ; then
+  KLIPPER_CONF_DIR=${results[0]}
+  LOG_DIR=${results[1]}
+  echo $LOG_DIR
+  echo $KLIPPER_CONF_DIR
+fi
