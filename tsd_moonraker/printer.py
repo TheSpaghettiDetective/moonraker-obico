@@ -83,10 +83,6 @@ class PrinterState:
         data = {
             'current_print_ts': self.current_print_ts,
             'octoprint_data': self.to_octoprint_state(),
-            '_from': {
-                'plugin': 'tsd_moonraker',
-                'version': VERSION,
-            }
         }
         if print_event:
             data['octoprint_event'] = {'event_type': print_event}
@@ -98,6 +94,10 @@ class PrinterState:
                     flipH=config.webcam.flip_h,
                     rotate90=config.webcam.rotate_90,
                     streamRatio="16:9" if config.webcam.aspect_ratio_169 else "4:3",
+                ),
+                agent=dict(
+                    name="moonraker_obico",
+                    version=VERSION,
                 ),
             )
         return data

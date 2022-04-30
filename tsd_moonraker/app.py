@@ -499,7 +499,7 @@ class App(object):
             return False
 
     def start(self):
-        self.logger.info(f'starting tsd_moonraker (v{VERSION})')
+        self.logger.info(f'starting moonraker-obico (v{VERSION})')
         self.logger.debug(self.model.config.server)
         self.tsdconn = TSDConn(
             'tsdconn',
@@ -1104,7 +1104,7 @@ class App(object):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('tsd_moonraker')
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         '-c', '--config', dest='config_path', required=True,
         help='Path to config file (cfg)'
