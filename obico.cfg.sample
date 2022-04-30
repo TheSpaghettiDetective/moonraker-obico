@@ -20,5 +20,5 @@
 # aspect_ratio_169 = False
 
 [logging]
-# path = /home/pi/klipper_logs/tsd-moonraker.log
+# path = /home/pi/klipper_logs/moonraker-obico.log
 # level = INFO
