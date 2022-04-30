@@ -39,19 +39,25 @@ discover_moonraker() {
     return 1
   fi
 
-  if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
-    return 1
+  # It seems that config can be in either config.server or config.file_manager
+  if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
+    if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
+      return 1
+    fi
   fi
 
-  if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
-    return 1
+  # It seems that log_path can be in either config.server or config.file_manager
+  if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.server.log_path') ; then
+    if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
+      return 1
+    fi
   fi
 
   if [[ "${has_mainsail}" = true ]] ; then
     toolchain_msg='Mainsail/Moonraker/Klipper'
   fi
 
-  if [[ "${has_mainsail}" = true ]] ; then
+  if [[ "${has_fluidd}" = true ]] ; then
     toolchain_msg='Fluidd/Moonraker/Klipper'
   fi
 
