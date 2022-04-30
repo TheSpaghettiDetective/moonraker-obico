@@ -18,3 +18,7 @@
 # flip_v = False
 # rotate_90 = False
 # aspect_ratio_169 = False
+
+[logging]
+# path = /home/pi/klipper_logs/tsd-moonraker.log
+# level = INFO

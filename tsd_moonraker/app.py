@@ -1111,7 +1111,6 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-l', '--log-file', dest='log_path', required=False,
-        default='tsd_moonraker.log',
         help='Path to log file'
     )
     parser.add_argument(
@@ -1121,10 +1120,13 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    level = logging.DEBUG
-    setup_logging(args.log_path, logging.DEBUG if args.debug else logging.INFO)
-
     config = Config.load_from(args.config_path)
+
+    if args.log_path:
+        config.logging.path = args.log_path
+    if args.debug:
+        config.logging.level = 'DEBUG'
+    setup_logging(config.logging)
 
     get_tags()
 

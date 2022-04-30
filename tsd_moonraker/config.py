@@ -112,10 +112,17 @@ class WebcamConfig:
 
 
 @dataclasses.dataclass
+class LoggingConfig:
+    path: str
+    level: str = 'DEBUG'
+
+
+@dataclasses.dataclass
 class Config:
     moonraker: MoonrakerConfig
     server: ServerConfig
     webcam: WebcamConfig
+    logging: LoggingConfig
 
     _config_path: str
     _config: ConfigParser
@@ -201,6 +208,17 @@ class Config:
             )
         )
 
+        logging_config = LoggingConfig(
+            path=config.get(
+                'logging', 'path',
+                fallback=''
+            ),
+            level=config.get(
+                'logging', 'level',
+                fallback=''
+            ),
+		)
+
         sentry_opt = config.get(
             'server', 'sentry_opt',
             fallback='out'
@@ -210,6 +228,7 @@ class Config:
             moonraker=moonraker_config,
             server=tsd_config,
             webcam=webcam_config,
+            logging=logging_config,
             _config=config,
             _config_path=config_path,
             sentry_opt=sentry_opt,
