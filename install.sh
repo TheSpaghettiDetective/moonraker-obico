@@ -6,9 +6,11 @@ set -o errtrace
 set -o errexit
 set -o pipefail
 
-
 SYSTEMDDIR="/etc/systemd/system"
-OBICO_DIR="${HOME}/tsd-moonraker"
+KLIPPER_CONF_DIR="${HOME}/klipper_config"
+MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
+LOG_DIR="${HOME}/klipper_logs"
+OBICO_DIR="${HOME}/moonraker-obico"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 
@@ -40,17 +42,26 @@ discover_moonraker() {
   fi
 
   # It seems that config can be in either config.server or config.file_manager
-  if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
-    if ! mr_config_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
+  if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
+    if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
       return 1
     fi
   fi
 
   # It seems that log_path can be in either config.server or config.file_manager
-  if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.server.log_path') ; then
-    if ! mr_log_path=$(echo $mr_info | python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
+  if ! mr_log_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.log_path') ; then
+    if ! mr_log_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
       return 1
     fi
+  fi
+
+  eval mr_config_path="${mr_config_path}"
+  eval mr_log_path="${mr_log_path}"
+
+  mr_config_file="${mr_config_path}/moonraker.conf"
+
+  if [[ ! -f "${mr_config_file}" ]] ; then
+    return 1
   fi
 
   if [[ "${has_mainsail}" = true ]] ; then
@@ -64,47 +75,12 @@ discover_moonraker() {
   read -p "${toolchain_msg} is detected. Moonraker is on port: ${mr_port}. Is this correct? [Y/n]: " -e -i "Y" correct
 
   if [[ "${correct^^}" == "Y" ]] ; then
-    echo "${mr_config_path}"
-    echo "${mr_log_path}"
+    KLIPPER_CONF_DIR="${mr_config_path}"
+    LOG_DIR="${mr_log_path}"
+    MOONRAKER_CONFIG_FILE="${mr_config_file}"
     return 0
   fi
   return 1
-}
-
-# Set up config
-
-klipper_conf_dir_valid() {
-  [[ -d "${KLIPPER_CONF_DIR}" ]]
-  return $?
-}
-
-ensure_klipper_conf_dir() {
-  KLIPPER_CONF_DIR="${HOME}/klipper_config"
-  if klipper_conf_dir_valid ; then
-    report_status "Locating Klipper config dir... found!"
-  else
-    while ! klipper_conf_dir_valid ; do
-      read -p "Enter your klipper config directory path: " -e -i "${KLIPPER_CONF_DIR}" klip_conf_dir
-      KLIPPER_CONF_DIR=${klip_conf_dir}
-    done
-  fi
-}
-
-moonraker_config_valid() {
-  [[ -f "${MOONRAKER_CONFIG}" ]]
-  return $?
-}
-
-ensure_moonraker_config() {
-  MOONRAKER_CONFIG="${KLIPPER_CONF_DIR}/moonraker.conf"
-  if moonraker_config_valid ; then
-    report_status "Locating Moonraker config file... found!"
-  else
-    while ! moonraker_config_valid ; do
-      read -p "Enter your Moonraker config file path: " -e -i "${MOONRAKER_CONFIG}" mr_config
-      MOONRAKER_CONFIG="${mr_config}"
-    done
-  fi
 }
 
 ensure_venv() {
@@ -182,7 +158,7 @@ WantedBy=multi-user.target
 Type=simple
 User=${CURRENT_USER}
 WorkingDirectory=${OBICO_DIR}
-ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/obico.cfg -l ${LOG_DIR}/tsd-moonraker.log
+ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/obico.cfg
 Restart=always
 RestartSec=5
 EOF
@@ -232,9 +208,7 @@ EOF
 ensure_venv
 ensure_json_parser
 
-if results=($(discover_moonraker 7125)) ; then
-  KLIPPER_CONF_DIR=${results[0]}
-  LOG_DIR=${results[1]}
+if discover_moonraker 7125 ; then
   echo $LOG_DIR
   echo $KLIPPER_CONF_DIR
 fi
