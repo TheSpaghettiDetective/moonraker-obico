@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copied from get.rvm.io
+# Copied from get.rvm.io. Not sure what they do
 shopt -s extglob
 set -o errtrace
 set -o errexit
@@ -16,6 +16,7 @@ OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
+FORCE_UPDATE="n"
 
 # Helper functions
 report_status() {
@@ -100,12 +101,12 @@ ensure_venv() {
   else
     OBICO_ENV="${HOME}/moonraker-obico-env"
 
-    report_status "Installing required system packages..."
+    report_status "Installing required system packages... You may be prompted to enter password."
     PKGLIST="python3 python3-pip python3-venv"
     sudo apt-get update --allow-releaseinfo-change
     sudo apt-get install --yes ${PKGLIST}
 
-    report_status "Creating python virtual environment for TSD..."
+    report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
     virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
     "${OBICO_ENV}"/bin/pip3 install -r "${OBICO_DIR}"/requirements.txt
@@ -121,9 +122,17 @@ ensure_writtable() {
   fi
 }
 
-ensure_new_installation() {
+quit_on_existing_cfg() {
   if [[ -f "${OBICO_CFG_FILE}" ]] ; then
     echo "An existing moonraker-obico configuratioin is found at ${OBICO_CFG_FILE}."
+    echo "Please check the help documentations at https://www.obico.io/moonraker if you have run into issues with the existing moonraker-obico."
+    exit 1
+  fi
+}
+
+quit_on_existing_service() {
+  if systemctl --all --type service --no-legend | grep moonraker-obico ; then
+    echo "An existing moonraker-obico service is already installed."
     echo "Please check the help documentations at https://www.obico.io/moonraker if you have run into issues with the existing moonraker-obico."
     exit 1
   fi
@@ -153,30 +162,23 @@ port = ${MOONRAKER_PORT}
 # aspect_ratio_169 = False
 
 [logging]
-path = "${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log"
+path = ${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log
 # level = INFO
 EOF
 }
 
 stop_sevice() {
-  serviceName="tsd-moonraker"
-  if sudo systemctl --all --type service --no-legend | grep "$serviceName" | grep -q running; then
-    ## stop existing instance
-    report_status "Stopping TheSpaghettiDetective Moonraker Plugin instance ..."
-    sudo systemctl stop tsd-moonraker
-  else
-    report_status "$serviceName service does not exist or not running."
+  if sudo systemctl --all --type service --no-legend | grep moonraker-obico | grep -q running; then
+    report_status "Stopping moonraker-obico service..."
+    sudo systemctl stop moonraker-obico
   fi
 }
 
-create_service() {
-  # check if config exists!
-  if [[ ! -f "${SYSTEMDDIR}"/tsd-moonraker.service ]]; then
-    ### create systemd service file
-    sudo /bin/sh -c "cat > ${SYSTEMDDIR}/tsd-moonraker.service" <<EOF
-#Systemd service file for TheSpaghettiDetective Moonraker Plugin
+recreate_service() {
+  sudo /bin/sh -c "cat > ${SYSTEMDDIR}/moonraker-obico.service" <<EOF
+#Systemd service file for moonraker-obico
 [Unit]
-Description=Starts TheSpaghettiDetective Moonraker Plugin on startup
+Description=Obico for Moonraker
 After=network-online.target moonraker.service
 
 [Install]
@@ -186,18 +188,16 @@ WantedBy=multi-user.target
 Type=simple
 User=${CURRENT_USER}
 WorkingDirectory=${OBICO_DIR}
-ExecStart=${OBICO_ENV}/bin/python3 -m tsd_moonraker.app -c ${KLIPPER_CONF_DIR}/obico.cfg
+ExecStart=${OBICO_ENV}/bin/python3 -m moonraker_obico.app -c ${OBICO_CFG_FILE}
 Restart=always
 RestartSec=5
 EOF
 
-    ### enable instance
-    sudo systemctl enable tsd-moonraker.service
-    report_status "Single TheSpaghettiDetective Moonraker Plugin instance created!"
-  fi
-  ### launching instance
-  report_status "Launching TheSpaghettiDetective Moonraker Plugin instance ..."
-  sudo systemctl start tsd-moonraker
+  sudo systemctl enable moonraker-obico.service
+  report_status "moonraker-obico service created and enabled."
+  report_status "Launching moonraker-obico service..."
+  sudo systemctl start moonraker-obico
+  sudo systemctl daemon-reload
 }
 
 ensure_json_parser() {
@@ -226,12 +226,12 @@ if __name__ == '__main__':
 EOF
 }
 
-#init_config_path
-#create_initial_config
-#stop_sevice
-#install_packages
-#create_virtualenv
-#create_service
+# Parse command line arguments
+while getopts "f" arg; do
+    case $arg in
+        f) FORCE_UPDATE="y";;
+    esac
+done
 
 ensure_venv
 ensure_json_parser
@@ -246,5 +246,12 @@ ensure_writtable "${LOG_DIR}"
 
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 
-ensure_new_installation
+quit_on_existing_cfg
+
+if [[ $FORCE_UPDATE != "y" ]]; then
+	quit_on_existing_service
+fi
+
 create_config
+
+recreate_service
