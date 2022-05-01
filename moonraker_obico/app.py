@@ -338,7 +338,7 @@ class MoonrakerConn(ConnHandler):
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
 
-class TSDConn(ConnHandler):
+class ServerConn(ConnHandler):
     max_backoff_secs = 300
     flow_step_timeout_msecs = 5000
 
@@ -383,18 +383,14 @@ class TSDConn(ConnHandler):
         self.loop_forever(self.on_event)
 
     def _get_linked_printer(self):
+        if not self.config.auth_token:
+            raise FlowError('auth_token not configured')
+
         try:
             resp = self.send_http_request(
                 'GET',
                 '/api/v1/octo/printer/',
             )
-        except requests.exceptions.HTTPError as exc:
-            if (
-                exc.response is not None and
-                exc.response.status_code == 401
-            ):
-                raise FatalError('auth_token is invalid', exc=exc)
-            raise FlowError('failed to fetch printer', exc=exc)
         except Exception as exc:
             raise FlowError('failed to fetch printer', exc=exc)
 
@@ -501,7 +497,7 @@ class App(object):
     def start(self):
         self.logger.info(f'starting moonraker-obico (v{VERSION})')
         self.logger.debug(self.model.config.server)
-        self.tsdconn = TSDConn(
+        self.tsdconn = ServerConn(
             'tsdconn',
             self.sentry,
             self.model.config.server,
