@@ -9,8 +9,11 @@ set -o pipefail
 SYSTEMDDIR="/etc/systemd/system"
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
 MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
+MOONRAKER_HOST="127.0.0.1"
+MOONRAKER_PORT="7125"
 LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
+OBICO_SERVER="https://app.obico.io"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 
@@ -19,9 +22,8 @@ report_status() {
   echo -e "###### $1"
 }
 
-discover_moonraker() {
-  mr_port=$1
-  if ! mr_database=$(curl -s "http://127.0.0.1:${mr_port}/server/database/list") ; then
+discover_sys_settings() {
+  if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/database/list") ; then
     return 1
   fi
 
@@ -37,12 +39,12 @@ discover_moonraker() {
     return 1
   fi
 
-  if ! mr_info=$(curl -s "http://127.0.0.1:${mr_port}/server/config") ; then
+  if ! mr_info=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/config") ; then
     return 1
   fi
 
   # It seems that config can be in either config.server or config.file_manager
-  if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
+  if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
     if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
       return 1
     fi
@@ -72,7 +74,7 @@ discover_moonraker() {
     toolchain_msg='Fluidd/Moonraker/Klipper'
   fi
 
-  read -p "${toolchain_msg} is detected. Moonraker is on port: ${mr_port}. Is this correct? [Y/n]: " -e -i "Y" correct
+  read -p "${toolchain_msg} is detected. Moonraker is on port: ${MOONRAKER_PORT}. Is this correct? [Y/n]: " -e -i "Y" correct
 
   if [[ "${correct^^}" == "Y" ]] ; then
     KLIPPER_CONF_DIR="${mr_config_path}"
@@ -83,11 +85,20 @@ discover_moonraker() {
   return 1
 }
 
+prompt_for_settings() {
+  read -p "The port Moonraker is on: " -e -i "${MOONRAKER_PORT}" user_input
+  MOONRAKER_PORT="${user_input}"
+  read -p "The path of Moonraker's config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
+  MOONRAKER_CONFIG_FILE="${user_input}"
+  read -p "The directory for Obico's log files: " -e -i "${LOG_DIR}" user_input
+  LOG_DIR="${user_input}"
+}
+
 ensure_venv() {
   if [[ -f "${HOME}/moonraker-env/bin/activate" ]] ; then
     OBICO_ENV="${HOME}/moonraker-env"
   else
-    OBICO_ENV="${HOME}/obico-env"
+    OBICO_ENV="${HOME}/moonraker-obico-env"
 
     report_status "Installing required system packages..."
     PKGLIST="python3 python3-pip python3-venv"
@@ -101,33 +112,50 @@ ensure_venv() {
   fi
 }
 
-ensure_log_dir() {
-  if [[ -w "${HOME}/klipper_logs" ]] ; then
-    LOG_DIR="${HOME}/klipper_logs"
-  else
-    LOG_DIR="${HOME}/obico_logs"
-    mkdir -p "${LOG_DIR}"
+ensure_writtable() {
+  dest_path="$1"
+  if [[ ! -w "$1" ]] ; then
+    echo "$1 doesn't exist or can't be changed."
+    echo "Please make sure $1 exits and can be changed. Then re-run this setup."
+    exit 1
   fi
 }
 
-create_initial_config() {
-  # check if config exists!
-  if [[ ! -f "${KLIPPER_CONF_DIR}"/obico.cfg ]]; then
-    report_status "Selecting log path"
-    echo -e "\n"
-    read -p "Enter your bot log file: " -e -i "${LOG_DIR}" bot_log_path
-    LOG_DIR=${bot_log_path}
-    report_status "Writing bot logs to ${LOG_DIR}"
-    # check if dir exists!
-    if [[ ! -d "${LOG_DIR}" ]]; then
-      mkdir "${LOG_DIR}"
-    fi
-
-    report_status "Creating base config file"
-    cp -n "${OBICO_DIR}"/config.sample.ini "${KLIPPER_CONF_DIR}"/obico.cfg
-
-    sed -i "s+some_log_path+${LOG_DIR}+g" "${KLIPPER_CONF_DIR}"/obico.cfg
+ensure_new_installation() {
+  if [[ -f "${OBICO_CFG_FILE}" ]] ; then
+    echo "An existing moonraker-obico configuratioin is found at ${OBICO_CFG_FILE}."
+    echo "Please check the help documentations at https://www.obico.io/moonraker if you have run into issues with the existing moonraker-obico."
+    exit 1
   fi
+}
+
+create_config() {
+  read -p "URL for the Obico server (Don't change unless you are connecting to a self-hosted Obico server): " -e -i "${OBICO_SERVER}" user_input
+  OBICO_SERVER="${user_input}"
+  cat <<EOF > "${OBICO_CFG_FILE}"
+[server]
+url = ${OBICO_SERVER}
+
+[moonraker]
+host = ${MOONRAKER_HOST}
+port = ${MOONRAKER_PORT}
+# api_key = <grab one or set trusted hosts in moonraker>
+
+[webcam]
+# CAUTION: Don't set this section unless you know what you are doing
+#   In most cases webcam configuration will be automatically retrived from moonraker
+#
+# snapshot_url = http://127.0.0.1:8080/?action=snapshot
+# stream_url = http://127.0.0.1:8080/?action=stream
+# flip_h = False
+# flip_v = False
+# rotate_90 = False
+# aspect_ratio_169 = False
+
+[logging]
+path = "${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log"
+# level = INFO
+EOF
 }
 
 stop_sevice() {
@@ -208,7 +236,15 @@ EOF
 ensure_venv
 ensure_json_parser
 
-if discover_moonraker 7125 ; then
-  echo $LOG_DIR
-  echo $KLIPPER_CONF_DIR
+if ! discover_sys_settings ; then
+  prompt_for_settings
 fi
+
+ensure_writtable "${KLIPPER_CONF_DIR}"
+ensure_writtable "${MOONRAKER_CONFIG_FILE}"
+ensure_writtable "${LOG_DIR}"
+
+OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
+
+ensure_new_installation
+create_config
