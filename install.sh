@@ -200,6 +200,24 @@ EOF
   sudo systemctl daemon-reload
 }
 
+recreate_update_file() {
+  cat <<EOF > "${OBICO_UPDATE_FILE}"
+[update_manager moonraker-obico]
+type: git_repo
+path: ~/moonraker-obico
+origin: https://github.com/TheSpaghettiDetective/tsd-moonraker.git
+env: ${OBICO_ENV}/bin/python
+requirements: requirements.txt
+install_script: install.sh
+is_system_service: True
+EOF
+
+  if ! grep "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
+    echo "" >> "${MOONRAKER_CONFIG_FILE}"
+    echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
+	fi
+}
+
 ensure_json_parser() {
 cat <<EOF > ${JSON_PARSE_PY}
 def find(element, json):
@@ -245,7 +263,9 @@ ensure_writtable "${MOONRAKER_CONFIG_FILE}"
 ensure_writtable "${LOG_DIR}"
 
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
+OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 
+recreate_update_file
 quit_on_existing_cfg
 
 if [[ $FORCE_UPDATE != "y" ]]; then
