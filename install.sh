@@ -14,6 +14,7 @@ MOONRAKER_PORT="7125"
 LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
+OBICO_REPO="https://github.com/TheSpaghettiDetective/tsd-moonraker.git"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
@@ -22,6 +23,17 @@ UPDATE_SETTINGS="n"
 # Helper functions
 report_status() {
   echo -e "###### $1"
+}
+
+ensure_obico_dir() {
+  if [[ -d "${OBICO_DIR}" ]] ; then
+    report_status "Updating moonraker-obico from ${OBICO_REPO}"
+    cd "${OBICO_DIR}"
+    git pull
+  else
+    report_status "Downloading moonraker-obico from ${OBICO_REPO}"
+    git clone "${OBICO_REPO}" "${OBICO_DIR}"
+  fi
 }
 
 discover_sys_settings() {
@@ -215,7 +227,7 @@ recreate_update_file() {
 [update_manager moonraker-obico]
 type: git_repo
 path: ~/moonraker-obico
-origin: https://github.com/TheSpaghettiDetective/tsd-moonraker.git
+origin: ${OBICO_REPO}
 env: ${OBICO_ENV}/bin/python
 requirements: requirements.txt
 install_script: install.sh
@@ -259,13 +271,14 @@ EOF
 }
 
 # Parse command line arguments
-while getopts "fu" arg; do
+while getopts "fus" arg; do
     case $arg in
         f) RESET_CONFIG="y";;
         u) UPDATE_SETTINGS="y";;
     esac
 done
 
+ensure_obico_dir
 ensure_venv
 ensure_json_parser
 
