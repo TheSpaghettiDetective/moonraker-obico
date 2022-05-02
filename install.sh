@@ -29,7 +29,10 @@ ensure_obico_dir() {
   if [[ -d "${OBICO_DIR}" ]] ; then
     report_status "Updating moonraker-obico from ${OBICO_REPO}"
     cd "${OBICO_DIR}"
-    git pull
+    if ! git pull ; then
+      echo ""
+      echo "!!!WARNING: moonraker-obico may not be up to date. Proceeding anyway..."
+    fi
   else
     report_status "Downloading moonraker-obico from ${OBICO_REPO}"
     git clone "${OBICO_REPO}" "${OBICO_DIR}"
@@ -181,8 +184,7 @@ EOF
 }
 
 service_existed() {
-  #systemctl --all --type service --no-legend | cat
-  if systemctl --all --type service --no-legend | grep -q moonraker-obico ; then
+  if [[ -f ${SYSTEMDDIR}/moonraker-obico.service ]]; then
     if [[ $UPDATE_SETTINGS = "y" ]]; then
       report_status "Stopping moonraker-obico service..."
       systemctl stop moonraker-obico
@@ -282,6 +284,10 @@ ensure_obico_dir
 ensure_venv
 ensure_json_parser
 
+if $(dirname "$0")/scripts/tsd_service_existed.sh ; then
+  exit 0
+fi
+
 if ! discover_sys_settings ; then
   prompt_for_settings
 fi
@@ -300,6 +306,10 @@ fi
 
 if ! cfg_existed ; then
   create_config
+fi
+
+if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_ENV}"; then
+  exit 0
 fi
 
 link_to_server
