@@ -20,18 +20,12 @@ JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
 UPDATE_SETTINGS="n"
 
-# Helper functions
-report_status() {
-  echo -e "###### $1"
-}
-
 ensure_obico_dir() {
   if [[ -d "${OBICO_DIR}" ]] ; then
-    report_status "Updating moonraker-obico from ${OBICO_REPO}"
+    report_status "Updating moonraker-obico from ${OBICO_REPO} ...\n"
     cd "${OBICO_DIR}"
     if ! git pull ; then
-      echo ""
-      echo "!!!WARNING: moonraker-obico may not be up to date. Proceeding anyway..."
+      echo -e "\n!!!WARNING: moonraker-obico may not be up to date. Proceeding anyway.\n"
     fi
   else
     report_status "Downloading moonraker-obico from ${OBICO_REPO}"
@@ -40,6 +34,8 @@ ensure_obico_dir() {
 }
 
 discover_sys_settings() {
+  report_status "Detecting the softwares and settings of your Klipper system ...\n"
+
   if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/database/list") ; then
     return 1
   fi
@@ -84,14 +80,18 @@ discover_sys_settings() {
   fi
 
   if [[ "${has_mainsail}" = true ]] ; then
-    toolchain_msg='Mainsail/Moonraker/Klipper'
+    toolchain_msg='Mainsail'
   fi
 
   if [[ "${has_fluidd}" = true ]] ; then
-    toolchain_msg='Fluidd/Moonraker/Klipper'
+    toolchain_msg='Fluidd'
   fi
 
-  read -p "${toolchain_msg} is detected. Moonraker is on port: ${MOONRAKER_PORT}. Is this correct? [Y/n]: " -e -i "Y" correct
+  echo -e "The following have been detected:\n"
+  echo -e "- Web Server: Moonraker"
+  echo -e "- Web Frontend: ${toolchain_msg}"
+  echo -e "- Moonraker port: ${MOONRAKER_PORT}\n"
+  read -p "Is this correct? [Y/n]: " -e -i "Y" correct
 
   if [[ "${correct^^}" == "Y" ]] ; then
     KLIPPER_CONF_DIR="${mr_config_path}"
@@ -103,12 +103,14 @@ discover_sys_settings() {
 }
 
 prompt_for_settings() {
-  read -p "The port Moonraker is on: " -e -i "${MOONRAKER_PORT}" user_input
+  echo -e "We couldn't automatically detect the settings. Please enter them below to continue:\n"
+  read -p "Moonraker port: " -e -i "${MOONRAKER_PORT}" user_input
   MOONRAKER_PORT="${user_input}"
-  read -p "The path of Moonraker's config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
+  read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
   MOONRAKER_CONFIG_FILE="${user_input}"
-  read -p "The directory for Obico's log files: " -e -i "${LOG_DIR}" user_input
+  read -p "Klipper log directory: " -e -i "${LOG_DIR}" user_input
   LOG_DIR="${user_input}"
+  echo ""
 }
 
 ensure_venv() {
@@ -132,9 +134,7 @@ ensure_venv() {
 ensure_writtable() {
   dest_path="$1"
   if [[ ! -w "$1" ]] ; then
-    echo "$1 doesn't exist or can't be changed."
-    echo "Please make sure $1 exits and can be changed. Then re-run this setup."
-    exit 1
+    exit_on_error "$1 doesn't exist or can't be changed."
   fi
 }
 
@@ -142,9 +142,9 @@ cfg_existed() {
   if [[ -f "${OBICO_CFG_FILE}" ]] ; then
     if [[ $RESET_CONFIG = "y" ]]; then
       backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
-      echo "!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
-      echo "Old file moved to ${backup_config_file}"
+      echo -e "\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
       cp  ${OBICO_CFG_FILE} ${backup_config_file}
+      echo -e "Old file moved to ${backup_config_file}\n"
       return 1
     else
       return 0
@@ -190,6 +190,7 @@ service_existed() {
       systemctl stop moonraker-obico
       return 1
     else
+      report_status "moonraker-obico systemctl service already existed. Skipping..."
       return 0
     fi
   else
@@ -198,7 +199,7 @@ service_existed() {
 }
 
 recreate_service() {
-  echo "Creating systemctl service moonraker-obico... You may need to enter password to run sudo."
+  report_status "Creating moonraker-obico systemctl service... You may need to enter password to run sudo."
   sudo /bin/sh -c "cat > ${SYSTEMDDIR}/moonraker-obico.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
@@ -219,6 +220,7 @@ EOF
 
   sudo systemctl enable moonraker-obico.service
   sudo systemctl daemon-reload
+  echo ""
   report_status "moonraker-obico service created and enabled."
   report_status "Launching moonraker-obico service..."
   systemctl start moonraker-obico
@@ -272,6 +274,79 @@ if __name__ == '__main__':
 EOF
 }
 
+# Helper functions
+report_status() {
+  echo -e "###### $1"
+}
+
+welcome() {
+  cat <<EOF
+
+=====================================================================================================
+###                                                                                               ###
+###                       Install and Configure Obico for Klipper                                 ###
+###                                                                                               ###
+=====================================================================================================
+
+EOF
+}
+
+oops() {
+  cat <<EOF
+
+   ____
+  / __ \\
+ | |  | | ___   ___   ___   ___  _ __  ___
+ | |  | |/ _ \\ / _ \\ / _ \\ / _ \\| '_ \\/ __|
+ | |__| | (_) | (_) | (_) | (_) | |_) \\__ \\  _   _   _
+  \\____/ \\___/ \\___/ \\___/ \\___/| .__/|___/ (_) (_) (_)
+                                | |
+                                |_|
+
+
+EOF
+}
+
+exit_on_error() {
+  RED='\033[0;31m'
+  NC='\033[0m' # No Color
+
+  oops
+  cat <<EOF
+
+The installation has run into an error:
+
+EOF
+
+  msg=$1
+  printf "${RED}${msg}${NC}\n"
+
+  cat <<EOF
+
+Please fix the error above and re-run this setup script:
+
+-------------------------------------------------------------------------------------------------
+
+cd ~/moonraker-obico
+./install.sh
+
+-------------------------------------------------------------------------------------------------
+
+Need help? You can get it from:
+
+- The Obico's help docs: https://obico.io/help/
+- The Obico community: https://discord.gg/hsMwGpD
+
+EOF
+  exit 1
+}
+
+unknown_error() {
+  exit_on_error "Installation interrupted by user or for unknown error."
+}
+
+trap 'unknown_error' ERR
+
 # Parse command line arguments
 while getopts "fus" arg; do
     case $arg in
@@ -280,6 +355,7 @@ while getopts "fus" arg; do
     esac
 done
 
+welcome
 ensure_obico_dir
 ensure_venv
 ensure_json_parser
