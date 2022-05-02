@@ -1,6 +1,8 @@
 import argparse
 import logging
 import requests
+import signal
+import sys
 
 from .utils import raise_for_status
 from .config import Config
@@ -9,6 +11,21 @@ logging.basicConfig()
 
 
 if __name__ == '__main__':
+
+    def linking_interupted(signum, frame):
+        print("""
+
+The process to link to the Obico Server is interrupted.
+To resume the linking process at a later time, run:
+
+~/moonraker-obico/install.sh
+
+""")
+        sys.exit(1)
+
+
+    signal.signal(signal.SIGINT, linking_interupted)
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-c', '--config', dest='config_path', required=True,
@@ -17,11 +34,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = Config.load_from(args.config_path)
 
-    print('Hi!')
-
     if config.server.auth_token:
-        print('\nWARNING: Current tsd authentication token '
-              'is going to be overwritten!\n')
+        print("""
+WARNING: Authentication token found! Proceed only if you want to re-link your printer to the Obico server.
+""")
 
     endpoint_prefix = config.server.canonical_endpoint_prefix()
     print(

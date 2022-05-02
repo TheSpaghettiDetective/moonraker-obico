@@ -169,6 +169,7 @@ EOF
 }
 
 service_existed() {
+  #systemctl --all --type service --no-legend | cat
   if systemctl --all --type service --no-legend | grep -q moonraker-obico ; then
     if [[ $UPDATE_SETTINGS = "y" ]]; then
       report_status "Stopping moonraker-obico service..."
@@ -227,18 +228,8 @@ EOF
 	fi
 }
 
-resume_linking() {
-  echo "The process to link to the Obico Server is interrupted."
-  echo "To resume the linking process at a later time, run:"
-  echo "${OBICO_DIR}/install.sh"
-}
-
 link_to_server() {
-  trap resume_linking INT
-
   ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c /home/pi/klipper_config/moonraker-obico.cfg
-
-  trap - INT
 }
 
 ensure_json_parser() {
