@@ -9,7 +9,7 @@ logging.basicConfig()
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('TSD Moonraker - Link printer')
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         '-c', '--config', dest='config_path', required=True,
         help='Path to config file (ini)'

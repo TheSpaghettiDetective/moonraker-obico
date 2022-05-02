@@ -16,7 +16,8 @@ OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
-FORCE_UPDATE="n"
+RESET_CONFIG="n"
+UPDATE_SETTINGS="n"
 
 # Helper functions
 report_status() {
@@ -28,11 +29,11 @@ discover_sys_settings() {
     return 1
   fi
 
-  if echo $mr_database | grep -i 'mainsail' >/dev/null ; then
+  if echo $mr_database | grep -qi 'mainsail' ; then
     has_mainsail=true
   fi
 
-  if echo $mr_database | grep -i 'fluidd' >/dev/null ; then
+  if echo $mr_database | grep -qi 'fluidd' ; then
     has_fluidd=true
   fi
 
@@ -122,19 +123,19 @@ ensure_writtable() {
   fi
 }
 
-quit_on_existing_cfg() {
+cfg_existed() {
   if [[ -f "${OBICO_CFG_FILE}" ]] ; then
-    echo "An existing moonraker-obico configuratioin is found at ${OBICO_CFG_FILE}."
-    echo "Please check the help documentations at https://www.obico.io/moonraker if you have run into issues with the existing moonraker-obico."
-    exit 1
-  fi
-}
-
-quit_on_existing_service() {
-  if systemctl --all --type service --no-legend | grep moonraker-obico ; then
-    echo "An existing moonraker-obico service is already installed."
-    echo "Please check the help documentations at https://www.obico.io/moonraker if you have run into issues with the existing moonraker-obico."
-    exit 1
+    if [[ $RESET_CONFIG = "y" ]]; then
+      backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
+      echo "!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
+      echo "Old file moved to ${backup_config_file}"
+      cp  ${OBICO_CFG_FILE} ${backup_config_file}
+      return 1
+    else
+      return 0
+    fi
+  else
+    return 1
   fi
 }
 
@@ -167,14 +168,22 @@ path = ${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log
 EOF
 }
 
-stop_sevice() {
-  if sudo systemctl --all --type service --no-legend | grep moonraker-obico | grep -q running; then
-    report_status "Stopping moonraker-obico service..."
-    sudo systemctl stop moonraker-obico
+service_existed() {
+  if systemctl --all --type service --no-legend | grep -q moonraker-obico ; then
+    if [[ $UPDATE_SETTINGS = "y" ]]; then
+      report_status "Stopping moonraker-obico service..."
+      systemctl stop moonraker-obico
+      return 1
+    else
+      return 0
+    fi
+  else
+    return 1
   fi
 }
 
 recreate_service() {
+  echo "Creating systemctl service moonraker-obico... You may need to enter password to run sudo."
   sudo /bin/sh -c "cat > ${SYSTEMDDIR}/moonraker-obico.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
@@ -194,10 +203,10 @@ RestartSec=5
 EOF
 
   sudo systemctl enable moonraker-obico.service
+  sudo systemctl daemon-reload
   report_status "moonraker-obico service created and enabled."
   report_status "Launching moonraker-obico service..."
-  sudo systemctl start moonraker-obico
-  sudo systemctl daemon-reload
+  systemctl start moonraker-obico
 }
 
 recreate_update_file() {
@@ -212,10 +221,24 @@ install_script: install.sh
 is_system_service: True
 EOF
 
-  if ! grep "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
+  if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
     echo "" >> "${MOONRAKER_CONFIG_FILE}"
     echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
 	fi
+}
+
+resume_linking() {
+  echo "The process to link to the Obico Server is interrupted."
+  echo "To resume the linking process at a later time, run:"
+  echo "${OBICO_DIR}/install.sh"
+}
+
+link_to_server() {
+  trap resume_linking INT
+
+  ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c /home/pi/klipper_config/moonraker-obico.cfg
+
+  trap - INT
 }
 
 ensure_json_parser() {
@@ -245,9 +268,10 @@ EOF
 }
 
 # Parse command line arguments
-while getopts "f" arg; do
+while getopts "fu" arg; do
     case $arg in
-        f) FORCE_UPDATE="y";;
+        f) RESET_CONFIG="y";;
+        u) UPDATE_SETTINGS="y";;
     esac
 done
 
@@ -265,13 +289,13 @@ ensure_writtable "${LOG_DIR}"
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 
-recreate_update_file
-quit_on_existing_cfg
-
-if [[ $FORCE_UPDATE != "y" ]]; then
-	quit_on_existing_service
+if ! service_existed ; then
+  recreate_service
+  recreate_update_file
 fi
 
-create_config
+if ! cfg_existed ; then
+  create_config
+fi
 
-recreate_service
+link_to_server
