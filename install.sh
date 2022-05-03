@@ -102,12 +102,13 @@ prompt_for_settings() {
 }
 
 ensure_venv() {
+  report_status "Installing required system packages... You may be prompted to enter password."
+  echo -e ""
   if [[ -f "${HOME}/moonraker-env/bin/activate" ]] ; then
     OBICO_ENV="${HOME}/moonraker-env"
   else
     OBICO_ENV="${HOME}/moonraker-obico-env"
 
-    report_status "Installing required system packages... You may be prompted to enter password."
     PKGLIST="python3 python3-pip python3-venv"
     sudo apt-get update --allow-releaseinfo-change
     sudo apt-get install --yes ${PKGLIST}
@@ -115,8 +116,9 @@ ensure_venv() {
     report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
     virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
-    "${OBICO_ENV}"/bin/pip3 install -r "${OBICO_DIR}"/requirements.txt
   fi
+  "${OBICO_ENV}"/bin/pip3 install -r "${OBICO_DIR}"/requirements.txt
+  echo ""
 }
 
 ensure_writtable() {
@@ -144,13 +146,14 @@ cfg_existed() {
 
 create_config() {
   cat <<EOF
+
 ================================= Select Obico Server ==============================================
 
 EOF
 
   echo -e "Now tell us what Obico Server you want to link your printer to."
   echo -e "You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io\n"
-  read -p "The Obico Server (Don't change unless you are connecting to a self-hosted Obico Server): " -e -i "${OBICO_SERVER}" user_input
+  read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "${OBICO_SERVER}" user_input
   echo ""
   OBICO_SERVER="${user_input}"
   report_status "Creating config file ${OBICO_CFG_FILE} ..."
@@ -247,7 +250,7 @@ link_to_server() {
 =============================== Link Printer to Obico Server ======================================
 
 EOF
-  ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c /home/pi/klipper_config/moonraker-obico.cfg
+  ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
 }
 
 prompt_for_sentry() {
@@ -411,7 +414,8 @@ EOF
 trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
-OBICO_DIR=$(dirname "$0")
+OBICO_DIR=$(realpath $(dirname "$0"))
+echo $OBICO_DIR
 
 # Parse command line arguments
 while getopts "fus" arg; do

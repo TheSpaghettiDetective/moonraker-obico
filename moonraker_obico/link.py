@@ -85,9 +85,8 @@ If you need help, head to https://obico.io/docs/user_guides/klipper-setup
             raise_for_status(resp, with_content=True)
             data = resp.json()
             auth_token = data['printer']['auth_token']
-            print(f'Got auth token "{auth_token}".')
             config.update_tsd_auth_token(auth_token)
-            print('Updated config.')
+            print('\n###### Sccuessfully linked to your Obico Server account!')
             break
         except Exception:
             logging.exception('Something went wrong.')
