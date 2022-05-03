@@ -263,6 +263,24 @@ EOF
   ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c /home/pi/klipper_config/moonraker-obico.cfg
 }
 
+prompt_for_sentry() {
+	if grep -q "sentry_opt" "${OBICO_CFG_FILE}" ; then
+		return 0
+  fi
+  echo -e "\nOne last thing: Do you want to opt in bug reporting to help us make Obico better?"
+  echo -e "The debugging info included in the report will be anonymized.\n"
+  read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
+  echo ""
+  if [[ "${opt_in^^}" == "Y" ]] ; then
+		cat <<EOF >> "${OBICO_CFG_FILE}"
+
+[misc]
+sentry_opt: in
+EOF
+  fi
+}
+
+
 ensure_json_parser() {
 cat <<EOF > ${JSON_PARSE_PY}
 def find(element, json):
@@ -453,4 +471,5 @@ trap - ERR
 trap - INT
 
 link_to_server
+prompt_for_sentry
 finished
