@@ -27,17 +27,23 @@ EOF
     mv "${TSD_MR_CONFIG}" "${BK_TSD_MR_CONFIG}"
     cat << EOF
 
-========================================================================
-||                                                                    ||
-||                            SUCCESS!                                ||
-||                                                                    ||
-========================================================================
+===================================================================================================
+###                                                                                             ###
+###                                      SUCCESS!!!                                             ###
+###                            Now enjoy Obico for Klipper!                                     ###
+###                                                                                             ###
+===================================================================================================
 
 The printer you previously linked to The Spaghetti Detective has been
 successfully migrated to Obico.
 
-Please now log into the Obico web app (https://app.obico.io) or mobile app
+Now log into the Obico web app (https://app.obico.io) or mobile app
 to make sure everything looks correct.
+
+To remove Obico for Klipper, run:
+
+cd ~/moonraker-obico
+./install.sh -u
 
 EOF
   exit 0

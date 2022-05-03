@@ -92,6 +92,7 @@ discover_sys_settings() {
   echo -e "- Web Frontend: ${toolchain_msg}"
   echo -e "- Moonraker port: ${MOONRAKER_PORT}\n"
   read -p "Is this correct? [Y/n]: " -e -i "Y" correct
+  echo ""
 
   if [[ "${correct^^}" == "Y" ]] ; then
     KLIPPER_CONF_DIR="${mr_config_path}"
@@ -155,8 +156,17 @@ cfg_existed() {
 }
 
 create_config() {
-  read -p "URL for the Obico server (Don't change unless you are connecting to a self-hosted Obico server): " -e -i "${OBICO_SERVER}" user_input
+  cat <<EOF
+================================= Select Obico Server ==============================================
+
+EOF
+
+  echo -e "Now tell us what Obico Server you want to link your printer to."
+  echo -e "You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io\n"
+  read -p "The Obico Server (Don't change unless you are connecting to a self-hosted Obico Server): " -e -i "${OBICO_SERVER}" user_input
+  echo ""
   OBICO_SERVER="${user_input}"
+  report_status "Creating config file ${OBICO_CFG_FILE} ..."
   cat <<EOF > "${OBICO_CFG_FILE}"
 [server]
 url = ${OBICO_SERVER}
@@ -245,6 +255,11 @@ EOF
 }
 
 link_to_server() {
+  cat <<EOF
+
+=============================== Link Printer to Obico Server ======================================
+
+EOF
   ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c /home/pi/klipper_config/moonraker-obico.cfg
 }
 
@@ -326,13 +341,11 @@ EOF
 Please fix the error above and re-run this setup script:
 
 -------------------------------------------------------------------------------------------------
-
 cd ~/moonraker-obico
 ./install.sh
-
 -------------------------------------------------------------------------------------------------
 
-Need help? You can get it from:
+Need help? Stop by:
 
 - The Obico's help docs: https://obico.io/help/
 - The Obico community: https://discord.gg/hsMwGpD
@@ -341,17 +354,65 @@ EOF
   exit 1
 }
 
+finished() {
+  echo -e "\n\n\n"
+  cat $(dirname "$0")/scripts/banner
+  cat <<EOF
+===================================================================================================
+###                                                                                             ###
+###                                      SUCCESS!!!                                             ###
+###                            Now enjoy Obico for Klipper!                                     ###
+###                                                                                             ###
+===================================================================================================
+
+The changes we have made to your system:
+
+- Source code: ${OBICO_DIR}
+- System service: ${SYSTEMDDIR}/moonraker-obico.service
+- Config file: ${OBICO_CFG_FILE}
+- Update file: ${OBICO_UPDATE_FILE}
+- Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
+- Log file: ${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log
+
+To remove Obico for Klipper, run:
+
+cd ~/moonraker-obico
+./install.sh -u
+
+EOF
+
+}
+
 unknown_error() {
   exit_on_error "Installation interrupted by user or for unknown error."
 }
 
+uninstall() {
+  cat <<EOF
+
+To uninstall Obico for Klipper, please run:
+
+sudo systemctl stop moonraker-obico.service
+sudo systemctl disable moonraker-obico.service
+sudo rm /etc/systemd/system/moonraker-obico.service
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+rm -rf ~/moonraker-obico
+
+EOF
+
+  exit 0
+}
+
 trap 'unknown_error' ERR
+trap 'unknown_error' INT
 
 # Parse command line arguments
 while getopts "fus" arg; do
     case $arg in
         f) RESET_CONFIG="y";;
-        u) UPDATE_SETTINGS="y";;
+        s) UPDATE_SETTINGS="y";;
+        u) uninstall ;;
     esac
 done
 
@@ -388,4 +449,8 @@ if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_E
   exit 0
 fi
 
+trap - ERR
+trap - INT
+
 link_to_server
+finished

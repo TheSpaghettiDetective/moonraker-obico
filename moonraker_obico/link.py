@@ -10,15 +10,39 @@ from .config import Config
 logging.basicConfig()
 
 
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 if __name__ == '__main__':
 
     def linking_interupted(signum, frame):
         print("""
 
-The process to link to the Obico Server is interrupted.
+   ____
+  / __ \\
+ | |  | | ___   ___   ___   ___  _ __  ___
+ | |  | |/ _ \\ / _ \\ / _ \\ / _ \\| '_ \\/ __|
+ | |__| | (_) | (_) | (_) | (_) | |_) \\__ \\  _   _   _
+  \\____/ \\___/ \\___/ \\___/ \\___/| .__/|___/ (_) (_) (_)
+                                | |
+                                |_|
+
+"""+RED+"""
+
+The process to link to your Obico Server account was interrupted.
+
+"""+NC+"""
 To resume the linking process at a later time, run:
 
-~/moonraker-obico/install.sh
+-------------------------------------------------------------------------------------------------
+cd ~/moonraker-obico
+./install.sh
+-------------------------------------------------------------------------------------------------
+
+Need help? Stop by:
+
+- The Obico's help docs: https://obico.io/help/
+- The Obico community: https://discord.gg/hsMwGpD
 
 """)
         sys.exit(1)
@@ -35,23 +59,26 @@ To resume the linking process at a later time, run:
     config = Config.load_from(args.config_path)
 
     if config.server.auth_token:
-        print("""
-WARNING: Authentication token found! Proceed only if you want to re-link your printer to the Obico server.
-""")
+        print(RED+"""
+!!!WARNING: Authentication token found! Proceed only if you want to re-link your printer to the Obico server.
+For more information, visit: https://obico.io/docs/user_guides/relink-klipper
+
+"""+NC)
 
     endpoint_prefix = config.server.canonical_endpoint_prefix()
-    print(
-        f'Visit\n\n    {endpoint_prefix}/printers/\n\n'
-        'or the mobile app and start linking '
-        'a printer and switch to Manual Setup mode!\n\n'
-        'You need to find a verification code and paste it bellow.'
+    print("""
+To link to your Obico Server account, you need to obtain the 6-digit verification code
+in the Obico mobile or web app, and enter the code below.
+
+If you need help, head to https://obico.io/docs/user_guides/klipper-setup
+"""
     )
 
     url = f'{config.server.url}/api/v1/octo/verify/'
     while True:
         code = input('\nEnter verification code (or leave it empty to quit): ')
         if not code.strip():
-            break
+            linking_interupted(None, None)
 
         try:
             resp = requests.post(url, params={'code': code.strip()})
