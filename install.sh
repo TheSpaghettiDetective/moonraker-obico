@@ -20,19 +20,6 @@ JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
 UPDATE_SETTINGS="n"
 
-ensure_obico_dir() {
-  if [[ -d "${OBICO_DIR}" ]] ; then
-    report_status "Updating moonraker-obico from ${OBICO_REPO} ...\n"
-    cd "${OBICO_DIR}"
-    if ! git pull ; then
-      echo -e "\n!!!WARNING: moonraker-obico may not be up to date. Proceeding anyway.\n"
-    fi
-  else
-    report_status "Downloading moonraker-obico from ${OBICO_REPO}"
-    git clone "${OBICO_REPO}" "${OBICO_DIR}"
-  fi
-}
-
 discover_sys_settings() {
   report_status "Detecting the softwares and settings of your Klipper system ...\n"
 
@@ -385,7 +372,6 @@ finished() {
 
 The changes we have made to your system:
 
-- Source code: ${OBICO_DIR}
 - System service: ${SYSTEMDDIR}/moonraker-obico.service
 - Config file: ${OBICO_CFG_FILE}
 - Update file: ${OBICO_UPDATE_FILE}
@@ -425,6 +411,8 @@ EOF
 trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
+OBICO_DIR=$(dirname "$0")
+
 # Parse command line arguments
 while getopts "fus" arg; do
     case $arg in
@@ -435,7 +423,6 @@ while getopts "fus" arg; do
 done
 
 welcome
-ensure_obico_dir
 ensure_venv
 ensure_json_parser
 
