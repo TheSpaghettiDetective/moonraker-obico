@@ -220,7 +220,7 @@ class Config:
 		)
 
         sentry_opt = config.get(
-            'server', 'sentry_opt',
+            'misc', 'sentry_opt',
             fallback='out'
         )
 
