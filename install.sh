@@ -20,6 +20,29 @@ JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
 UPDATE_SETTINGS="n"
 
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+ensure_not_octoprint() {
+  if curl -s "http://127.0.0.1:5000" >/dev/null ; then
+    printf ${RED}
+    cat <<EOF
+It looks like you are running OctoPrint.
+Please note this program only works for Moonraker/Mainsail/Fluidd with Klipper.
+If you are using OctoPrint with Klipper, such as OctoKlipper, please install "Obico for OctoPrint" instead.
+
+EOF
+   printf ${NC}
+
+    read -p "Continue anyway? [y/N]: " -e -i "N" cont
+    echo ""
+  
+    if [[ "${cont^^}" != "Y" ]] ; then
+      exit 0 
+    fi
+  fi
+}
+
 discover_sys_settings() {
   report_status "Detecting the softwares and settings of your Klipper system ...\n"
 
@@ -331,9 +354,6 @@ EOF
 }
 
 exit_on_error() {
-  RED='\033[0;31m'
-  NC='\033[0m' # No Color
-
   oops
   cat <<EOF
 
@@ -427,6 +447,7 @@ while getopts "fus" arg; do
 done
 
 welcome
+ensure_not_octoprint
 ensure_venv
 ensure_json_parser
 
