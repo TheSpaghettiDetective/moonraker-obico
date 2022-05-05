@@ -61,7 +61,7 @@ Need help? Stop by:
     if config.server.auth_token:
         print(RED+"""
 !!!WARNING: Authentication token found! Proceed only if you want to re-link your printer to the Obico server.
-For more information, visit: https://obico.io/docs/user_guides/relink-klipper
+For more information, visit: https://obico.io/docs/user-guides/relink-klipper
 
 """+NC)
 
@@ -70,7 +70,7 @@ For more information, visit: https://obico.io/docs/user_guides/relink-klipper
 To link to your Obico Server account, you need to obtain the 6-digit verification code
 in the Obico mobile or web app, and enter the code below.
 
-If you need help, head to https://obico.io/docs/user_guides/klipper-setup
+If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 """
     )
 
