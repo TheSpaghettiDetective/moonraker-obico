@@ -1,24 +1,24 @@
 [server]
-# url = https://app.obico.io
+url = https://app.obico.io
 # auth_token: <let the link command set this, see more in readme>
 # sentry_opt: out or in
 
 [moonraker]
-# host = 127.0.0.1
-# port = 7125
+host = 127.0.0.1
+port = 7125
 # api_key = <grab one or set trusted hosts in moonraker>
 
 [webcam]
 # CAUTION: Don't set this section unless you know what you are doing
 #   In most cases webcam configuration will be automatically retrived from moonraker
 #
-# snapshot_url = http://127.0.0.1:8080/?action=snapshot
-# stream_url = http://127.0.0.1:8080/?action=stream
+snapshot_url = http://127.0.0.1:8080/?action=snapshot
+stream_url = http://127.0.0.1:8080/?action=stream
 # flip_h = False
 # flip_v = False
 # rotate_90 = False
 # aspect_ratio_169 = False
 
 [logging]
-# path = /home/pi/klipper_logs/moonraker-obico.log
-# level = INFO
+path = /home/pi/klipper_logs/moonraker-obico.log
+level = INFO

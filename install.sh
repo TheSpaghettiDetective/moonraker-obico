@@ -14,7 +14,7 @@ MOONRAKER_PORT="7125"
 LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
-OBICO_REPO="https://github.com/TheSpaghettiDetective/tsd-moonraker.git"
+OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
@@ -36,9 +36,9 @@ EOF
 
     read -p "Continue anyway? [y/N]: " -e -i "N" cont
     echo ""
-  
+
     if [[ "${cont^^}" != "Y" ]] ; then
-      exit 0 
+      exit 0
     fi
   fi
 }

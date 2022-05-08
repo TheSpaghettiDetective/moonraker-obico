@@ -9,4 +9,4 @@ build
 dist
 *.egg*
 .DS_Store
-*.ini
+moonraker-obico.cfg
