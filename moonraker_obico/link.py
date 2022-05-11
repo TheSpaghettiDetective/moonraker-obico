@@ -89,4 +89,5 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
             print('\n###### Sccuessfully linked to your Obico Server account!')
             break
         except Exception:
-            logging.exception('Something went wrong.')
+            print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
+

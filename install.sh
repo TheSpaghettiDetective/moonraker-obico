@@ -482,6 +482,8 @@ fi
 trap - ERR
 trap - INT
 
-link_to_server
-prompt_for_sentry
-finished
+if link_to_server ; then
+  systemctl restart moonraker-obico
+  prompt_for_sentry
+  finished
+fi

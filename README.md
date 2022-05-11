@@ -1,6 +1,6 @@
 # Obico for Klipper
 
-This is a Moonraker plugin that enables the Klipper-based 3D printer to connect to Obico.
+This is a Moonraker plugin that enables the Klipper-based 3D printers to connect to Obico.
 
 [Obico](https://www.obico.io) is a community-built, open-source smart 3D printing platform used by makers, enthusiasts, and tinkerers around the world.
 
