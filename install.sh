@@ -273,7 +273,7 @@ link_to_server() {
 =============================== Link Printer to Obico Server ======================================
 
 EOF
-  ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
+  PYTHONPATH=$(dirname "$0"):${PYTHONPATH} ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
 }
 
 prompt_for_sentry() {
