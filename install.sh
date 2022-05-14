@@ -119,6 +119,7 @@ prompt_for_settings() {
   MOONRAKER_PORT="${user_input}"
   read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
   MOONRAKER_CONFIG_FILE="${user_input}"
+  KLIPPER_CONF_DIR=$(dirname MOONRAKER_CONFIG_FILE)
   read -p "Klipper log directory: " -e -i "${LOG_DIR}" user_input
   LOG_DIR="${user_input}"
   echo ""
