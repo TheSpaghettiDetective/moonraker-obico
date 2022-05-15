@@ -116,12 +116,12 @@ discover_sys_settings() {
 prompt_for_settings() {
   echo -e "We couldn't automatically detect the settings. Please enter them below to continue:\n"
   read -p "Moonraker port: " -e -i "${MOONRAKER_PORT}" user_input
-  MOONRAKER_PORT="${user_input}"
+  eval MOONRAKER_PORT="${user_input}"
   read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
-  MOONRAKER_CONFIG_FILE="${user_input}"
-  KLIPPER_CONF_DIR=$(dirname MOONRAKER_CONFIG_FILE)
+  eval MOONRAKER_CONFIG_FILE="${user_input}"
+  KLIPPER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
   read -p "Klipper log directory: " -e -i "${LOG_DIR}" user_input
-  LOG_DIR="${user_input}"
+  eval LOG_DIR="${user_input}"
   echo ""
 }
 
