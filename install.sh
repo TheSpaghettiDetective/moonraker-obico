@@ -259,7 +259,8 @@ origin: ${OBICO_REPO}
 env: ${OBICO_ENV}/bin/python
 requirements: requirements.txt
 install_script: install.sh
-is_system_service: True
+managed_services:
+  moonraker-obico
 EOF
 
   if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
