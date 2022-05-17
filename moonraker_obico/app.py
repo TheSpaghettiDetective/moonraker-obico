@@ -497,42 +497,26 @@ class App(object):
     def start(self):
         self.logger.info(f'starting moonraker-obico (v{VERSION})')
         self.logger.debug(self.model.config.server)
-        self.tsdconn = ServerConn(
-            'tsdconn',
-            self.sentry,
-            self.model.config.server,
-            self.push_event,
-        )
+        self.tsdconn = ServerConn('tsdconn', self.sentry, self.model.config.server, self.push_event,)
+        self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
 
-        self.moonrakerconn = MoonrakerConn(
-            'moonrakerconn',
-            self.model.config,
-            self.sentry,
-            self.push_event,
-        )
-
-        thread = threading.Thread(
-            target=self.tsdconn.start)
+        thread = threading.Thread(target=self.tsdconn.start)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(
-            target=self.moonrakerconn.start)
+        thread = threading.Thread(target=self.moonrakerconn.start)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(
-            target=self.snapshot_loop)
+        thread = threading.Thread(target=self.snapshot_loop)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(
-            target=self.scheduler_loop)
+        thread = threading.Thread(target=self.scheduler_loop)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(
-            target=self.event_loop)
+        thread = threading.Thread(target=self.event_loop)
         thread.daemon = True
         thread.start()
 
