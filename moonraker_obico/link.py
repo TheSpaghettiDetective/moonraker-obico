@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 if __name__ == '__main__':
 
-    def linking_interupted(signum, frame):
+    def linking_interrupted(signum, frame):
         print("""
 
    ____
@@ -48,7 +48,7 @@ Need help? Stop by:
         sys.exit(1)
 
 
-    signal.signal(signal.SIGINT, linking_interupted)
+    signal.signal(signal.SIGINT, linking_interrupted)
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -78,7 +78,7 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
     while True:
         code = input('\nEnter verification code (or leave it empty to quit): ')
         if not code.strip():
-            linking_interupted(None, None)
+            linking_interrupted(None, None)
 
         try:
             resp = requests.post(url, params={'code': code.strip()})

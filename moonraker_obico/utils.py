@@ -13,7 +13,7 @@ import struct
 import threading
 import socket
 from contextlib import closing
-
+from typing import Union
 from sarge import run, Capture
 from pathvalidate import sanitize_filename as sfn
 import backoff
@@ -304,3 +304,42 @@ def raise_for_status(resp, with_content=False, **kwargs):
 
             raise
     resp.raise_for_status()
+
+
+# Courtesy of https://github.com/OctoPrint/OctoPrint/blob/master/src/octoprint/util/__init__.py
+
+def to_unicode(
+    s_or_u: Union[str, bytes], encoding: str = "utf-8", errors: str = "strict"
+) -> str:
+    """
+    Make sure ``s_or_u`` is a unicode string (str).
+    Arguments:
+        s_or_u (str or bytes): The value to convert
+        encoding (str): encoding to use if necessary, see :meth:`python:bytes.decode`
+        errors (str): error handling to use if necessary, see :meth:`python:bytes.decode`
+    Returns:
+        str: converted string.
+    """
+    if s_or_u is None:
+        return s_or_u
+
+    if not isinstance(s_or_u, (str, bytes)):
+        s_or_u = str(s_or_u)
+
+    if isinstance(s_or_u, bytes):
+        return s_or_u.decode(encoding, errors=errors)
+    else:
+        return s_or_u
+
+
+def pi_version():
+    try:
+        with open('/sys/firmware/devicetree/base/model', 'r') as firmware_model:
+            model = re.search('Raspberry Pi(.*)', firmware_model.read()).group(1)
+            if model:
+                return "0" if re.search('Zero', model, re.IGNORECASE) else "3"
+            else:
+                return None
+    except:
+        return None
+

@@ -68,7 +68,7 @@ class ServerConn(ConnHandler):
         if event.name == 'connected':
             return True
 
-    def send_status_update(self, data):
+    def send_ws_msg_to_server(self, data):
         if self.ready:
             self.conn.send(data)
 

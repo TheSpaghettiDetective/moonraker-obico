@@ -10,6 +10,7 @@ import collections
 import queue
 import json
 import re
+import signal
 
 import requests  # type: ignore
 
@@ -23,9 +24,13 @@ from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
 from .moonraker_conn import MoonrakerConn
 from .server_conn import ServerConn
+from .webcam_stream import WebcamStreamer
+from .janus import JanusConn
 
 
 _logger = logging.getLogger('obico.app')
+_default_int_handler = None
+_default_term_handler = None
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
 REQUEST_KLIPPY_STATE_TICKS = 10
@@ -84,6 +89,8 @@ class App(object):
         self.sentry = self.model.config.get_sentry()
         self.tsdconn = None
         self.moonrakerconn = None
+        self.webcam_streamer = None
+        self.janus = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -99,10 +106,18 @@ class App(object):
             return False
 
     def start(self):
+        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
+        # global _default_int_handler, _default_term_handler
+        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
+        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
+
         _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.debug(self.model.config.server)
         self.tsdconn = ServerConn('tsdconn', self.sentry, self.model.config.server, self.push_event,)
         self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
+        self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
+        self.janus = JanusConn(self.model.config, self.tsdconn, self.sentry)
+
 
         thread = threading.Thread(target=self.tsdconn.start)
         thread.daemon = True
@@ -124,6 +139,13 @@ class App(object):
         thread.daemon = True
         thread.start()
 
+        # Janus may take a while to start, or fail to start. Put it in thread to make sure it does not block
+        janus_thread = threading.Thread(target=self.janus.start)
+        janus_thread.daemon = True
+        janus_thread.start()
+
+        self.webcam_streamer.video_pipeline()
+
         try:
             thread.join()
         except Exception:
@@ -141,6 +163,24 @@ class App(object):
             self.tsdconn.close()
         if self.moonrakerconn:
             self.moonrakerconn.close()
+        if self.janus:
+            self.janus.shutdown()
+
+    # TODO: This doesn't work as ffmpeg seems to mess with signals as well
+    def interrupted(self, signum, frame):
+        print('Cleaning up moonraker-obico service... Press Ctrl-C again to quit immediately')
+        self.stop()
+
+        global _default_int_handler, _default_term_handler
+
+        if _default_int_handler:
+            signal.signal(signal.SIGINT, _default_int_handler)
+            _default_int_handler = None
+
+        if _default_term_handler:
+            signal.signal(signal.SIGTERM, _default_term_handler)
+            _default_term_handler = None
+
 
     def event_loop(self):
         # processes app events
@@ -451,7 +491,7 @@ class App(object):
             data = self.model.printer_state.to_tsd_state(config=config)
 
         self.model.status_posted_to_server_ts = time.time()
-        self.tsdconn.send_status_update(data)
+        self.tsdconn.send_ws_msg_to_server(data)
 
     def post_print_event(self, print_event, config=None):
         ts = self.model.printer_state.current_print_ts
@@ -600,8 +640,8 @@ class App(object):
             elif target == ('_printer', 'home'):
                 self._process_home_message(ack_ref, axes=args[0])
 
-        # if msg.get('janus') and self.janus:
-        #    self.janus.pass_to_janus(msg.get('janus'))
+        if msg.get('janus') and self.janus:
+            self.janus.pass_to_janus(msg.get('janus'))
 
         if need_status_boost:
             self.boost_status_update()

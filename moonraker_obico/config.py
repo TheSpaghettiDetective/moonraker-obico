@@ -59,6 +59,7 @@ class ServerConfig:
 
 @dataclasses.dataclass
 class WebcamConfig:
+    disable_video_streaming: bool = False
     snapshot_url: str = ''
     snapshot_ssl_validation: bool = False
     stream_url: str = ''

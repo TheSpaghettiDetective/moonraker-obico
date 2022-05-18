@@ -11,23 +11,11 @@ import logging
 
 _logger = logging.getLogger('obico.webcam_capture')
 
-def webcam_full_url(url):
-    if not url or not url.strip():
-        return None
-
-    full_url = url.strip()
-    if not urlparse(full_url).scheme:
-        full_url = 'http://localhost/' + re.sub(r'^\/', '', full_url)
-
-    return full_url
-
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 @backoff.on_predicate(backoff.expo, max_tries=3)
 def capture_jpeg(webcam_config):
-    snapshot_url = webcam_full_url(
-        webcam_config.snapshot_url or ''
-    )
+    snapshot_url = webcam_config.snapshot_url
 
     if snapshot_url:
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
@@ -40,9 +28,9 @@ def capture_jpeg(webcam_config):
 
         return jpg
     else:
-        stream_url = webcam_full_url(
-            webcam_config.stream_url or '/webcam/?action=stream'
-        )
+        stream_url = webcam_config.stream_url
+        if not stream_url:
+            return
 
         _logger.debug(f'GET {stream_url}')
         with closing(urlopen(stream_url)) as res:
