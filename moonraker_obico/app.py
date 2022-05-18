@@ -144,8 +144,6 @@ class App(object):
         janus_thread.daemon = True
         janus_thread.start()
 
-        self.webcam_streamer.video_pipeline()
-
         try:
             thread.join()
         except Exception:
@@ -290,6 +288,10 @@ class App(object):
         elif event.name == 'linked_printer':
             self.model.linked_printer = event.data
             _logger.info(f'linked printer: {self.model.linked_printer}')
+
+            if self.model.linked_printer.get('is_pro') and not self.model.config.webcam.disable_video_streaming:
+                _logger.info('Starting webcam streamer')
+                self.webcam_streamer.video_pipeline()
 
         elif event.name == 'message':
             # message from tsd server
