@@ -1,9 +1,11 @@
 from typing import Dict
 import requests  # type: ignore
+import logging
 
-from .logger import getLogger
 from .wsconn import WSConn, ConnHandler
 from .utils import Event
+
+_logger = logging.getLogger('obico.server_conn')
 
 class ServerConn(ConnHandler):
     max_backoff_secs = 300
@@ -20,7 +22,7 @@ class ServerConn(ConnHandler):
         if self.conn:
             self.conn.close()
 
-        self.logger.debug('fetching printer data')
+        _logger.debug('fetching printer data')
         linked_printer = self._get_linked_printer()
         self.on_event(
             Event(sender=self.id, name='linked_printer', data=linked_printer)
@@ -33,16 +35,15 @@ class ServerConn(ConnHandler):
             url=self.config.ws_url(),
             token=self.config.auth_token,
             on_event=self.push_event,
-            logger=getLogger(f'{self.id}.ws'),
         )
 
         self.conn.start()
 
-        self.logger.debug('waiting for connection')
+        _logger.debug('waiting for connection')
         self.wait_for(self._received_connected)
 
         self.set_ready()
-        self.logger.info('connection is ready')
+        _logger.info('connection is ready')
         self.on_event(
             Event(sender=self.id, name=f'{self.id}_ready', data={})
         )
@@ -84,7 +85,7 @@ class ServerConn(ConnHandler):
         _kwargs = dict(allow_redirects=True)
         _kwargs.update(kwargs)
 
-        self.logger.debug(f'{method} {endpoint}')
+        _logger.debug(f'{method} {endpoint}')
         try:
             resp = requests.request(
                 method, endpoint, timeout=timeout, headers=headers, **_kwargs)

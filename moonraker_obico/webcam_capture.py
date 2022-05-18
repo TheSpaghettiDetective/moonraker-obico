@@ -6,12 +6,10 @@ from urllib.parse import urlparse
 from contextlib import closing
 import requests
 import backoff
+import logging
 
-from .logger import getLogger
 
-
-logger = getLogger('webcam')
-
+_logger = logging.getLogger('obico.webcam_capture')
 
 def webcam_full_url(url):
     if not url or not url.strip():
@@ -34,7 +32,7 @@ def capture_jpeg(webcam_config):
     if snapshot_url:
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
 
-        logger.debug(f'GET {snapshot_url}')
+        _logger.debug(f'GET {snapshot_url}')
         r = requests.get(snapshot_url, stream=True, timeout=5,
                          verify=snapshot_validate_ssl)
         r.raise_for_status()
@@ -46,7 +44,7 @@ def capture_jpeg(webcam_config):
             webcam_config.stream_url or '/webcam/?action=stream'
         )
 
-        logger.debug(f'GET {stream_url}')
+        _logger.debug(f'GET {stream_url}')
         with closing(urlopen(stream_url)) as res:
             chunker = MjpegStreamChunker()
 

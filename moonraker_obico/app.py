@@ -18,14 +18,14 @@ from .wsconn import WSConn, ConnHandler
 from .version import VERSION
 from .utils import get_tags, FlowTimeout, FlowError, FatalError, Event, DEBUG, resp_to_exception, sanitize_filename
 from .webcam_capture import capture_jpeg
-from .logger import getLogger, setup_logging
+from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
 from .moonraker_conn import MoonrakerConn
 from .server_conn import ServerConn
 
 
-logger = getLogger()
+_logger = logging.getLogger('obico.app')
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
 REQUEST_KLIPPY_STATE_TICKS = 10
@@ -46,7 +46,6 @@ def fix_timestamp(cur_ts, now_ts):
 
 
 class App(object):
-    logger = logger
 
     @dataclasses.dataclass
     class Model:
@@ -89,19 +88,19 @@ class App(object):
 
     def push_event(self, event):
         if self.shutdown:
-            self.logger.debug(f'is shutdown, dropping event {event}')
+            _logger.debug(f'is shutdown, dropping event {event}')
             return False
 
         try:
             self.q.put_nowait(event)
             return True
         except queue.Full:
-            self.logger.error(f'event queue is full, dropping event {event}')
+            _logger.error(f'event queue is full, dropping event {event}')
             return False
 
     def start(self):
-        self.logger.info(f'starting moonraker-obico (v{VERSION})')
-        self.logger.debug(self.model.config.server)
+        _logger.info(f'starting moonraker-obico (v{VERSION})')
+        _logger.debug(self.model.config.server)
         self.tsdconn = ServerConn('tsdconn', self.sentry, self.model.config.server, self.push_event,)
         self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
 
@@ -129,13 +128,13 @@ class App(object):
             thread.join()
         except Exception:
             self.sentry.captureException()
-            self.logger.exception('ops')
+            _logger.exception('ops')
 
     def stop(self, cause=None):
         if cause:
-            self.logger.error(f'shutdown ({cause})')
+            _logger.error(f'shutdown ({cause})')
         else:
-            self.logger.info('shutdown')
+            _logger.info('shutdown')
 
         self.shutdown = True
         if self.tsdconn:
@@ -152,7 +151,7 @@ class App(object):
                 self._process_event(event)
             except Exception:
                 self.sentry.captureException()
-                self.logger.exception(f'error processing event {event}')
+                _logger.exception(f'error processing event {event}')
 
     def _process_event(self, event):
         if event.name == 'fatal_error':
@@ -168,11 +167,11 @@ class App(object):
             self._on_tsdconn_event(event)
 
         elif event.name == 'download_and_print_done':
-            self.logger.info('clearing downloading flag')
+            _logger.info('clearing downloading flag')
             self.model.downloading_gcode_file = None
 
         elif event.name == 'post_snapshot_done':
-            self.logger.info('posting snapshot finished')
+            _logger.info('posting snapshot finished')
 
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
@@ -197,12 +196,12 @@ class App(object):
             if ack_ref and self.tsdconn:
                 if 'error' in event.data:
                     error = event.data['error']
-                    self.logger.warning(f'got error for ack_ref {ack_ref} ({error})')
+                    _logger.warning(f'got error for ack_ref {ack_ref} ({error})')
                     try:
                         # moonraker's WebRequestError is a weird json lookalike, probing
                         error = json.loads(error['message'].replace("'", '"'))
                     except Exception:
-                        self.logger.exception("p")
+                        _logger.exception("p")
                         pass
 
                     self.tsdconn.send_passthru({
@@ -221,7 +220,7 @@ class App(object):
 
         elif event.name == 'message':
             if 'error' in event.data:
-                self.logger.debug(f'error response from moonraker, {event}')
+                _logger.debug(f'error response from moonraker, {event}')
 
             elif event.data.get('result') == 'ok':
                 # printer action response
@@ -250,7 +249,7 @@ class App(object):
 
         elif event.name == 'linked_printer':
             self.model.linked_printer = event.data
-            self.logger.info(f'linked printer: {self.model.linked_printer}')
+            _logger.info(f'linked printer: {self.model.linked_printer}')
 
         elif event.name == 'message':
             # message from tsd server
@@ -353,7 +352,7 @@ class App(object):
             data['ret'] = ret
         except Exception as exc:
             data['exc'] = exc
-            self.logger.exception(
+            _logger.exception(
                 f'unexpected error in {fn.__name__.lstrip("_")}')
             self.sentry.captureException()
 
@@ -377,7 +376,7 @@ class App(object):
 
     def download_and_print(self, ref: str, gcode_file: Dict) -> None:
         if self.model.downloading_gcode_file:
-            self.logger.info(
+            _logger.info(
                 'download_and_print ignored; previous attempt has not finished'
             )
             return
@@ -398,7 +397,7 @@ class App(object):
         if not self.tsdconn:
             return
 
-        self.logger.info('capturing and posting snapshot')
+        _logger.info('capturing and posting snapshot')
 
         try:
             files = {
@@ -418,7 +417,7 @@ class App(object):
     def _download_and_print(self, gcode_file):
         filename = gcode_file['filename']
 
-        self.logger.info(
+        _logger.info(
             f'downloading "{filename}" from {gcode_file["url"]}')
 
         safe_filename = sanitize_filename(filename)
@@ -431,7 +430,7 @@ class App(object):
         )
         r.raise_for_status()
 
-        self.logger.info(f'uploading "{filename}" to moonraker')
+        _logger.info(f'uploading "{filename}" to moonraker')
         resp_data = self.moonrakerconn.api_post(
                 'server/files/upload',
                 filename=filename,
@@ -440,8 +439,8 @@ class App(object):
                 print='true',
         )
 
-        self.logger.debug(f'upload response: {resp_data}')
-        self.logger.info(
+        _logger.debug(f'upload response: {resp_data}')
+        _logger.info(
             f'uploading "{filename}" finished.')
 
     def post_status_update(self, data=None, config=None):
@@ -451,8 +450,6 @@ class App(object):
         if not data:
             data = self.model.printer_state.to_tsd_state(config=config)
 
-        # self.logger.debug(f'sending status to tsd: {data}')
-
         self.model.status_posted_to_server_ts = time.time()
         self.tsdconn.send_status_update(data)
 
@@ -461,17 +458,17 @@ class App(object):
         if ts == -1:
             return
 
-        self.logger.info(f'print event: {print_event} ({ts})')
+        _logger.info(f'print event: {print_event} ({ts})')
         self.post_status_update(
             self.model.printer_state.to_tsd_state(print_event, config=config)
         )
 
     def _received_job_action(self, data):
-        self.logger.info(f'received print: {data["job"]}')
+        _logger.info(f'received print: {data["job"]}')
         self.model.printer_state.last_print = data['job']
 
     def _received_last_print(self, job_data):
-        self.logger.info(f'received last print: {job_data}')
+        _logger.info(f'received last print: {job_data}')
         self.model.printer_state.last_print = job_data
         self.model.printer_state.current_print_ts = int((
             self.model.printer_state.last_print or {}
@@ -484,7 +481,7 @@ class App(object):
         next_state_str = printer_state.get_state_str_from(data['status'])
 
         if prev_state_str != next_state_str:
-            self.logger.info(
+            _logger.info(
                 'detected state change: {} -> {}'.format(
                     prev_state_str, next_state_str
                 )
@@ -512,7 +509,7 @@ class App(object):
                 ):
                     # then let's use its timestamp
                     if ts != last_print_ts:
-                        self.logger.debug(
+                        _logger.debug(
                             "choosing moonraker's job start_time "
                             "as current_print_ts")
                     ts = last_print_ts
@@ -543,13 +540,13 @@ class App(object):
                     self.post_print_event('PrintDone')
                 else:
                     # FIXME
-                    self.logger.error(
+                    _logger.error(
                         f'unexpected state "{_state}", please report.')
 
                 printer_state.current_print_ts = -1
 
     def _received_server_message(self, msg):
-        logger.info(f'from tsd: {msg}')
+        _logger.info(f'from tsd: {msg}')
         need_status_boost = False
 
         if 'remote_status' in msg:
@@ -588,7 +585,7 @@ class App(object):
             if ack_ref is not None:
                 # same msg may arrive through both ws and datachannel
                 if ack_ref in self.model.seen_refs:
-                    self.logger.debug('Ignoring already processed passthru message')
+                    _logger.debug('Ignoring already processed passthru message')
                     return
                 # no need to remove item or check size
                 # as deque manages that when maxlen is set
@@ -658,7 +655,7 @@ class App(object):
             else self.model.config.server.feedrate_xy
         )
 
-        self.logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
+        _logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
 
         self.model.set_event_id_for_ack_ref(
             self.moonrakerconn.request_jog(
@@ -680,7 +677,7 @@ class App(object):
                 )
             return
 
-        self.logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
+        _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
 
         self.model.set_event_id_for_ack_ref(
             self.moonrakerconn.request_home(axes=axes),

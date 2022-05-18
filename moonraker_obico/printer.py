@@ -5,10 +5,6 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
-from .logger import getLogger
-
-logger = getLogger('klippystate')
-
 
 @dataclasses.dataclass
 class PrinterState:

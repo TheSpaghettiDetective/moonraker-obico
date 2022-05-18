@@ -6,6 +6,7 @@ import re
 import os
 import random
 import platform
+import logging
 import tempfile
 from io import BytesIO
 import struct
@@ -18,7 +19,7 @@ from pathvalidate import sanitize_filename as sfn
 import backoff
 import requests
 
-from .logger import getLogger
+_logger = logging.getLogger('obico.utils')
 
 DEBUG = os.environ.get('DEBUG')
 CAM_EXCLUSIVE_USE = os.path.join(tempfile.gettempdir(), '.using_picam')
@@ -26,7 +27,6 @@ CAM_EXCLUSIVE_USE = os.path.join(tempfile.gettempdir(), '.using_picam')
 # Update printer settings at max 30 minutes interval,
 # as they are relatively static.
 
-logger = getLogger('utils')
 
 
 class ShutdownException(Exception):
@@ -82,11 +82,10 @@ def sanitize_filename(fname):
 
 class ExpoBackoff:
 
-    def __init__(self, max_seconds, max_attempts=3, logger_=None):
+    def __init__(self, max_seconds, max_attempts=3):
         self.attempts = 0
         self.max_seconds = max_seconds
         self.max_attempts = max_attempts
-        self.logger = logger_ or logger
 
     def reset(self):
         self.attempts = 0
@@ -97,11 +96,11 @@ class ExpoBackoff:
             self.max_attempts is not None and
             self.attempts >= self.max_attempts
         ):
-            self.logger.error('giving up on error: %s' % (e))
+            _logger.error('giving up on error: %s' % (e))
             raise e
         else:
             delay = self.get_delay(self.attempts, self.max_seconds)
-            self.logger.error('backing off %f seconds: %s' % (delay, e))
+            _logger.error('backing off %f seconds: %s' % (delay, e))
 
             time.sleep(delay)
 

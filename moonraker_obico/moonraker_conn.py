@@ -2,10 +2,12 @@ from typing import Optional, Dict, List, Tuple
 from numbers import Number
 import re
 import requests  # type: ignore
+import logging
 
-from .logger import getLogger
 from .wsconn import WSConn, ConnHandler
 from .utils import  FlowTimeout, Event
+
+_logger = logging.getLogger('obico.moonraker_conn')
 
 class MoonrakerConn(ConnHandler):
     max_backoff_secs = 30
@@ -26,7 +28,7 @@ class MoonrakerConn(ConnHandler):
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
-        self.logger.debug('GET {url}')
+        _logger.debug('GET {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         resp = requests.get(
@@ -43,7 +45,7 @@ class MoonrakerConn(ConnHandler):
 
     def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
-        self.logger.debug('POST {url}')
+        _logger.debug('POST {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         files={'file': (filename, fileobj, 'application/octet-stream')} if filename and fileobj else None
@@ -62,7 +64,7 @@ class MoonrakerConn(ConnHandler):
 
     def push_event(self, event):
         if self.shutdown:
-            self.logger.debug(f'is shutdown, dropping event {event}')
+            _logger.debug(f'is shutdown, dropping event {event}')
             return False
 
         return super().push_event(event)
@@ -76,7 +78,7 @@ class MoonrakerConn(ConnHandler):
             self.conn.close()
 
         if not self.config.api_key:
-            self.logger.warning('api key is unset, trying to fetch one')
+            _logger.warning('api key is unset, trying to fetch one')
             self.config.api_key = self.api_get('access/api_key')
 
         self.conn = WSConn(
@@ -86,22 +88,21 @@ class MoonrakerConn(ConnHandler):
             url=self.config.ws_url(),
             token=self.config.api_key,
             on_event=self.push_event,
-            logger=getLogger(f'{self.id}.ws'),
             ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
         )
 
         self.conn.start()
-        self.logger.debug('waiting for connection')
+        _logger.debug('waiting for connection')
         self.wait_for(self._received_connected)
 
-        self.logger.debug('requesting websocket_id')
+        _logger.debug('requesting websocket_id')
         self.request_websocket_id()
         self.wait_for(self._received_websocket_id)
 
         self.app_config.webcam.update_from_moonraker(self)
 
         while True:
-            self.logger.info('waiting for klipper ready')
+            _logger.info('waiting for klipper ready')
             self.ready = False
             try:
                 while True:
@@ -114,24 +115,24 @@ class MoonrakerConn(ConnHandler):
                     except FlowTimeout:
                         continue
 
-                self.logger.debug('requesting printer objects')
+                _logger.debug('requesting printer objects')
                 self.request_printer_objects()
                 self.wait_for(self._received_printer_objects)
 
-                self.logger.debug('requesting heaters')
+                _logger.debug('requesting heaters')
                 self.request_heaters()
                 self.wait_for(self._received_heaters)
 
-                self.logger.debug('subscribing')
+                _logger.debug('subscribing')
                 sub_id = self.request_subscribe()
                 self.wait_for(self._received_subscription(sub_id))
 
-                self.logger.debug('requesting last job')
+                _logger.debug('requesting last job')
                 self.request_job_list(order='desc', limit=1)
                 self.wait_for(self._received_last_job)
 
                 self.set_ready()
-                self.logger.info('connection is ready')
+                _logger.info('connection is ready')
                 self.on_event(
                     Event(sender=self.id, name=f'{self.id}_ready', data={})
                 )
@@ -139,7 +140,7 @@ class MoonrakerConn(ConnHandler):
                 # forwarding events
                 self.loop_forever(self.on_event)
             except self.KlippyGone:
-                self.logger.warning('klipper got disconnected')
+                _logger.warning('klipper got disconnected')
                 continue
 
     def _wait_for(self, event, process_fn, timeout_msecs):
@@ -178,13 +179,13 @@ class MoonrakerConn(ConnHandler):
     def _received_printer_objects(self, event):
         if 'objects' in event.data.get('result', ()):
             self.printer_objects = event.data['result']['objects']
-            self.logger.info(f'printer objects: {self.printer_objects}')
+            _logger.info(f'printer objects: {self.printer_objects}')
             return True
 
     def _received_heaters(self, event):
         if 'heaters' in event.data.get('result', {}).get('status', {}):
             self.heaters = event.data['result']['status']['heaters']['available_heaters']  # noqa: E501
-            self.logger.info(f'heaters: {self.heaters}')
+            _logger.info(f'heaters: {self.heaters}')
             return True
 
     def _received_subscription(self, sub_id):

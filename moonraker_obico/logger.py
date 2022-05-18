@@ -2,12 +2,6 @@ import logging
 import logging.handlers
 import sys
 
-
-def getLogger(name=''):
-    _name = 'obico' if not name else f'obico.{name}'
-    return logging.getLogger(_name)
-
-
 def setup_logging(logging_config):
     log_level_info = {'DEBUG': logging.DEBUG,
                       'INFO': logging.INFO,

@@ -5,20 +5,19 @@ import json
 import bson
 import websocket
 import time
+import logging
 
-from .logger import getLogger
 from .utils import (
     Event, FlowTimeout, ShutdownException,
     FlowError, FatalError, ExpoBackoff)
 
-logger = getLogger('utils')
-
+_logger = logging.getLogger('obico.wsconn')
 
 class WSConn(object):
 
     def __init__(
         self, id, sentry, url, token, on_event, auth_header_fmt,
-        subprotocols=None, logger=logger, ignore_pattern=None
+        subprotocols=None, ignore_pattern=None
     ):
         self.shutdown = False
         self.id = id
@@ -30,14 +29,13 @@ class WSConn(object):
         self.wsock = None
         self.auth_header_fmt = auth_header_fmt
         self.subprotocols = subprotocols
-        self.logger = logger
         self.ignore_pattern = ignore_pattern
 
     def send(self, data, is_binary=False):
         try:
             self.to_server_q.put_nowait((data, is_binary, False))
         except queue.Full:
-            self.logger.exception('sending queue is full')
+            _logger.exception('sending queue is full')
 
     def on_event(self, event):
         if self.shutdown:
@@ -50,7 +48,7 @@ class WSConn(object):
         try:
             self.to_server_q.put_nowait((None, False, True))
         except queue.Full:
-            self.logger.exception('sending queue is full')
+            _logger.exception('sending queue is full')
 
     def start(self):
         server_thread = threading.Thread(
@@ -60,7 +58,7 @@ class WSConn(object):
 
     def _connect_websocket(self):
         def on_ws_error(ws, error):
-            self.logger.debug(f'connection error ({error})')
+            _logger.debug(f'connection error ({error})')
             if self.wsock:
                 if self.wsock != ws:
                     return
@@ -80,7 +78,7 @@ class WSConn(object):
                     self.sentry.captureException(with_tags=True)
 
         def on_ws_close(ws, *args, **kwargs):
-            self.logger.debug('connection closed')
+            _logger.debug('connection closed')
             if self.wsock and self.wsock == ws:
                 self.wsock = None
                 try:
@@ -112,7 +110,7 @@ class WSConn(object):
             ):
                 return
 
-            self.logger.debug(f'receiving {raw}')
+            _logger.debug(f'receiving {raw}')
             try:
                 self.on_event(
                     Event(
@@ -122,7 +120,7 @@ class WSConn(object):
             except queue.Full:
                 self.sentry.captureException(with_tags=True)
 
-        self.logger.info(f'connecting to {self.url}')
+        _logger.info(f'connecting to {self.url}')
         self.wsock = websocket.WebSocketApp(
             self.url,
             on_message=on_ws_message,
@@ -167,10 +165,10 @@ class WSConn(object):
                     self.wsock.sock and
                     self.wsock.sock.connected
                 ):
-                    self.logger.debug(f'sending {raw}')
+                    _logger.debug(f'sending {raw}')
                     self.wsock.send(raw, opcode=opcode)
                 else:
-                    self.logger.error(f'unable to send {raw}')
+                    _logger.error(f'unable to send {raw}')
         except Exception as e:
             try:
                 self.on_event(
@@ -181,7 +179,7 @@ class WSConn(object):
                 )
             except queue.Full:
                 self.sentry.captureException(with_tags=True)
-            self.logger.warning(e)
+            _logger.warning(e)
 
 
 class Timer(object):
@@ -215,7 +213,6 @@ class ConnHandler(object):
 
     def __init__(self, id, sentry, on_event):
         self.id = id
-        self.logger = getLogger(self.id)
         self.sentry = sentry
         self._on_event = on_event
         self.shutdown: bool = False
@@ -226,7 +223,6 @@ class ConnHandler(object):
         self.reconn_backoff = ExpoBackoff(
             self.max_backoff_secs,
             max_attempts=None,
-            logger_=self.logger
         )
 
     def on_event(self, event):
@@ -241,18 +237,18 @@ class ConnHandler(object):
                 self.flow()
             except FlowError as err:
                 if hasattr(err, 'exc'):
-                    self.logger.error(f'{err} ({err.exc}), reconnecting')
+                    _logger.error(f'{err} ({err.exc}), reconnecting')
                 else:
-                    self.logger.error(f'got error ({err}), reconnecting')
+                    _logger.error(f'got error ({err}), reconnecting')
                 self.reconn_backoff.more(err)
             except FlowTimeout as err:
-                self.logger.error('got flow related timeout, reconnecting')
+                _logger.error('got flow related timeout, reconnecting')
                 self.reconn_backoff.more(err)
             except ShutdownException:
-                self.logger.error('shutting down')
+                _logger.error('shutting down')
                 break
             except FatalError as exc:
-                self.logger.error(f'got fatal error ({exc})')
+                _logger.error(f'got fatal error ({exc})')
                 self.on_event(
                     Event(
                         sender=self.id, name='fatal_error',
@@ -271,14 +267,14 @@ class ConnHandler(object):
 
     def push_event(self, event):
         if self.shutdown:
-            self.logger.debug(f'is shutdown, dropping event {event}')
+            _logger.debug(f'is shutdown, dropping event {event}')
             return True
 
         try:
             self.q.put_nowait(event)
             return True
         except queue.Full:
-            self.logger.error(f'event queue is full, dropping {event}')
+            _logger.error(f'event queue is full, dropping {event}')
             return False
 
     def wait_for(self, process_fn, timeout_msecs=-1, loop_forever=False):
@@ -289,8 +285,6 @@ class ConnHandler(object):
 
         while self.shutdown is False:
             event = self.q.get()
-
-            # self.logger.debug(f'event: {event}')
 
             if self._wait_for(event, process_fn, timeout_msecs):
                 if not loop_forever:
