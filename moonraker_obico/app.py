@@ -441,18 +441,16 @@ class App(object):
 
         _logger.info('capturing and posting snapshot')
 
-        try:
-            files = {
-                'pic': capture_jpeg(self.model.config.webcam),
-            }
-        except (requests.exceptions.ConnectionError, ConnectionError) as exc:
-            raise Exception(f'failed to capture snapshot ({exc})')
+        pic = capture_jpeg(self.model.config.webcam)
+        if not pic:
+            _logger.error('Error in capture_jpeg. Skipping posting snapshot...') # Likely due to mistaken configuration. Not reporting to sentry.
+            return
 
         self.tsdconn.send_http_request(
             'POST',
             '/api/v1/octo/pic/',
             timeout=60,
-            files=files,
+            files={'pic': pic},
             raise_exception=True,
         )
 

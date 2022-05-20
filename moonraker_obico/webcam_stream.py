@@ -86,6 +86,11 @@ class WebcamStreamer:
         webcam_config = self.config.webcam
 
         jpg = capture_jpeg(webcam_config)
+
+        if not jpg:
+            _logger.warning('Not a valid jpeg source. Quiting ffmpeg.')
+            return
+
         (_, img_w, img_h) = get_image_info(jpg)
         stream_url = webcam_config.stream_url
 
