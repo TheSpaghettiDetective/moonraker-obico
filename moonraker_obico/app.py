@@ -282,7 +282,7 @@ class App(object):
         if event.name == 'tsdconn_ready':
             # tsd connection is up and initalized,
             # let's sendt a state update
-            self.post_status_update(config=self.model.config)
+            self.post_status_update_to_server(config=self.model.config)
             self.post_snapshot()
 
         elif event.name == 'linked_printer':
@@ -359,7 +359,7 @@ class App(object):
                 interval_seconds /= 10
 
             if self.model.status_posted_to_server_ts < now - interval_seconds:
-                self.post_status_update()
+                self.post_status_update_to_server()
 
             yield
 
@@ -483,7 +483,7 @@ class App(object):
         _logger.info(
             f'uploading "{filename}" finished.')
 
-    def post_status_update(self, data=None, config=None):
+    def post_status_update_to_server(self, data=None, config=None):
         if not self.tsdconn.ready:
             return
 
@@ -499,7 +499,7 @@ class App(object):
             return
 
         _logger.info(f'print event: {print_event} ({ts})')
-        self.post_status_update(
+        self.post_status_update_to_server(
             self.model.printer_state.to_tsd_state(print_event, config=config)
         )
 
