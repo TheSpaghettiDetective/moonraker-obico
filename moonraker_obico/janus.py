@@ -21,9 +21,9 @@ MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
 
 class JanusConn:
 
-    def __init__(self, config, tsdconn, sentry):
+    def __init__(self, config, server_conn, sentry):
         self.config = config
-        self.tsdconn = tsdconn
+        self.server_conn = server_conn
         self.sentry = sentry
         self.janus_ws_backoff = ExpoBackoff(120, max_attempts=20)
         self.janus_ws = None
@@ -146,6 +146,6 @@ class JanusConn:
 
             _logger.debug('Relaying Janus msg')
             _logger.debug(msg)
-            self.tsdconn.send_ws_msg_to_server(dict(janus=raw_msg))
+            self.server_conn.send_ws_msg_to_server(dict(janus=raw_msg))
         except:
             self.sentry.captureException(tags=get_tags())

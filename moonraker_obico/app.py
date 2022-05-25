@@ -87,7 +87,7 @@ class App(object):
         self.shutdown = False
         self.model = model
         self.sentry = self.model.config.get_sentry()
-        self.tsdconn = None
+        self.server_conn = None
         self.moonrakerconn = None
         self.webcam_streamer = None
         self.janus = None
@@ -113,13 +113,13 @@ class App(object):
 
         _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.debug(self.model.config.server)
-        self.tsdconn = ServerConn('tsdconn', self.sentry, self.model.config.server, self.push_event,)
+        self.server_conn = ServerConn('server_conn', self.sentry, self.model.config.server, self.push_event,)
         self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
         self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
-        self.janus = JanusConn(self.model.config, self.tsdconn, self.sentry)
+        self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
 
 
-        thread = threading.Thread(target=self.tsdconn.start)
+        thread = threading.Thread(target=self.server_conn.start)
         thread.daemon = True
         thread.start()
 
@@ -157,8 +157,8 @@ class App(object):
             _logger.info('shutdown')
 
         self.shutdown = True
-        if self.tsdconn:
-            self.tsdconn.close()
+        if self.server_conn:
+            self.server_conn.close()
         if self.moonrakerconn:
             self.moonrakerconn.close()
         if self.janus:
@@ -201,8 +201,8 @@ class App(object):
         elif event.sender == 'moonrakerconn':
             self._on_moonrakerconn_event(event)
 
-        elif event.sender == 'tsdconn':
-            self._on_tsdconn_event(event)
+        elif event.sender == 'server_conn':
+            self._on_server_conn_event(event)
 
         elif event.name == 'download_and_print_done':
             _logger.info('clearing downloading flag')
@@ -231,7 +231,7 @@ class App(object):
 
         elif 'id' in event.data and event.data['id'] in self.model.pending_ack_refs_by_event_id:
             ack_ref = self.model.pending_ack_refs_by_event_id.pop(event.data['id'])[0]
-            if ack_ref and self.tsdconn:
+            if ack_ref and self.server_conn:
                 if 'error' in event.data:
                     error = event.data['error']
                     _logger.warning(f'got error for ack_ref {ack_ref} ({error})')
@@ -242,14 +242,14 @@ class App(object):
                         _logger.exception("p")
                         pass
 
-                    self.tsdconn.send_passthru({
+                    self.server_conn.send_passthru({
                         'ref': ack_ref,
                         'ret': {
                             'error': f"{error.get('message', error)}",
                         },
                     })
                 else:
-                    self.tsdconn.send_passthru({
+                    self.server_conn.send_passthru({
                         'ref': ack_ref,
                         'ret': {
                             'success': event.data['result']
@@ -278,8 +278,8 @@ class App(object):
                 # full state update from moonraker
                 self._received_klippy_update(event.data['result'])
 
-    def _on_tsdconn_event(self, event):
-        if event.name == 'tsdconn_ready':
+    def _on_server_conn_event(self, event):
+        if event.name == 'server_conn_ready':
             # tsd connection is up and initalized,
             # let's sendt a state update
             self.post_status_update_to_server(config=self.model.config)
@@ -403,7 +403,7 @@ class App(object):
         return ret
 
     def post_snapshot(self) -> None:
-        if self.tsdconn and self.tsdconn.ready:
+        if self.server_conn and self.server_conn.ready:
             self.model.force_snapshot.set()
 
     def snapshot_loop(self):
@@ -436,7 +436,7 @@ class App(object):
         self.model.downloading_gcode_file = (ref, gcode_file)
 
     def _post_snapshot(self) -> None:
-        if not self.tsdconn:
+        if not self.server_conn:
             return
 
         _logger.info('capturing and posting snapshot')
@@ -446,7 +446,7 @@ class App(object):
             _logger.error('Error in capture_jpeg. Skipping posting snapshot...') # Likely due to mistaken configuration. Not reporting to sentry.
             return
 
-        self.tsdconn.send_http_request(
+        self.server_conn.send_http_request(
             'POST',
             '/api/v1/octo/pic/',
             timeout=60,
@@ -484,14 +484,14 @@ class App(object):
             f'uploading "{filename}" finished.')
 
     def post_status_update_to_server(self, data=None, config=None):
-        if not self.tsdconn.ready:
+        if not self.server_conn.ready:
             return
 
         if not data:
             data = self.model.printer_state.to_tsd_state(config=config)
 
         self.model.status_posted_to_server_ts = time.time()
-        self.tsdconn.send_ws_msg_to_server(data)
+        self.server_conn.send_ws_msg_to_server(data)
 
     def post_print_event(self, print_event, config=None):
         ts = self.model.printer_state.current_print_ts
@@ -650,14 +650,14 @@ class App(object):
         self.model.status_update_booster = 20
 
     def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
-        if not self.tsdconn or not self.tsdconn.ready:
+        if not self.server_conn or not self.server_conn.ready:
             return
 
         if (
             not self.model.downloading_gcode_file and
             not self.model.is_printing()
         ):
-            self.tsdconn.send_passthru(
+            self.server_conn.send_passthru(
                 {
                     'ref': ack_ref,
                     'ret': {'target_path': gcode_file['filename']},
@@ -665,7 +665,7 @@ class App(object):
             )
             self.download_and_print(ack_ref, gcode_file)
         else:
-            self.tsdconn.send_passthru(
+            self.server_conn.send_passthru(
                 {
                     'ref': ack_ref,
                     'ret': {
@@ -675,8 +675,8 @@ class App(object):
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
         if not self.moonrakerconn or not self.moonrakerconn.ready:
-            if self.tsdconn and self.tsdconn.ready:
-                self.tsdconn.send_passthru(
+            if self.server_conn and self.server_conn.ready:
+                self.server_conn.send_passthru(
                     {
                         'ref': ack_ref,
                         'ret': {
@@ -706,8 +706,8 @@ class App(object):
 
     def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
         if not self.moonrakerconn or not self.moonrakerconn.ready:
-            if self.tsdconn and self.tsdconn.ready:
-                self.tsdconn.send_passthru(
+            if self.server_conn and self.server_conn.ready:
+                self.server_conn.send_passthru(
                     {
                         'ref': ack_ref,
                         'ret': {
