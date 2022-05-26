@@ -25,7 +25,6 @@ class MoonrakerConn:
         self._next_id: int = 0
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
-        self.websocket_id: Optional[int] = None
         self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
 
@@ -80,7 +79,6 @@ class MoonrakerConn:
     def start(self) -> None:
         self.timer.reset(None)
         self.ready = False
-        self.websocket_id = None
 
         if self.conn:
             self.conn.close()
@@ -102,10 +100,6 @@ class MoonrakerConn:
         self.conn.start()
         _logger.debug('waiting for connection')
         self.wait_for(self._received_connected)
-
-        _logger.debug('requesting websocket_id')
-        self.request_websocket_id()
-        self.wait_for(self._received_websocket_id)
 
         self.app_config.webcam.update_from_moonraker(self)
 
@@ -270,11 +264,6 @@ class MoonrakerConn:
             ):
                 return True
         return wait_for_id
-
-    def _received_websocket_id(self, event):
-        if 'websocket_id' in event.data.get('result', ()):
-            self.websocket_id = event.data['result']['websocket_id']
-            return True
 
     def _received_printer_objects(self, event):
         if 'objects' in event.data.get('result', ()):
