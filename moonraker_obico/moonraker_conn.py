@@ -4,12 +4,14 @@ import re
 import requests  # type: ignore
 import logging
 
-from .wsconn import WSConn, ConnHandler
-from .utils import  FlowTimeout, Event
+from .wsconn import WSConn
+from .utils import (
+    Event, FlowTimeout, ShutdownException,
+    FlowError, FatalError, ExpoBackoff)
 
 _logger = logging.getLogger('obico.moonraker_conn')
 
-class MoonrakerConn(ConnHandler):
+class MoonrakerConn:
     max_backoff_secs = 30
     flow_step_timeout_msecs = 2000
     ready_timeout_msecs = 60000
@@ -25,6 +27,18 @@ class MoonrakerConn(ConnHandler):
         self.websocket_id: Optional[int] = None
         self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
+
+        self.sentry = sentry
+        self._on_event = on_event
+        self.shutdown: bool = False
+        self.ready: bool = False
+        self.q = queue.Queue(maxsize=1000)
+        self.conn = None
+        self.timer = Timer(self.push_event)
+        self.reconn_backoff = ExpoBackoff(
+            self.max_backoff_secs,
+            max_attempts=None,
+        )
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
@@ -67,9 +81,25 @@ class MoonrakerConn(ConnHandler):
             _logger.debug(f'is shutdown, dropping event {event}')
             return False
 
-        return super().push_event(event)
+        try:
+            self.q.put_nowait(event)
+            return True
+        except queue.Full:
+            _logger.error(f'event queue is full, dropping {event}')
+            return False
 
-    def flow(self) -> None:
+    def close(self):
+        self.push_event(Event(name='shutdown', data={}))
+        self.shutdown = True
+
+    def on_event(self, event):
+        if self.shutdown:
+            return
+
+        self._on_event(event)
+
+
+    def start(self) -> None:
         self.timer.reset(None)
         self.ready = False
         self.websocket_id = None
@@ -101,7 +131,7 @@ class MoonrakerConn(ConnHandler):
 
         self.app_config.webcam.update_from_moonraker(self)
 
-        while True:
+        while self.shutdown is False:
             _logger.info('waiting for klipper ready')
             self.ready = False
             try:
@@ -131,7 +161,8 @@ class MoonrakerConn(ConnHandler):
                 self.request_job_list(order='desc', limit=1)
                 self.wait_for(self._received_last_job)
 
-                self.set_ready()
+                self.ready = True
+                self.reconn_backoff.reset()
                 _logger.info('connection is ready')
                 self.on_event(
                     Event(sender=self.id, name=f'{self.id}_ready', data={})
@@ -142,16 +173,81 @@ class MoonrakerConn(ConnHandler):
             except self.KlippyGone:
                 _logger.warning('klipper got disconnected')
                 continue
+            except FlowError as err:
+                if hasattr(err, 'exc'):
+                    _logger.error(f'{err} ({err.exc}), reconnecting')
+                else:
+                    _logger.error(f'got error ({err}), reconnecting')
+                self.reconn_backoff.more(err)
+            except FlowTimeout as err:
+                _logger.error('got flow related timeout, reconnecting')
+                self.reconn_backoff.more(err)
+            except ShutdownException:
+                _logger.error('shutting down')
+                break
+            except FatalError as exc:
+                _logger.error(f'got fatal error ({exc})')
+                self.on_event(
+                    Event(
+                        sender=self.id, name='fatal_error',
+                        data={'exc': exc}
+                    )
+                )
+                self.close()
+
+    def loop_forever(self, process_fn):
+        self.wait_for(process_fn, timeout_msecs=None, loop_forever=True)
+
+    def wait_for(self, process_fn, timeout_msecs=-1, loop_forever=False):
+        if timeout_msecs == -1:
+            self.timer.reset(self.flow_step_timeout_msecs)
+        else:
+            self.timer.reset(timeout_msecs)
+
+        while self.shutdown is False:
+            event = self.q.get()
+
+            if self._wait_for(event, process_fn, timeout_msecs):
+                if not loop_forever:
+                    return
 
     def _wait_for(self, event, process_fn, timeout_msecs):
-        if (
-            event.data.get('method') == 'notify_klippy_disconnected'
-        ):
+        if event.data.get('method') == 'notify_klippy_disconnected':
             self.on_event(Event(sender=self.id, name='klippy_gone', data={}))
             raise self.KlippyGone
 
-        return super(MoonrakerConn, self)._wait_for(
-            event, process_fn, timeout_msecs)
+        if event.name == 'shutdown':
+            self.shutdown = True
+            if self.conn:
+                self.conn.close()
+            raise ShutdownException()
+
+        if event.name == 'connection_error':
+            self.ready = False
+            self.on_event(event)
+            exc = event.data.get('exc')
+            if (
+                exc and
+                hasattr(exc, 'status_code') and
+                exc.status_code in (401, 403)
+            ):
+                raise FatalError(f'{self.id} failed to authenticate', exc)
+
+            message = str(exc) if exc else 'connection error'
+            raise FlowError(message, exc=exc)
+
+        if event.name == 'disconnected':
+            self.ready = False
+            self.on_event(event)
+            raise FlowError('diconnected')
+
+        if event.name == 'timeout' and event.data['timer_id'] == self.timer.id:
+            raise FlowTimeout('timed out')
+
+        if process_fn(event):
+            return True
+
+        return None
 
     def _received_connected(self, event):
         if event.name == 'connected':

@@ -15,7 +15,7 @@ import signal
 import requests  # type: ignore
 
 
-from .wsconn import WSConn, ConnHandler
+from .wsconn import WSConn
 from .version import VERSION
 from .utils import get_tags, FlowTimeout, FlowError, FatalError, Event, DEBUG, resp_to_exception, sanitize_filename
 from .webcam_capture import capture_jpeg
