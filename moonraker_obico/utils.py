@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 from typing import Dict, Optional
-import dataclasses
 import time
 import re
 import os
@@ -55,13 +54,6 @@ class AuthenticationError(Exception):
     def __init__(self, message, exc=None):
         self.exc = exc
         super().__init__(message)
-
-
-@dataclasses.dataclass
-class Event:
-    name: str
-    data: Dict
-    sender: Optional[str] = None
 
 
 def resp_to_exception(resp: requests.Response) -> Optional[Exception]:

@@ -1,13 +1,14 @@
 from typing import Optional, Dict, List, Tuple
 from numbers import Number
 import re
+import queue
+import threading
 import requests  # type: ignore
 import logging
+import time
 
-from .wsconn import WSConn
-from .utils import (
-    Event, FlowTimeout, ShutdownException,
-    FlowError, FatalError, ExpoBackoff)
+from .wsconn import WSConn, Event
+from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
 
 _logger = logging.getLogger('obico.moonraker_conn')
 
@@ -19,8 +20,8 @@ class MoonrakerConn:
     class KlippyGone(Exception):
         pass
 
-    def __init__(self, id, app_config, sentry, on_event):
-        super().__init__(id, sentry, on_event)
+    def __init__(self, app_config, sentry, on_event):
+        self.id: str = 'moonrakerconn'
         self._next_id: int = 0
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
@@ -396,3 +397,26 @@ class MoonrakerConn:
         )
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
+class Timer(object):
+
+    def __init__(self, push_event):
+        self.id = 0
+        self.push_event = push_event
+
+    def reset(self, timeout_msecs):
+        self.id += 1
+        if timeout_msecs is not None:
+            thread = threading.Thread(
+                target=self.ticktack,
+                args=(self.id, timeout_msecs)
+            )
+            thread.daemon = True
+            thread.start()
+
+    def ticktack(self, timer_id, msecs):
+        time.sleep(msecs / 1000.0)
+
+        if self.id != timer_id:
+            return
+
+        self.push_event(Event(name='timeout', data={'timer_id': timer_id}))

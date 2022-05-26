@@ -14,10 +14,9 @@ import signal
 
 import requests  # type: ignore
 
-
-from .wsconn import WSConn
+from .wsconn import WSConn, Event
 from .version import VERSION
-from .utils import get_tags, FlowTimeout, FlowError, FatalError, Event, DEBUG, resp_to_exception, sanitize_filename
+from .utils import get_tags, FlowTimeout, FlowError, FatalError, DEBUG, resp_to_exception, sanitize_filename
 from .webcam_capture import capture_jpeg
 from .logger import setup_logging
 from .printer import PrinterState
@@ -107,7 +106,7 @@ class App(object):
         _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.debug(self.model.config.server)
         self.server_conn = ServerConn(self.model.config.server, self.model.printer_state, self.process_server_msg, self.sentry, )
-        self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
+        self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.

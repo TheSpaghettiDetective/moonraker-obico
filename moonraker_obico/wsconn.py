@@ -1,17 +1,23 @@
 from __future__ import absolute_import
+from typing import Dict, Optional
 import queue
+import dataclasses
 import threading
 import json
 import bson
 import websocket
-import time
 import logging
 
-from .utils import (
-    Event, FlowTimeout, ShutdownException,
-    FlowError, FatalError, ExpoBackoff)
+from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
 
 _logger = logging.getLogger('obico.wsconn')
+
+@dataclasses.dataclass
+class Event:
+    name: str
+    data: Dict
+    sender: Optional[str] = None
+
 
 class WSConn(object):
 
@@ -181,26 +187,3 @@ class WSConn(object):
             _logger.warning(e)
 
 
-class Timer(object):
-
-    def __init__(self, push_event):
-        self.id = 0
-        self.push_event = push_event
-
-    def reset(self, timeout_msecs):
-        self.id += 1
-        if timeout_msecs is not None:
-            thread = threading.Thread(
-                target=self.ticktack,
-                args=(self.id, timeout_msecs)
-            )
-            thread.daemon = True
-            thread.start()
-
-    def ticktack(self, timer_id, msecs):
-        time.sleep(msecs / 1000.0)
-
-        if self.id != timer_id:
-            return
-
-        self.push_event(Event(name='timeout', data={'timer_id': timer_id}))
