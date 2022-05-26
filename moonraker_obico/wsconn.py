@@ -110,7 +110,6 @@ class WSConn(object):
             ):
                 return
 
-            _logger.debug(f'receiving {raw}')
             try:
                 self.on_event(
                     Event(

@@ -108,7 +108,6 @@ class App(object):
         _logger.debug(self.model.config.server)
         self.server_conn = ServerConn(self.model.config.server, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
-        self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
@@ -116,9 +115,12 @@ class App(object):
 
         if self.model.linked_printer.get('is_pro') and not self.model.config.webcam.disable_video_streaming:
             _logger.info('Starting webcam streamer')
-            self.webcam_streamer.video_pipeline()
+            self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
+            stream_thread = threading.Thread(target=self.webcam_streamer.video_pipeline)
+            stream_thread.daemon = True
+            stream_thread.start()
 
-        thread = threading.Thread(target=self.server_conn.message_to_server_loop)
+        thread = threading.Thread(target=self.server_conn.start)
         thread.daemon = True
         thread.start()
 
@@ -324,12 +326,6 @@ class App(object):
     def _recurring_post_snapshot(self):
         while self.shutdown is False:
             now = time.time()
-
-            self.model.last_jpg_post_ts = fix_timestamp(
-                self.model.last_jpg_post_ts,
-                now
-            )
-
             interval_seconds = POST_PIC_INTERVAL_SECONDS
 
             if (
@@ -342,6 +338,7 @@ class App(object):
 
             if self.model.last_jpg_post_ts < now - interval_seconds:
                 self.post_snapshot()
+                self.model.last_jpg_post_ts = now
 
             yield
 
@@ -361,7 +358,7 @@ class App(object):
         return ret
 
     def post_snapshot(self) -> None:
-        if self.server_conn and self.server_conn.ready:
+        if self.server_conn:
             self.model.force_snapshot.set()
 
     def snapshot_loop(self):

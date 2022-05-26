@@ -1,17 +1,17 @@
-from typing import Dict
+from typing import Optional, Dict, List, Tuple
 import requests  # type: ignore
 import logging
 import time
 import backoff
 import queue
 import bson
+import json
 import threading
 
 from .utils import ExpoBackoff, get_tags
-from .ws import WebSocketClient
+from .ws import WebSocketClient, WebSocketConnectionException
 from .config import ServerConfig, Config
 from .printer import PrinterState
-from .app.App import Model
 
 POST_STATUS_INTERVAL_SECONDS = 50.0
 
@@ -20,44 +20,51 @@ _logger = logging.getLogger('obico.server_conn')
 class ServerConn:
 
     def __init__(self, server_config: ServerConfig(), printer_state: PrinterState(), process_server_msg, sentry):
-        self.app_model: Model = app_model
         self.config: ServerConfig = server_config
         self.printer_state: PrinterState() = printer_state
         self.process_server_msg = process_server_msg
+        self.sentry = sentry
 
         self.status_posted_to_server_ts = 0
         self.ss = None
         self.message_queue_to_server = queue.Queue(maxsize=1000)
+        self.status_update_booster = 0    # update status at higher frequency when self.status_update_booster > 0
+
 
     ## WebSocket part of the server connection
 
+    def start(self):
+        thread = threading.Thread(target=self.message_to_server_loop)
+        thread.daemon = True
+        thread.start()
+
+        while True:
+            try:
+                interval_in_seconds = POST_STATUS_INTERVAL_SECONDS
+                if self.status_update_booster > 0:
+                    interval_in_seconds /= 5
+
+                if self.status_posted_to_server_ts < time.time() - interval_in_seconds:
+                    self.post_status_update_to_server()
+
+            except Exception as e:
+                self.sentry.captureException(tags=get_tags())
+
+            time.sleep(1)
+
+
     def message_to_server_loop(self):
-        def on_server_ws_close(self, ws):
+
+        def on_server_ws_close(ws):
             if self.ss and self.ss.ws and self.ss.ws == ws:
                 self.ss = None
 
-        def on_server_ws_open(self, ws):
+        def on_server_ws_open(ws):
             if self.ss and self.ss.ws and self.ss.ws == ws:
                 self.post_status_update_to_server() # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
-        def status_update_loop(self):
-            while True:
-                try:
-                    interval_in_seconds = POST_STATUS_INTERVAL_SECONDS
-                    if self.status_update_booster > 0:
-                        interval_in_seconds /= 5
-
-                    if self.status_posted_to_server_ts < time.time() - interval_in_seconds:
-                        self.post_status_update_to_server()
-
-                except Exception as e:
-                    self.sentry.captureException(tags=get_tags())
-
-                time.sleep(1)
-
-        thread = threading.Thread(target=status_update_loop)
-        thread.daemon = True
-        thread.start()
+        def on_message(ws, msg):
+            self.process_server_msg(msg)
 
         server_ws_backoff = ExpoBackoff(300)
         while True:
@@ -68,7 +75,7 @@ class ServerConn:
                     self.ss = WebSocketClient(
                         self.config.ws_url(),
                         token=self.config.auth_token,
-                        on_ws_msg=self.process_server_msg,
+                        on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
                         on_ws_close=on_server_ws_close,)
 
@@ -94,11 +101,7 @@ class ServerConn:
             _logger.warning("Server message queue is full, msg dropped")
 
     def post_status_update_to_server(self, print_event: Optional[str] = None,  config: Optional[Config] = None):
-        if not self.ss or not self.ss.connected():
-            _logger.warn('Skipping post_status_update_to_server because ServerConn is not connected')
-            return
-
-        self.send_ws_msg_to_server(self.app_model.printer_state.to_dict(print_event=print_event, config=config))
+        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, config=config))
         self.status_posted_to_server_ts = time.time()
 
     def send_passthru(self, payload: Dict):
@@ -117,7 +120,10 @@ class ServerConn:
         except Exception:
             return None  # Triggers a backoff
 
-        return resp.json()['printer']
+        printer = resp.json()['printer']
+        _logger.info('Linked printer: {}'.format(printer))
+
+        return printer
 
 
     def send_http_request(

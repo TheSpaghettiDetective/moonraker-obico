@@ -28,7 +28,7 @@ class MoonrakerConn(ConnHandler):
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
-        _logger.debug('GET {url}')
+        _logger.debug(f'GET {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         resp = requests.get(
@@ -45,7 +45,7 @@ class MoonrakerConn(ConnHandler):
 
     def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
-        _logger.debug('POST {url}')
+        _logger.debug(f'POST {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
         files={'file': (filename, fileobj, 'application/octet-stream')} if filename and fileobj else None
