@@ -41,6 +41,8 @@ class MoonrakerConn:
             max_attempts=None,
         )
 
+    ## REST API part
+
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
         _logger.debug(f'GET {url}')
@@ -73,32 +75,7 @@ class MoonrakerConn:
         resp.raise_for_status()
         return resp.json()
 
-    def next_id(self) -> int:
-        next_id = self._next_id = self._next_id + 1
-        return next_id
-
-    def push_event(self, event):
-        if self.shutdown:
-            _logger.debug(f'is shutdown, dropping event {event}')
-            return False
-
-        try:
-            self.q.put_nowait(event)
-            return True
-        except queue.Full:
-            _logger.error(f'event queue is full, dropping {event}')
-            return False
-
-    def close(self):
-        self.push_event(Event(name='shutdown', data={}))
-        self.shutdown = True
-
-    def on_event(self, event):
-        if self.shutdown:
-            return
-
-        self._on_event(event)
-
+    ## WebSocket part
 
     def start(self) -> None:
         self.timer.reset(None)
@@ -198,6 +175,32 @@ class MoonrakerConn:
 
     def loop_forever(self, process_fn):
         self.wait_for(process_fn, timeout_msecs=None, loop_forever=True)
+
+    def next_id(self) -> int:
+        next_id = self._next_id = self._next_id + 1
+        return next_id
+
+    def push_event(self, event):
+        if self.shutdown:
+            _logger.debug(f'is shutdown, dropping event {event}')
+            return False
+
+        try:
+            self.q.put_nowait(event)
+            return True
+        except queue.Full:
+            _logger.error(f'event queue is full, dropping {event}')
+            return False
+
+    def close(self):
+        self.push_event(Event(name='shutdown', data={}))
+        self.shutdown = True
+
+    def on_event(self, event):
+        if self.shutdown:
+            return
+
+        self._on_event(event)
 
     def wait_for(self, process_fn, timeout_msecs=-1, loop_forever=False):
         if timeout_msecs == -1:
