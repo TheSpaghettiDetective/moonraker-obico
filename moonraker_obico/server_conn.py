@@ -1,76 +1,124 @@
 from typing import Dict
 import requests  # type: ignore
 import logging
+import time
+import backoff
+import queue
+import bson
+import threading
 
-from .wsconn import WSConn, ConnHandler
-from .utils import Event
+from .utils import ExpoBackoff, get_tags
+from .ws import WebSocketClient
+from .config import ServerConfig, Config
+from .printer import PrinterState
+from .app.App import Model
+
+POST_STATUS_INTERVAL_SECONDS = 50.0
 
 _logger = logging.getLogger('obico.server_conn')
 
-class ServerConn(ConnHandler):
-    max_backoff_secs = 300
-    flow_step_timeout_msecs = 5000
+class ServerConn:
 
-    def __init__(self, id, sentry, tsd_config, on_event):
-        super().__init__(id, sentry, on_event)
-        self.config: ServerConfig = tsd_config
+    def __init__(self, server_config: ServerConfig(), printer_state: PrinterState(), process_server_msg, sentry):
+        self.app_model: Model = app_model
+        self.config: ServerConfig = server_config
+        self.printer_state: PrinterState() = printer_state
+        self.process_server_msg = process_server_msg
 
-    def flow(self):
-        self.timer.reset(None)
-        self.ready = False
+        self.status_posted_to_server_ts = 0
+        self.ss = None
+        self.message_queue_to_server = queue.Queue(maxsize=1000)
 
-        if self.conn:
-            self.conn.close()
+    ## WebSocket part of the server connection
 
-        _logger.debug('fetching printer data')
-        linked_printer = self._get_linked_printer()
-        self.on_event(
-            Event(sender=self.id, name='linked_printer', data=linked_printer)
-        )
+    def message_to_server_loop(self):
+        def on_server_ws_close(self, ws):
+            if self.ss and self.ss.ws and self.ss.ws == ws:
+                self.ss = None
 
-        self.conn = WSConn(
-            id=self.id,
-            auth_header_fmt='authorization: bearer {}',
-            sentry=self.sentry,
-            url=self.config.ws_url(),
-            token=self.config.auth_token,
-            on_event=self.push_event,
-        )
+        def on_server_ws_open(self, ws):
+            if self.ss and self.ss.ws and self.ss.ws == ws:
+                self.post_status_update_to_server() # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
-        self.conn.start()
+        def status_update_loop(self):
+            while True:
+                try:
+                    interval_in_seconds = POST_STATUS_INTERVAL_SECONDS
+                    if self.status_update_booster > 0:
+                        interval_in_seconds /= 5
 
-        _logger.debug('waiting for connection')
-        self.wait_for(self._received_connected)
+                    if self.status_posted_to_server_ts < time.time() - interval_in_seconds:
+                        self.post_status_update_to_server()
 
-        self.set_ready()
-        _logger.info('connection is ready')
-        self.on_event(
-            Event(sender=self.id, name=f'{self.id}_ready', data={})
-        )
+                except Exception as e:
+                    self.sentry.captureException(tags=get_tags())
 
-        self.loop_forever(self.on_event)
+                time.sleep(1)
 
-    def _get_linked_printer(self):
+        thread = threading.Thread(target=status_update_loop)
+        thread.daemon = True
+        thread.start()
+
+        server_ws_backoff = ExpoBackoff(300)
+        while True:
+            try:
+                (data, as_binary) = self.message_queue_to_server.get()
+
+                if not self.ss or not self.ss.connected():
+                    self.ss = WebSocketClient(
+                        self.config.ws_url(),
+                        token=self.config.auth_token,
+                        on_ws_msg=self.process_server_msg,
+                        on_ws_open=on_server_ws_open,
+                        on_ws_close=on_server_ws_close,)
+
+                if as_binary:
+                    raw = bson.dumps(data)
+                    _logger.debug("Sending binary ({} bytes) to server".format(len(raw)))
+                else:
+                    _logger.debug("Sending to server: \n{}".format(data))
+                    raw = json.dumps(data, default=str)
+                self.ss.send(raw, as_binary=as_binary)
+                server_ws_backoff.reset()
+            except WebSocketConnectionException as e:
+                _logger.warning(e)
+                server_ws_backoff.more(e)
+            except Exception as e:
+                self.sentry.captureException(tags=get_tags())
+                server_ws_backoff.more(e)
+
+    def send_ws_msg_to_server(self, data, as_binary=False):
+        try:
+            self.message_queue_to_server.put_nowait((data, as_binary))
+        except queue.Full:
+            _logger.warning("Server message queue is full, msg dropped")
+
+    def post_status_update_to_server(self, print_event: Optional[str] = None,  config: Optional[Config] = None):
+        if not self.ss or not self.ss.connected():
+            _logger.warn('Skipping post_status_update_to_server because ServerConn is not connected')
+            return
+
+        self.send_ws_msg_to_server(self.app_model.printer_state.to_dict(print_event=print_event, config=config))
+        self.status_posted_to_server_ts = time.time()
+
+    def send_passthru(self, payload: Dict):
+        self.send_ws_msg_to_server({'passthru': payload})
+
+
+    ## REST API part of the server connection
+
+    @backoff.on_predicate(backoff.expo, max_value=1200)
+    def get_linked_printer(self):
         if not self.config.auth_token:
-            raise FlowError('auth_token not configured')
+            raise Exception('auth_token not configured. Exiting the process...')
 
         try:
-            resp = self.send_http_request(
-                'GET',
-                '/api/v1/octo/printer/',
-            )
-        except Exception as exc:
-            raise FlowError('failed to fetch printer', exc=exc)
+            resp = self.send_http_request('GET', '/api/v1/octo/printer/', raise_exception=True)
+        except Exception:
+            return None  # Triggers a backoff
 
         return resp.json()['printer']
 
-    def _received_connected(self, event):
-        if event.name == 'connected':
-            return True
-
-    def send_ws_msg_to_server(self, data):
-        if self.ready:
-            self.conn.send(data)
 
     def send_http_request(
         self, method, uri, timeout=10, raise_exception=True,
@@ -102,8 +150,3 @@ class ServerConn(ConnHandler):
             resp.raise_for_status()
 
         return resp
-
-    def send_passthru(self, payload: Dict):
-        if self.ready:
-            self.conn.send({'passthru': payload})
-

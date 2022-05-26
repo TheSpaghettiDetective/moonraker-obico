@@ -45,11 +45,6 @@ if DEBUG:
 ACKREF_EXPIRE_SECS = 300
 
 
-def fix_timestamp(cur_ts, now_ts):
-    # force resetting timestamp when time skews
-    return 0 if cur_ts > now_ts else cur_ts
-
-
 class App(object):
 
     @dataclasses.dataclass
@@ -61,8 +56,6 @@ class App(object):
         force_snapshot: threading.Event
         seen_refs: collections.deque
         pending_ack_refs_by_event_id: Dict[int, Tuple[str, float]]
-        status_update_booster: int = 0
-        status_posted_to_server_ts: float = 0.0
         last_jpg_post_ts: float = 0.0
         downloading_gcode_file: Optional[Tuple[str, Dict]] = None
 
@@ -113,13 +106,19 @@ class App(object):
 
         _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.debug(self.model.config.server)
-        self.server_conn = ServerConn('server_conn', self.sentry, self.model.config.server, self.push_event,)
+        self.server_conn = ServerConn(self.model.config.server, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn('moonrakerconn', self.model.config, self.sentry, self.push_event,)
         self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
 
+        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
+        self.model.linked_printer = self.server_conn.get_linked_printer()
 
-        thread = threading.Thread(target=self.server_conn.start)
+        if self.model.linked_printer.get('is_pro') and not self.model.config.webcam.disable_video_streaming:
+            _logger.info('Starting webcam streamer')
+            self.webcam_streamer.video_pipeline()
+
+        thread = threading.Thread(target=self.server_conn.message_to_server_loop)
         thread.daemon = True
         thread.start()
 
@@ -201,9 +200,6 @@ class App(object):
         elif event.sender == 'moonrakerconn':
             self._on_moonrakerconn_event(event)
 
-        elif event.sender == 'server_conn':
-            self._on_server_conn_event(event)
-
         elif event.name == 'download_and_print_done':
             _logger.info('clearing downloading flag')
             self.model.downloading_gcode_file = None
@@ -278,31 +274,12 @@ class App(object):
                 # full state update from moonraker
                 self._received_klippy_update(event.data['result'])
 
-    def _on_server_conn_event(self, event):
-        if event.name == 'server_conn_ready':
-            # tsd connection is up and initalized,
-            # let's sendt a state update
-            self.post_status_update_to_server(config=self.model.config)
-            self.post_snapshot()
-
-        elif event.name == 'linked_printer':
-            self.model.linked_printer = event.data
-            _logger.info(f'linked printer: {self.model.linked_printer}')
-
-            if self.model.linked_printer.get('is_pro') and not self.model.config.webcam.disable_video_streaming:
-                _logger.info('Starting webcam streamer')
-                self.webcam_streamer.video_pipeline()
-
-        elif event.name == 'message':
-            # message from tsd server
-            self._received_server_message(event.data)
 
     def scheduler_loop(self, sleep_secs=1):
         # scheduler for events,
         # lightweight tasks only!
         loops = (
             self._recurring_klippy_status_request(),
-            self._recurring_post_status_update(),
             self._recurring_post_snapshot(),
             # self._recurring_list_jobs_request(),
         )
@@ -343,25 +320,6 @@ class App(object):
                 self.moonrakerconn.request_job_list(limit=3, order='desc')
 
         return self._ticks_interval(5, enqueue)
-
-    def _recurring_post_status_update(self):
-        while self.shutdown is False:
-            now = time.time()
-
-            self.model.status_posted_to_server_ts = fix_timestamp(
-                self.model.status_posted_to_server_ts,
-                now,
-            )
-
-            interval_seconds = POST_STATUS_INTERVAL_SECONDS
-            if self.model.status_update_booster > 0:
-                self.model.status_update_booster -= 1
-                interval_seconds /= 10
-
-            if self.model.status_posted_to_server_ts < now - interval_seconds:
-                self.post_status_update_to_server()
-
-            yield
 
     def _recurring_post_snapshot(self):
         while self.shutdown is False:
@@ -488,7 +446,7 @@ class App(object):
             return
 
         if not data:
-            data = self.model.printer_state.to_tsd_state(config=config)
+            data = self.model.printer_state.to_dict(config=config)
 
         self.model.status_posted_to_server_ts = time.time()
         self.server_conn.send_ws_msg_to_server(data)
@@ -500,7 +458,7 @@ class App(object):
 
         _logger.info(f'print event: {print_event} ({ts})')
         self.post_status_update_to_server(
-            self.model.printer_state.to_tsd_state(print_event, config=config)
+            self.model.printer_state.to_dict(print_event, config=config)
         )
 
     def _received_job_action(self, data):
@@ -585,8 +543,8 @@ class App(object):
 
                 printer_state.current_print_ts = -1
 
-    def _received_server_message(self, msg):
-        _logger.info(f'from tsd: {msg}')
+    def process_server_msg(self, msg):
+        _logger.debug(f'Received from server: {msg}')
         need_status_boost = False
 
         if 'remote_status' in msg:
@@ -647,7 +605,7 @@ class App(object):
             self.boost_status_update()
 
     def boost_status_update(self):
-        self.model.status_update_booster = 20
+        self.server_conn.status_update_booster = 20
 
     def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
         if not self.server_conn or not self.server_conn.ready:
