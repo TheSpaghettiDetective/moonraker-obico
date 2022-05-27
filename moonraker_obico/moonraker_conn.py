@@ -85,7 +85,6 @@ class MoonrakerConn:
         data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
         if 'heaters' in data.get('status', {}):
             self.heaters = data['status']['heaters']['available_heaters']  # noqa: E501
-            _logger.info(f'heaters: {self.heaters}')
             return True
 
     ## WebSocket part

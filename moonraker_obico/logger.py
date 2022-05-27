@@ -8,7 +8,7 @@ def setup_logging(logging_config):
                       'WARNING': logging.WARNING,
                       'ERROR': logging.ERROR,
 	}
-    logger = logging.getLogger('obico')
+    logger = logging.getLogger()
     log_level = log_level_info.get(logging_config.level.upper(), logging.INFO)
     logger.setLevel(log_level)
 
