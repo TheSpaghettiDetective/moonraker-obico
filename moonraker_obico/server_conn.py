@@ -64,7 +64,7 @@ class ServerConn:
                 self.post_status_update_to_server() # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
         def on_message(ws, msg):
-            self.process_server_msg(msg)
+            self.process_server_msg(json.loads(msg))
 
         server_ws_backoff = ExpoBackoff(300)
         while True:
