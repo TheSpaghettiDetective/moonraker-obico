@@ -6,6 +6,7 @@ import threading
 import requests  # type: ignore
 import logging
 import time
+import backoff
 
 from .wsconn import WSConn, Event
 from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
@@ -73,15 +74,28 @@ class MoonrakerConn:
         resp.raise_for_status()
         return resp.json()
 
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    def ensure_api_key(self):
+        if not self.config.api_key:
+            _logger.warning('api key is unset, trying to fetch one')
+            self.config.api_key = self.api_get('access/api_key', raise_for_status=True)
+
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    def find_all_heaters(self):
+        data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
+        if 'heaters' in data.get('status', {}):
+            self.heaters = data['status']['heaters']['available_heaters']  # noqa: E501
+            _logger.info(f'heaters: {self.heaters}')
+            return True
+
     ## WebSocket part
 
     def start(self) -> None:
         self.timer.reset(None)
         self.ready = False
 
-        if not self.config.api_key:
-            _logger.warning('api key is unset, trying to fetch one')
-            self.config.api_key = self.api_get('access/api_key')
+        self.ensure_api_key()
+        self.find_all_heaters()
 
         self.conn = WSConn(
             id=self.id,
@@ -112,10 +126,6 @@ class MoonrakerConn:
                         break
                     except FlowTimeout:
                         continue
-
-                _logger.debug('requesting heaters')
-                self.request_heaters()
-                self.wait_for(self._received_heaters)
 
                 _logger.debug('subscribing')
                 sub_id = self.request_subscribe()
@@ -257,12 +267,6 @@ class MoonrakerConn:
                 return True
         return wait_for_id
 
-    def _received_heaters(self, event):
-        if 'heaters' in event.data.get('result', {}).get('status', {}):
-            self.heaters = event.data['result']['status']['heaters']['available_heaters']  # noqa: E501
-            _logger.info(f'heaters: {self.heaters}')
-            return True
-
     def _received_subscription(self, sub_id):
         def wait_for_sub_id(event):
             if 'result' in event.data and event.data.get('id') == sub_id:
@@ -299,10 +303,6 @@ class MoonrakerConn:
 
     def request_printer_info(self):
         return self._jsonrpc_request('printer.info')
-
-    def request_heaters(self):
-        objects = {'heaters': None}
-        return self._jsonrpc_request('printer.objects.query', objects=objects)
 
     def request_subscribe(self, objects=None):
         objects = objects if objects else {
