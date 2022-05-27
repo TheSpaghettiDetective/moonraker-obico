@@ -8,7 +8,7 @@ import bson
 import websocket
 import logging
 
-from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
+from .utils import ShutdownException, FatalError, ExpoBackoff
 
 _logger = logging.getLogger('obico.wsconn')
 

@@ -25,7 +25,6 @@ class MoonrakerConn:
         self._next_id: int = 0
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
-        self.printer_objects: Optional[list] = None
         self.heaters: Optional[List[str]] = None
 
         self.sentry = sentry
@@ -80,9 +79,6 @@ class MoonrakerConn:
         self.timer.reset(None)
         self.ready = False
 
-        if self.conn:
-            self.conn.close()
-
         if not self.config.api_key:
             _logger.warning('api key is unset, trying to fetch one')
             self.config.api_key = self.api_get('access/api_key')
@@ -116,10 +112,6 @@ class MoonrakerConn:
                         break
                     except FlowTimeout:
                         continue
-
-                _logger.debug('requesting printer objects')
-                self.request_printer_objects()
-                self.wait_for(self._received_printer_objects)
 
                 _logger.debug('requesting heaters')
                 self.request_heaters()
@@ -265,12 +257,6 @@ class MoonrakerConn:
                 return True
         return wait_for_id
 
-    def _received_printer_objects(self, event):
-        if 'objects' in event.data.get('result', ()):
-            self.printer_objects = event.data['result']['objects']
-            _logger.info(f'printer objects: {self.printer_objects}')
-            return True
-
     def _received_heaters(self, event):
         if 'heaters' in event.data.get('result', {}).get('status', {}):
             self.heaters = event.data['result']['status']['heaters']['available_heaters']  # noqa: E501
@@ -313,9 +299,6 @@ class MoonrakerConn:
 
     def request_printer_info(self):
         return self._jsonrpc_request('printer.info')
-
-    def request_printer_objects(self):
-        return self._jsonrpc_request('printer.objects.list')
 
     def request_heaters(self):
         objects = {'heaters': None}

@@ -16,7 +16,7 @@ import requests  # type: ignore
 
 from .wsconn import WSConn, Event
 from .version import VERSION
-from .utils import get_tags, FlowTimeout, FlowError, FatalError, DEBUG, resp_to_exception, sanitize_filename
+from .utils import get_tags, FatalError, DEBUG, resp_to_exception, sanitize_filename
 from .webcam_capture import capture_jpeg
 from .logger import setup_logging
 from .printer import PrinterState
