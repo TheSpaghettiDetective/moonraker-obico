@@ -104,9 +104,6 @@ class ServerConn:
         self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, config=config))
         self.status_posted_to_server_ts = time.time()
 
-    def send_passthru(self, payload: Dict):
-        self.send_ws_msg_to_server({'passthru': payload})
-
 
     ## REST API part of the server connection
 
