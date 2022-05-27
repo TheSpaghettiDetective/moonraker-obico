@@ -438,9 +438,6 @@ class App(object):
             f'uploading "{filename}" finished.')
 
     def post_status_update_to_server(self, data=None, config=None):
-        if not self.server_conn.ready:
-            return
-
         if not data:
             data = self.model.printer_state.to_dict(config=config)
 
@@ -604,9 +601,6 @@ class App(object):
         self.server_conn.status_update_booster = 20
 
     def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
-        if not self.server_conn or not self.server_conn.ready:
-            return
-
         if (
             not self.model.downloading_gcode_file and
             not self.model.is_printing()
@@ -629,15 +623,14 @@ class App(object):
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
         if not self.moonrakerconn or not self.moonrakerconn.ready:
-            if self.server_conn and self.server_conn.ready:
-                self.server_conn.send_passthru(
-                    {
-                        'ref': ack_ref,
-                        'ret': {
-                            'error': 'Printer is not connected!',
-                        }
+            self.server_conn.send_passthru(
+                {
+                    'ref': ack_ref,
+                    'ret': {
+                        'error': 'Printer is not connected!',
                     }
-                )
+                }
+            )
             return
 
         gcode_move = self.model.printer_state.status['gcode_move']
@@ -660,15 +653,14 @@ class App(object):
 
     def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
         if not self.moonrakerconn or not self.moonrakerconn.ready:
-            if self.server_conn and self.server_conn.ready:
-                self.server_conn.send_passthru(
-                    {
-                        'ref': ack_ref,
-                        'ret': {
-                            'error': 'Printer is not connected!',
-                        }
+            self.server_conn.send_passthru(
+                {
+                    'ref': ack_ref,
+                    'ret': {
+                        'error': 'Printer is not connected!',
                     }
-                )
+                }
+            )
             return
 
         _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
