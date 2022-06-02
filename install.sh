@@ -171,12 +171,13 @@ cfg_existed() {
 create_config() {
   cat <<EOF
 
-================================= Select Obico Server ==============================================
+================================= Obico Server URL ==============================================
 
 EOF
 
   echo -e "Now tell us what Obico Server you want to link your printer to."
   echo -e "You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io\n"
+  echo -e "For self-hosted server, specify \`http://server_ip:port\`. For instance, http://192.168.0.5:3334.\n"
   read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "${OBICO_SERVER}" user_input
   echo ""
   OBICO_SERVER="${user_input}"
