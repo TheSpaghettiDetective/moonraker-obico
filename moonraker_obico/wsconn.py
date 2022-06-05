@@ -110,7 +110,6 @@ class WSConn(object):
                     self.sentry.captureException(with_tags=True)
 
         def on_ws_message(ws, raw):
-            _logger.debug(f'received {raw}')
             if (
                 self.ignore_pattern and
                 self.ignore_pattern.search(raw) is not None
