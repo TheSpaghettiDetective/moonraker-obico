@@ -19,7 +19,7 @@ _logger = logging.getLogger('obico.server_conn')
 
 class ServerConn:
 
-    def __init__(self, server_config: ServerConfig(), printer_state: PrinterState(), process_server_msg, sentry):
+    def __init__(self, server_config: ServerConfig, printer_state: PrinterState, process_server_msg, sentry):
         self.config: ServerConfig = server_config
         self.printer_state: PrinterState() = printer_state
         self.process_server_msg = process_server_msg

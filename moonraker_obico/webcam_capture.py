@@ -8,7 +8,14 @@ from contextlib import closing
 import requests
 import backoff
 import logging
+import time
+import threading
 
+from .utils import get_tags
+
+POST_PIC_INTERVAL_SECONDS = 10.0
+if os.environ.get('DEBUG'):
+    POST_PIC_INTERVAL_SECONDS = 3.0
 
 _logger = logging.getLogger('obico.webcam_capture')
 
@@ -79,3 +86,48 @@ class MjpegStreamChunker:
 
         self.current_chunk.write(line)
         return None
+
+
+class JpegPoster:
+
+    def __init__(self, app_model, server_conn, sentry):
+        self.config = app_model.config
+        self.app_model = app_model
+        self.server_conn = server_conn
+        self.sentry = sentry
+        self.last_jpg_post_ts = 0
+        self.need_viewing_boost = threading.Event()
+
+
+    def post_pic_to_server(self, viewing_boost=False):
+        files = {'pic': capture_jpeg(self.config.webcam)}
+
+        data = {'viewing_boost': 'true'} if viewing_boost else {}
+        resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files={'pic': pic}, raise_exception=True)
+        _logger.debug('Jpeg posted to server - {0}'.format(resp))
+
+    def pic_post_loop(self):
+        while True:
+            try:
+                viewing_boost = self.need_viewing_boost.wait(1)
+                if viewing_boost:
+                    self.need_viewing_boost.clear()
+                    repeats = 3 if self.model.linked_printer.get('is_pro') else 1 # Pro users get better viewing boost
+                    for _ in range(repeats):
+                        self.post_pic_to_server(viewing_boost=True)
+                    continue
+
+                if not self.app_model.printer_state.is_printing():
+                    continue
+
+                interval_seconds = POST_PIC_INTERVAL_SECONDS
+                if not self.model.remote_status['viewing'] and not self.model.remote_status['should_watch']:
+                    interval_seconds *= 12      # Slow down jpeg posting if needed
+
+                if self.last_jpg_post_ts > time.time() - interval_seconds:
+                    continue
+
+                self.last_jpg_post_ts = time.time()
+                self.post_pic_to_server(viewing_boost=False)
+            except:
+                self.sentry.captureException(tags=get_tags())

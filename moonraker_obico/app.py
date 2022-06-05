@@ -17,7 +17,7 @@ import requests  # type: ignore
 from .wsconn import WSConn, Event
 from .version import VERSION
 from .utils import get_tags, FatalError, DEBUG, resp_to_exception, sanitize_filename
-from .webcam_capture import capture_jpeg
+from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
@@ -33,12 +33,10 @@ _default_term_handler = None
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
 REQUEST_KLIPPY_STATE_TICKS = 10
-POST_STATUS_INTERVAL_SECONDS = 50
-POST_PIC_INTERVAL_SECONDS = 10
 
+POST_STATUS_INTERVAL_SECONDS = 50
 if DEBUG:
     POST_STATUS_INTERVAL_SECONDS = 10
-    POST_PIC_INTERVAL_SECONDS = 10
 
 
 ACKREF_EXPIRE_SECS = 300
@@ -52,13 +50,8 @@ class App(object):
         remote_status: Dict
         linked_printer: Dict
         printer_state: PrinterState
-        force_snapshot: threading.Event
         seen_refs: collections.deque
-        last_jpg_post_ts: float = 0.0
         downloading_gcode_file: Optional[Tuple[str, Dict]] = None
-
-        def is_printing(self):
-            return self.printer_state.is_printing()
 
         def is_configured(self):
             return True  # FIXME
@@ -70,6 +63,7 @@ class App(object):
         self.server_conn = None
         self.moonrakerconn = None
         self.webcam_streamer = None
+        self.jpeg_poster = None
         self.janus = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
@@ -96,6 +90,7 @@ class App(object):
         self.server_conn = ServerConn(self.model.config.server, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
+        self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.model.linked_printer = self.server_conn.get_linked_printer()
@@ -115,9 +110,9 @@ class App(object):
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(target=self.snapshot_loop)
-        thread.daemon = True
-        thread.start()
+        jpeg_post_thread = threading.Thread(target=self.jpeg_poster.pic_post_loop)
+        jpeg_post_thread.daemon = True
+        jpeg_post_thread.start()
 
         thread = threading.Thread(target=self.scheduler_loop)
         thread.daemon = True
@@ -193,9 +188,6 @@ class App(object):
             _logger.info('clearing downloading flag')
             self.model.downloading_gcode_file = None
 
-        elif event.name == 'post_snapshot_done':
-            _logger.info('posting snapshot finished')
-
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
             # clear app's klippy state
@@ -242,7 +234,6 @@ class App(object):
         # lightweight tasks only!
         loops = (
             self._recurring_klippy_status_request(),
-            self._recurring_post_snapshot(),
             # self._recurring_list_jobs_request(),
         )
         while self.shutdown is False:
@@ -283,25 +274,6 @@ class App(object):
 
         return self._ticks_interval(5, enqueue)
 
-    def _recurring_post_snapshot(self):
-        while self.shutdown is False:
-            now = time.time()
-            interval_seconds = POST_PIC_INTERVAL_SECONDS
-
-            if (
-                not self.model.is_printing() and
-                not self.model.remote_status['viewing'] and
-                not self.model.remote_status['should_watch']
-            ):
-                # slow down jpeg posting if needed
-                interval_seconds *= 12
-
-            if self.model.last_jpg_post_ts < now - interval_seconds:
-                self.post_snapshot()
-                self.model.last_jpg_post_ts = now
-
-            yield
-
     def _capture_error(self, fn, args=(), kwargs=None, done_event_name=None):
         ret, data = None, {}
         try:
@@ -316,20 +288,6 @@ class App(object):
         if done_event_name:
             self.push_event(Event(name=done_event_name, data=data))
         return ret
-
-    def post_snapshot(self) -> None:
-        if self.server_conn:
-            self.model.force_snapshot.set()
-
-    def snapshot_loop(self):
-        while self.shutdown is False:
-            if self.model.force_snapshot.wait(2) is True:
-                self.model.force_snapshot.clear()
-                self.model.last_jpg_post_ts = time.time()
-                self._capture_error(
-                    self._post_snapshot,
-                    done_event_name='post_snapshot_done',
-                )
 
     def download_and_print(self, ref: str, gcode_file: Dict) -> None:
         if self.model.downloading_gcode_file:
@@ -349,25 +307,6 @@ class App(object):
         thread.start()
 
         self.model.downloading_gcode_file = (ref, gcode_file)
-
-    def _post_snapshot(self) -> None:
-        if not self.server_conn:
-            return
-
-        _logger.info('capturing and posting snapshot')
-
-        pic = capture_jpeg(self.model.config.webcam)
-        if not pic:
-            _logger.error('Error in capture_jpeg. Skipping posting snapshot...') # Likely due to mistaken configuration. Not reporting to sentry.
-            return
-
-        self.server_conn.send_http_request(
-            'POST',
-            '/api/v1/octo/pic/',
-            timeout=60,
-            files={'pic': pic},
-            raise_exception=True,
-        )
 
     def _download_and_print(self, gcode_file):
         filename = gcode_file['filename']
@@ -503,9 +442,9 @@ class App(object):
 
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
-            if self.model.remote_status['viewing']:
-                self.post_snapshot()
             need_status_boost = True
+            if self.model.remote_status['viewing']:
+                self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
             need_status_boost = True
@@ -636,7 +575,6 @@ if __name__ == '__main__':
         remote_status={'viewing': False, 'should_watch': False},
         linked_printer=DEFAULT_LINKED_PRINTER,
         printer_state=PrinterState(),
-        force_snapshot=threading.Event(),
         seen_refs=collections.deque(maxlen=100),
     )
     app = App(model)
