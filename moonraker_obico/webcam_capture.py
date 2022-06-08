@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import io
 import re
+import os
 from urllib.request import urlopen
 from urllib.parse import urlparse
 from urllib.error import URLError, HTTPError
@@ -101,9 +102,9 @@ class JpegPoster:
 
     def post_pic_to_server(self, viewing_boost=False):
         files = {'pic': capture_jpeg(self.config.webcam)}
-
         data = {'viewing_boost': 'true'} if viewing_boost else {}
-        resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files={'pic': pic}, raise_exception=True)
+
+        resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True)
         _logger.debug('Jpeg posted to server - {0}'.format(resp))
 
     def pic_post_loop(self):
@@ -112,7 +113,7 @@ class JpegPoster:
                 viewing_boost = self.need_viewing_boost.wait(1)
                 if viewing_boost:
                     self.need_viewing_boost.clear()
-                    repeats = 3 if self.model.linked_printer.get('is_pro') else 1 # Pro users get better viewing boost
+                    repeats = 3 if self.app_model.linked_printer.get('is_pro') else 1 # Pro users get better viewing boost
                     for _ in range(repeats):
                         self.post_pic_to_server(viewing_boost=True)
                     continue
@@ -121,7 +122,7 @@ class JpegPoster:
                     continue
 
                 interval_seconds = POST_PIC_INTERVAL_SECONDS
-                if not self.model.remote_status['viewing'] and not self.model.remote_status['should_watch']:
+                if not self.app_model.remote_status['viewing'] and not self.app_model.remote_status['should_watch']:
                     interval_seconds *= 12      # Slow down jpeg posting if needed
 
                 if self.last_jpg_post_ts > time.time() - interval_seconds:

@@ -111,6 +111,7 @@ class SentryWrapper:
         self.sentryClient = sentryClient
 
     def captureException(self, *args, **kwargs):
+        _logger.exception('')
         if self.sentryClient:
             self.sentryClient.captureException(*args, **kwargs)
 

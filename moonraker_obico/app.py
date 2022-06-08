@@ -131,7 +131,6 @@ class App(object):
             thread.join()
         except Exception:
             self.sentry.captureException()
-            _logger.exception('ops')
 
     def stop(self, cause=None):
         if cause:
@@ -171,8 +170,7 @@ class App(object):
                 event = self.q.get()
                 self._process_event(event)
             except Exception:
-                self.sentry.captureException()
-                _logger.exception(f'error processing event {event}')
+                self.sentry.captureException(msg=f'error processing event {event}')
 
     def _process_event(self, event):
         if event.name == 'fatal_error':
