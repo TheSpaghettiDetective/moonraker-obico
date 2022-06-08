@@ -95,9 +95,9 @@ class App(object):
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.model.linked_printer = self.server_conn.get_linked_printer()
 
-        if self.model.linked_printer.get('is_pro') and not self.model.config.webcam.disable_video_streaming:
+        if not self.model.config.webcam.disable_video_streaming:
             _logger.info('Starting webcam streamer')
-            self.webcam_streamer = WebcamStreamer(self.model.config, self.sentry)
+            self.webcam_streamer = WebcamStreamer(self.model, self.sentry)
             stream_thread = threading.Thread(target=self.webcam_streamer.video_pipeline)
             stream_thread.daemon = True
             stream_thread.start()

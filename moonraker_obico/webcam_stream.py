@@ -60,8 +60,9 @@ def cpu_watch_dog(watched_process, max, interval):
 
 class WebcamStreamer:
 
-    def __init__(self, config, sentry):
-        self.config = config
+    def __init__(self, app_model, sentry):
+        self.config = app_model.config
+        self.app_model = app_model
         self.sentry = sentry
 
         self.ffmpeg_proc = None
@@ -98,9 +99,14 @@ class WebcamStreamer:
             # TODO: notification to user
             return
 
-        self.bitrate = bitrate_for_dim(img_w, img_h)
 
-        self.start_ffmpeg('-re -i {} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec h264_omx'.format(stream_url, self.bitrate, img_w, img_h))
+        bitrate = bitrate_for_dim(img_w, img_h)
+        fps = 25
+        if not self.app_model.linked_printer.get('is_pro'):
+            fps = 5
+            bitrate = int(bitrate/4)
+
+        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec h264_omx'.format(stream_url, fps, bitrate, img_w, img_h))
 
     def start_ffmpeg(self, ffmpeg_args):
         ffmpeg_cmd = '{} {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
