@@ -243,8 +243,4 @@ class Config:
         ) if self.sentry_opt == 'in' else None
         sentry = SentryWrapper(sentryClient)
         sentry.tags_context(get_tags())
-        if self.server.auth_token:
-            sentry.user_context(
-                {'id': self.server.auth_token}
-            )
         return sentry
