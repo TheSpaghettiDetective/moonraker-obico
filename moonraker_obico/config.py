@@ -240,7 +240,7 @@ class Config:
             'https://89fc4cf9318d46b1bfadc03c9d34577c@sentry.obico.io/8',  # noqa
             release=VERSION,
             ignore_exceptions=[]
-        ) if self.sentry_opt == 'in' else None
+        ) if self.sentry_opt == 'in' and self.server.canonical_endpoint_prefix().endswith('obico.io') else None
         sentry = SentryWrapper(sentryClient)
         sentry.tags_context(get_tags())
         return sentry
