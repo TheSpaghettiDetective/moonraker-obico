@@ -95,7 +95,7 @@ class App(object):
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.model.linked_printer = self.server_conn.get_linked_printer()
 
-        sentry.user_context({'id': self.model.config.server.auth_token})
+        self.sentry.user_context({'id': self.model.config.server.auth_token})
 
         if not self.model.config.webcam.disable_video_streaming:
             _logger.info('Starting webcam streamer')
