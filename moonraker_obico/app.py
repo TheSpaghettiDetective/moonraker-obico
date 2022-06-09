@@ -337,22 +337,13 @@ class App(object):
         _logger.info(
             f'uploading "{filename}" finished.')
 
-    def post_status_update_to_server(self, data=None, config=None):
-        if not data:
-            data = self.model.printer_state.to_dict(config=config)
-
-        self.model.status_posted_to_server_ts = time.time()
-        self.server_conn.send_ws_msg_to_server(data)
-
-    def post_print_event(self, print_event, config=None):
+    def post_print_event(self, print_event):
         ts = self.model.printer_state.current_print_ts
         if ts == -1:
             return
 
         _logger.info(f'print event: {print_event} ({ts})')
-        self.post_status_update_to_server(
-            self.model.printer_state.to_dict(print_event, config=config)
-        )
+        self.post_status_update_to_server(print_event)
 
     def _received_job_action(self, data):
         _logger.info(f'received print: {data["job"]}')
