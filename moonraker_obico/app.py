@@ -343,7 +343,7 @@ class App(object):
             return
 
         _logger.info(f'print event: {print_event} ({ts})')
-        self.post_status_update_to_server(print_event)
+        self.server_conn.post_status_update_to_server(print_event)
 
     def _received_job_action(self, data):
         _logger.info(f'received print: {data["job"]}')
