@@ -497,7 +497,7 @@ class App(object):
     def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
         if (
             not self.model.downloading_gcode_file and
-            not self.model.is_printing()
+            not self.model.printer_state.is_printing()
         ):
             self.download_and_print(ack_ref, gcode_file)
             return {'target_path': gcode_file['filename']}
