@@ -45,7 +45,7 @@ class ServerConn:
                     interval_in_seconds /= 5
 
                 if self.status_posted_to_server_ts < time.time() - interval_in_seconds:
-                    self.post_status_update_to_server(self.config)
+                    self.post_status_update_to_server(config=self.config)
 
             except Exception as e:
                 self.sentry.captureException(tags=get_tags())
@@ -73,8 +73,8 @@ class ServerConn:
 
                 if not self.ss or not self.ss.connected():
                     self.ss = WebSocketClient(
-                        self.config.server_config.ws_url(),
-                        token=self.config.server_config.auth_token,
+                        self.config.server.ws_url(),
+                        token=self.config.server.auth_token,
                         on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
                         on_ws_close=on_server_ws_close,)
@@ -109,7 +109,7 @@ class ServerConn:
 
     @backoff.on_predicate(backoff.expo, max_value=1200)
     def get_linked_printer(self):
-        if not self.config.server_config.auth_token:
+        if not self.config.server.auth_token:
             raise Exception('auth_token not configured. Exiting the process...')
 
         try:
@@ -127,9 +127,9 @@ class ServerConn:
         self, method, uri, timeout=10, raise_exception=True,
         **kwargs
     ):
-        endpoint = self.config.server_config.canonical_endpoint_prefix() + uri
+        endpoint = self.config.server.canonical_endpoint_prefix() + uri
         headers = {
-            'Authorization': f'Token {self.config.server_config.auth_token}'
+            'Authorization': f'Token {self.config.server.auth_token}'
         }
         headers.update(kwargs.pop('headers', {}))
 

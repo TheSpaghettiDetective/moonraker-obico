@@ -87,7 +87,7 @@ class App(object):
 
         _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.debug(self.model.config.server)
-        self.server_conn = ServerConn(self.model.config.server, self.model.printer_state, self.process_server_msg, self.sentry, )
+        self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
