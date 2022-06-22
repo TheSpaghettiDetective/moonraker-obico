@@ -19,9 +19,7 @@ class PrinterState:
 
     def is_printing(self) -> bool:
         with self._mutex:
-            return self.status.get(
-                'webhooks', {}
-            ).get('state') == 'printing'
+            return self.status.get('print_stats', {}).get('state') == 'printing'
 
     def got_metadata(self) -> bool:
         with self._mutex:
