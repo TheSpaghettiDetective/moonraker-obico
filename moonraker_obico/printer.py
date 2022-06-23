@@ -36,30 +36,6 @@ class PrinterState:
                 return self.last_print.get('metadata', {}).get('size')
         return None
 
-    def get_completion(self) -> float:
-        with self._mutex:
-            if not self.got_metadata() or not self.last_print:
-                return 0.0
-
-            virtual_sdcard = self.status.get('virtual_sdcard') or dict()
-            start_byte = self.last_print.get('metadata', {}).get('gcode_start_byte')
-            end_byte = self.last_print.get('metadata', {}).get('gcode_end_byte')
-            file_position = virtual_sdcard.get('file_position')
-
-            if start_byte is not None and end_byte is not None and file_position is not None:
-                if virtual_sdcard['file_position'] <= start_byte:
-                    return 0.0
-                if virtual_sdcard['file_position'] >= end_byte:
-                    return 1.0
-
-                current_position = file_position - start_byte
-                max_position = end_byte - start_byte
-
-                if current_position > 0 and max_position > 0:
-                    return 1 / max_position * current_position
-
-            return virtual_sdcard.get('progress', 0.0)
-
     def get_state_str_from(self, data: Dict) -> str:
         klippy_state = data.get(
             'webhooks', {}
@@ -142,6 +118,10 @@ class PrinterState:
             if state == 'Offline':
                 return {}
 
+            completion = self.status.get('virtual_sdcard', {}).get('progress')
+            print_time = print_stats.get('print_duration')
+            estimated_time = print_time / completion if print_time is not None and completion is not None and completion > 0.001 else None
+            print_time_left = estimated_time - print_time if estimated_time is not None and print_time is not None else None
             return {
                 '_ts': time.time(),
                 'state': {
@@ -172,11 +152,10 @@ class PrinterState:
                     'user': None,
                 },
                 'progress': {
-                    'completion': min(100, max(0, round(self.get_completion(), 4) * 100)),
+                    'completion': completion * 100,
                     'filepos': virtual_sdcard.get('file_position', 0),
-                    'printTime': print_stats.get('total_duration', 0.0),
-                    'printTimeLeft': None,
-                    'printTimeOrigin': None,
+                    'printTime': print_time,
+                    'printTimeLeft': print_time_left,
                 },
                 'temperatures': temps,
                 'file_metadata': {},
