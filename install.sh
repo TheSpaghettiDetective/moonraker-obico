@@ -6,7 +6,14 @@ set -o errtrace
 set -o errexit
 set -o pipefail
 
+green=$(echo -en "\e[92m")
+yellow=$(echo -en "\e[93m")
+red=$(echo -en "\e[91m")
+cyan=$(echo -en "\e[96m")
+default=$(echo -en "\e[39m")
+
 SYSTEMDDIR="/etc/systemd/system"
+SUFFIX=""
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
 MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
 MOONRAKER_HOST="127.0.0.1"
@@ -20,20 +27,46 @@ JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
 UPDATE_SETTINGS="n"
 
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+usage() {
+  if [ -n "$1" ]; then
+    echo "${red}${1}${default}"
+    echo ""
+  fi
+  cat <<EOF
+Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended if you have only 1 printer
+       $0 <[global_options]> <[moonraker_setting_options]>   # Recommended for multiple-printer setup
+
+Global options:
+          -n   Identifier used to distinguish multiple instances. Will be appended to the names of system service and log file
+          -f   Reset moonraker-obico config file, including removing the linked printer
+          -u   Show uninstallation instructions
+
+Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
+          -m   Moonraker server hostname or ip address
+          -p   Moonraker server port
+          -c   Moonraker config file path
+          -l   The directory for moonraker-obico log files, which are rotated based on size.
+EOF
+  exit 0
+}
+
+manual_setting_warning() {
+  cat <<EOF
+${yellow}
+!!!WARNING: You are manually specifying the Moonraker settings. This can be error prone.
+We highly recommend using KIAUH if you have a non-standard Klipper installation, e.g., running multiple Moonraker instances.
+${default}
+EOF
+}
 
 ensure_not_octoprint() {
   if curl -s "http://127.0.0.1:5000" >/dev/null ; then
-    printf ${RED}
     cat <<EOF
-It looks like you are running OctoPrint.
+${red}It looks like you are running OctoPrint.
 Please note this program only works for Moonraker/Mainsail/Fluidd with Klipper.
 If you are using OctoPrint with Klipper, such as OctoKlipper, please install "Obico for OctoPrint" instead.
-
+${default}
 EOF
-   printf ${NC}
-
     read -p "Continue anyway? [y/N]: " -e -i "N" cont
     echo ""
 
@@ -156,9 +189,9 @@ cfg_existed() {
   if [[ -f "${OBICO_CFG_FILE}" ]] ; then
     if [[ $RESET_CONFIG = "y" ]]; then
       backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
-      echo -e "\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
+      echo -e "${yellow}\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
       cp  ${OBICO_CFG_FILE} ${backup_config_file}
-      echo -e "Old file moved to ${backup_config_file}\n"
+      echo -e "Old file moved to ${backup_config_file}\n${default}"
       return 1
     else
       return 0
@@ -205,7 +238,7 @@ disable_video_streaming = False
 # aspect_ratio_169 = False
 
 [logging]
-path = ${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log
+path = ${LOG_DIR}/moonraker-obico${SUFFIX}.log
 # level = INFO
 EOF
 }
@@ -364,12 +397,7 @@ exit_on_error() {
 
 The installation has run into an error:
 
-EOF
-
-  msg=$1
-  printf "${RED}${msg}${NC}\n"
-
-  cat <<EOF
+${red}${1}${default}
 
 Please fix the error above and re-run this setup script:
 
@@ -404,7 +432,7 @@ The changes we have made to your system:
 - Config file: ${OBICO_CFG_FILE}
 - Update file: ${OBICO_UPDATE_FILE}
 - Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
-- Log file: ${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log
+- Log file: ${LOG_DIR}/moonraker-obico${SUFFIX}.log
 
 To remove Obico for Klipper, run:
 
@@ -436,20 +464,29 @@ EOF
   exit 0
 }
 
+## Main flow for installation starts here:
+
 trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 OBICO_DIR=$(realpath $(dirname "$0"))
-echo $OBICO_DIR
 
 # Parse command line arguments
-while getopts "fus" arg; do
+while getopts "hn:m:p:c:l:fus" arg; do
     case $arg in
+        h) usage && exit 0;;
+        m) mr_host=${OPTARG};;
+        p) mr_port=${OPTARG};;
+        c) mr_config=${OPTARG};;
+        l) log_path=${OPTARG%/};;
+        n) SUFFIX=-${OPTARG};;
         f) RESET_CONFIG="y";;
         s) UPDATE_SETTINGS="y";;
         u) uninstall ;;
+        *) usage && exit 0;;
     esac
 done
+
 
 welcome
 ensure_not_octoprint
@@ -460,8 +497,26 @@ if $(dirname "$0")/scripts/tsd_service_existed.sh ; then
   exit 0
 fi
 
-if ! discover_sys_settings ; then
-  prompt_for_settings
+if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "${log_path}" ]; then
+
+  if ! { [ -n "${mr_host}" ] && [ -n "${mr_port}" ] && [ -n "${mr_config}" ] && [ -n "${log_path}" ]; }; then
+    usage "Please specify all Moonraker setting options. See usage below." && exit 1
+  else
+    manual_setting_warning
+    MOONRAKER_HOST="${mr_host}"
+    MOONRAKER_PORT="${mr_port}"
+    eval MOONRAKER_CONFIG_FILE="${mr_config}"
+    eval KLIPPER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
+    eval LOG_DIR="${log_path}"
+  fi
+
+else
+
+  if ! discover_sys_settings ; then
+    manual_setting_warning
+    prompt_for_settings
+  fi
+
 fi
 
 ensure_writtable "${KLIPPER_CONF_DIR}"
