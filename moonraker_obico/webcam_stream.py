@@ -83,6 +83,21 @@ class WebcamStreamer:
             raise
 
     def ffmpeg_from_mjpeg(self):
+
+        def h264_encoder():
+            test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
+            FNULL = open(os.devnull, 'w')
+            for encoder in ['h264_v4l2m2m', 'h264_omx']:
+                ffmpeg_test_proc = psutil.Popen('ffmpeg -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(test_video, encoder).split(' '), stdout=FNULL, stderr=FNULL)
+                if ffmpeg_test_proc.wait() == 0:
+                    return encoder
+            return None
+
+        encoder = h264_encoder()
+        if not encoder:
+            # TODO: notification to user
+            return
+
         webcam_config = self.config.webcam
 
         jpg = capture_jpeg(webcam_config)
@@ -105,7 +120,7 @@ class WebcamStreamer:
             fps = 5
             bitrate = int(bitrate/4)
 
-        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec h264_omx'.format(stream_url, fps, bitrate, img_w, img_h))
+        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
 
     def start_ffmpeg(self, ffmpeg_args):
         ffmpeg_cmd = 'ffmpeg {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(ffmpeg_args, JANUS_SERVER)
