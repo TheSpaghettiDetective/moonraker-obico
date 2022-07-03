@@ -12,8 +12,6 @@ red=$(echo -en "\e[91m")
 cyan=$(echo -en "\e[96m")
 default=$(echo -en "\e[39m")
 
-SYSTEMDDIR="/etc/systemd/system"
-SUFFIX=""
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
 MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
 MOONRAKER_HOST="127.0.0.1"
@@ -22,6 +20,7 @@ LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
+OBICO_SERVICE_NAME="moonraker-obico.service"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
@@ -37,7 +36,6 @@ Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended
        $0 <[global_options]> <[moonraker_setting_options]>   # Recommended for multiple-printer setup
 
 Global options:
-          -n   Identifier used to distinguish multiple instances. Will be appended to the names of system service and log file
           -f   Reset moonraker-obico config file, including removing the linked printer
           -u   Show uninstallation instructions
 
@@ -238,16 +236,16 @@ disable_video_streaming = False
 # aspect_ratio_169 = False
 
 [logging]
-path = ${LOG_DIR}/moonraker-obico${SUFFIX}.log
+path = ${OBICO_LOG_FILE}
 # level = INFO
 EOF
 }
 
 service_existed() {
-  if [[ -f ${SYSTEMDDIR}/moonraker-obico.service ]]; then
+  if [[ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}" ]]; then
     if [[ $UPDATE_SETTINGS = "y" ]]; then
-      report_status "Stopping moonraker-obico service..."
-      systemctl stop moonraker-obico
+      report_status "Stopping ${OBICO_SERVICE_NAME}..."
+      systemctl stop "${OBICO_SERVICE_NAME}"
       return 1
     else
       report_status "moonraker-obico systemctl service already existed. Skipping..."
@@ -260,7 +258,7 @@ service_existed() {
 
 recreate_service() {
   report_status "Creating moonraker-obico systemctl service... You may need to enter password to run sudo."
-  sudo /bin/sh -c "cat > ${SYSTEMDDIR}/moonraker-obico.service" <<EOF
+  sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
 Description=Obico for Moonraker
@@ -278,12 +276,12 @@ Restart=always
 RestartSec=5
 EOF
 
-  sudo systemctl enable moonraker-obico.service
+  sudo systemctl enable "${OBICO_SERVICE_NAME}"
   sudo systemctl daemon-reload
   echo ""
-  report_status "moonraker-obico service created and enabled."
-  report_status "Launching moonraker-obico service..."
-  systemctl start moonraker-obico
+  report_status "${OBICO_SERVICE_NAME} service created and enabled."
+  report_status "Launching ${OBICO_SERVICE_NAME} service..."
+  systemctl start "${OBICO_SERVICE_NAME}"
 }
 
 recreate_update_file() {
@@ -296,7 +294,7 @@ env: ${OBICO_ENV}/bin/python
 requirements: requirements.txt
 install_script: install.sh
 managed_services:
-  moonraker-obico
+  ${OBICO_SERVICE_NAME}
 EOF
 
   if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
@@ -428,11 +426,11 @@ finished() {
 
 The changes we have made to your system:
 
-- System service: ${SYSTEMDDIR}/moonraker-obico.service
+- System service: /etc/systemd/system/${OBICO_SERVICE_NAME}
 - Config file: ${OBICO_CFG_FILE}
 - Update file: ${OBICO_UPDATE_FILE}
 - Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
-- Log file: ${LOG_DIR}/moonraker-obico${SUFFIX}.log
+- Log file: ${OBICO_LOG_FILE}
 
 To remove Obico for Klipper, run:
 
@@ -452,9 +450,9 @@ uninstall() {
 
 To uninstall Obico for Klipper, please run:
 
-sudo systemctl stop moonraker-obico.service
-sudo systemctl disable moonraker-obico.service
-sudo rm /etc/systemd/system/moonraker-obico.service
+sudo systemctl stop "${OBICO_SERVICE_NAME}"
+sudo systemctl disable "${OBICO_SERVICE_NAME}"
+sudo rm "/etc/systemd/system/${OBICO_SERVICE_NAME}"
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 rm -rf ~/moonraker-obico
@@ -472,14 +470,13 @@ trap 'unknown_error' INT
 OBICO_DIR=$(realpath $(dirname "$0"))
 
 # Parse command line arguments
-while getopts "hn:m:p:c:l:fus" arg; do
+while getopts "hm:p:c:l:fus" arg; do
     case $arg in
         h) usage && exit 0;;
         m) mr_host=${OPTARG};;
         p) mr_port=${OPTARG};;
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
-        n) SUFFIX=-${OPTARG};;
         f) RESET_CONFIG="y";;
         s) UPDATE_SETTINGS="y";;
         u) uninstall ;;
@@ -525,15 +522,20 @@ ensure_writtable "${LOG_DIR}"
 
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
+if [ "${MOONRAKER_PORT}" -ne "7125" ]; then
+  OBICO_SERVICE_NAME="moonraker-obico-${MOONRAKER_PORT}.service"
+  OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log"
+fi
 
 if ! service_existed ; then
   recreate_service
-  recreate_update_file
 fi
 
 if ! cfg_existed ; then
   create_config
 fi
+
+recreate_update_file
 
 if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_ENV}"; then
   exit 0
@@ -543,7 +545,7 @@ trap - ERR
 trap - INT
 
 if link_to_server ; then
-  systemctl restart moonraker-obico
+  systemctl restart "${OBICO_SERVICE_NAME}"
   prompt_for_sentry
   finished
 fi
