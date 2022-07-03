@@ -87,7 +87,7 @@ class WebcamStreamer:
         def h264_encoder():
             test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
             FNULL = open(os.devnull, 'w')
-            for encoder in ['h264_v4l2m2m', 'h264_omx']:
+            for encoder in ['h264_omx', 'h264_v4l2m2m']:
                 ffmpeg_test_proc = psutil.Popen('ffmpeg -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(test_video, encoder).split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
                     return encoder
