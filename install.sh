@@ -156,18 +156,18 @@ prompt_for_settings() {
   echo ""
 }
 
-ensure_venv() {
+ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
+
+  PKGLIST="python3 python3-pip python3-venv ffmpeg"
+  sudo apt-get update --allow-releaseinfo-change
+  sudo apt-get install --yes ${PKGLIST}
+
   echo -e ""
   if [[ -f "${HOME}/moonraker-env/bin/activate" ]] ; then
     OBICO_ENV="${HOME}/moonraker-env"
   else
     OBICO_ENV="${HOME}/moonraker-obico-env"
-
-    PKGLIST="python3 python3-pip python3-venv"
-    sudo apt-get update --allow-releaseinfo-change
-    sudo apt-get install --yes ${PKGLIST}
-
     report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
     virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
@@ -487,7 +487,7 @@ done
 
 welcome
 ensure_not_octoprint
-ensure_venv
+ensure_deps
 ensure_json_parser
 
 if $(dirname "$0")/scripts/tsd_service_existed.sh ; then
