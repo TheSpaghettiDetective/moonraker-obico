@@ -16,7 +16,6 @@ from .webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.webcam_stream')
 
-FFMPEG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 GST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'gst')
 
 PI_CAM_RESOLUTIONS = {
@@ -109,7 +108,7 @@ class WebcamStreamer:
         self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec h264_omx'.format(stream_url, fps, bitrate, img_w, img_h))
 
     def start_ffmpeg(self, ffmpeg_args):
-        ffmpeg_cmd = '{} {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
+        ffmpeg_cmd = 'ffmpeg {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(ffmpeg_args, JANUS_SERVER)
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
