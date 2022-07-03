@@ -522,6 +522,7 @@ ensure_writtable "${LOG_DIR}"
 
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
+OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
 if [ "${MOONRAKER_PORT}" -ne "7125" ]; then
   OBICO_SERVICE_NAME="moonraker-obico-${MOONRAKER_PORT}.service"
   OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log"
