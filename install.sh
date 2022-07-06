@@ -12,6 +12,7 @@ red=$(echo -en "\e[91m")
 cyan=$(echo -en "\e[96m")
 default=$(echo -en "\e[39m")
 
+SUFFIX=""
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
 MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
 MOONRAKER_HOST="127.0.0.1"
@@ -470,7 +471,7 @@ trap 'unknown_error' INT
 OBICO_DIR=$(realpath $(dirname "$0"))
 
 # Parse command line arguments
-while getopts "hm:p:c:l:fus" arg; do
+while getopts "hn:m:p:c:l:fus" arg; do
     case $arg in
         h) usage && exit 0;;
         m) mr_host=${OPTARG};;
@@ -478,6 +479,7 @@ while getopts "hm:p:c:l:fus" arg; do
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
         f) RESET_CONFIG="y";;
+        n) SUFFIX=${OPTARG};;
         s) UPDATE_SETTINGS="y";;
         u) uninstall ;;
         *) usage && exit 0;;
@@ -520,13 +522,15 @@ ensure_writtable "${KLIPPER_CONF_DIR}"
 ensure_writtable "${MOONRAKER_CONFIG_FILE}"
 ensure_writtable "${LOG_DIR}"
 
+if [ -z "${SUFFIX}" -a "${MOONRAKER_PORT}" -ne "7125" ]; then
+  SUFFIX=${MOONRAKER_PORT}
+fi
+
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
-if [ "${MOONRAKER_PORT}" -ne "7125" ]; then
-  OBICO_SERVICE_NAME="moonraker-obico-${MOONRAKER_PORT}.service"
-  OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico-${MOONRAKER_PORT}.log"
-fi
+OBICO_SERVICE_NAME="moonraker-obico-${SUFFIX}.service"
+OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico-${SUFFIX}.log"
 
 if ! service_existed ; then
   recreate_service
