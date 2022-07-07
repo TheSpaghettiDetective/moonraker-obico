@@ -36,10 +36,6 @@ class ServerConfig:
     feedrate_xy : int = DEFAULT_FEEDRATE_XY
     feedrate_z : int = DEFAULT_FEEDRATE_Z
 
-    # disable_video_streaming: bool = False
-    # pi_cam_resolution: str = 'medium'
-    # video_streaming_compatible_mode: str = 'auto'
-
     def canonical_endpoint_prefix(self):
         if not self.url:
             return None
@@ -206,7 +202,11 @@ class Config:
             aspect_ratio_169=config.getboolean(
                 'webcam', 'aspect_ratio_169',
                 fallback=False
-            )
+            ),
+            disable_video_streaming=config.getboolean(
+                'webcam', 'disable_video_streaming',
+                fallback=False
+            ),
         )
 
         logging_config = LoggingConfig(
