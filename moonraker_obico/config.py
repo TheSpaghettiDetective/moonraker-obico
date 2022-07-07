@@ -74,9 +74,6 @@ class WebcamConfig:
             for cfg in result.get('value', {}).values():
                 self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
                 self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
-                self.flip_h = cfg.get('flipX', False)
-                self.flip_v = cfg.get('flipY', False)
-
             return
 
         # webcam configs not found in the standard location. Try fluidd's flavor
@@ -88,9 +85,6 @@ class WebcamConfig:
                     continue
 
                 self.stream_url = self.webcam_full_url(cfg.get('url', None))
-                self.flip_h = cfg.get('flipX', False)
-                self.flip_v = cfg.get('flipY', False)
-
             return
 
         #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
