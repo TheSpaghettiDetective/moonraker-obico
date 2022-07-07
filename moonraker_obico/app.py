@@ -51,7 +51,7 @@ class App(object):
         linked_printer: Dict
         printer_state: PrinterState
         seen_refs: collections.deque
-        downloading_gcode_file: Optional[Tuple[str, Dict]] = None
+        downloading_gcode_file: bool = False
 
         def is_configured(self):
             return True  # FIXME
@@ -184,10 +184,6 @@ class App(object):
         elif event.sender == 'moonrakerconn':
             self._on_moonrakerconn_event(event)
 
-        elif event.name == 'download_and_print_done':
-            _logger.info('clearing downloading flag')
-            self.model.downloading_gcode_file = None
-
     def _on_moonrakerconn_event(self, event):
         if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
             # clear app's klippy state
@@ -274,40 +270,6 @@ class App(object):
 
         return self._ticks_interval(5, enqueue)
 
-    def _capture_error(self, fn, args=(), kwargs=None, done_event_name=None):
-        ret, data = None, {}
-        try:
-            ret = fn(*args, **(kwargs if kwargs is not None else {}))
-            data['ret'] = ret
-        except Exception as exc:
-            data['exc'] = exc
-            _logger.exception(
-                f'unexpected error in {fn.__name__.lstrip("_")}')
-            self.sentry.captureException()
-
-        if done_event_name:
-            self.push_event(Event(name=done_event_name, data=data))
-        return ret
-
-    def download_and_print(self, ref: str, gcode_file: Dict) -> None:
-        if self.model.downloading_gcode_file:
-            _logger.info(
-                'download_and_print ignored; previous attempt has not finished'
-            )
-            return
-
-        thread = threading.Thread(
-            target=self._capture_error(
-                self._download_and_print,
-                args=(gcode_file, ),
-                done_event_name='download_and_print_done',
-            )
-        )
-        thread.daemon = True
-        thread.start()
-
-        self.model.downloading_gcode_file = (ref, gcode_file)
-
     def _download_and_print(self, gcode_file):
         filename = gcode_file['filename']
 
@@ -324,6 +286,8 @@ class App(object):
         )
         r.raise_for_status()
 
+        self.model.downloading_gcode_file = False
+
         _logger.info(f'uploading "{filename}" to moonraker')
         resp_data = self.moonrakerconn.api_post(
                 'server/files/upload',
@@ -336,6 +300,7 @@ class App(object):
         _logger.debug(f'upload response: {resp_data}')
         _logger.info(
             f'uploading "{filename}" finished.')
+
 
     def post_print_event(self, print_event):
         ts = self.model.printer_state.current_print_ts
@@ -499,7 +464,15 @@ class App(object):
             not self.model.downloading_gcode_file and
             not self.model.printer_state.is_printing()
         ):
-            self.download_and_print(ack_ref, gcode_file)
+
+            thread = threading.Thread(
+                target=self._download_and_print,
+                args=(gcode_file, )
+            )
+            thread.daemon = True
+            thread.start()
+
+            self.model.downloading_gcode_file = True
             return {'target_path': gcode_file['filename']}
         else:
             return {'error': 'Currently downloading or printing!'}
