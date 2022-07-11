@@ -17,6 +17,7 @@ from .webcam_capture import capture_jpeg
 _logger = logging.getLogger('obico.webcam_stream')
 
 GST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'gst')
+FFMPEG = 'ffmpeg'
 
 PI_CAM_RESOLUTIONS = {
     'low': ((320, 240), (480, 270)),  # resolution for 4:3 and 16:9
@@ -57,6 +58,23 @@ def cpu_watch_dog(watched_process, max, interval):
     watch_thread.start()
 
 
+def set_ffmpeg_if_needed():
+    # We need patched ffmpeg for some systems that is distributed with defected ffmpeg, such as h264_v4l2m2m in rpios bullseye (32-bit)
+
+    cat_proc = psutil.Popen(['cat', '/etc/debian_version'], stdout=subprocess.PIPE)
+    if cat_proc.wait(timeout=5) != 0:
+        return
+
+    (debian_version, _) = cat_proc.communicate()
+    try:
+        debian_version = int(debian_version.decode("utf-8").split('.')[0])
+        if debian_version >= 11:
+            global FFMPEG
+            FFMPEG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'rpi_os.11', '32bits', 'ffmpeg')
+    except:
+        pass
+ 
+
 class WebcamStreamer:
 
     def __init__(self, app_model, sentry):
@@ -88,10 +106,12 @@ class WebcamStreamer:
             test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
             FNULL = open(os.devnull, 'w')
             for encoder in ['h264_omx', 'h264_v4l2m2m']:
-                ffmpeg_test_proc = psutil.Popen('ffmpeg -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(test_video, encoder).split(' '), stdout=FNULL, stderr=FNULL)
+                ffmpeg_test_proc = psutil.Popen('{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder).split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
                     return encoder
             return None
+
+        set_ffmpeg_if_needed()
 
         encoder = h264_encoder()
         if not encoder:
@@ -123,7 +143,7 @@ class WebcamStreamer:
         self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
 
     def start_ffmpeg(self, ffmpeg_args):
-        ffmpeg_cmd = 'ffmpeg {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(ffmpeg_args, JANUS_SERVER)
+        ffmpeg_cmd = '{} {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
