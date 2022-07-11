@@ -36,10 +36,6 @@ class ServerConfig:
     feedrate_xy : int = DEFAULT_FEEDRATE_XY
     feedrate_z : int = DEFAULT_FEEDRATE_Z
 
-    # disable_video_streaming: bool = False
-    # pi_cam_resolution: str = 'medium'
-    # video_streaming_compatible_mode: str = 'auto'
-
     def canonical_endpoint_prefix(self):
         if not self.url:
             return None
@@ -78,9 +74,6 @@ class WebcamConfig:
             for cfg in result.get('value', {}).values():
                 self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
                 self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
-                self.flip_h = cfg.get('flipX', False)
-                self.flip_v = cfg.get('flipY', False)
-
             return
 
         # webcam configs not found in the standard location. Try fluidd's flavor
@@ -92,9 +85,6 @@ class WebcamConfig:
                     continue
 
                 self.stream_url = self.webcam_full_url(cfg.get('url', None))
-                self.flip_h = cfg.get('flipX', False)
-                self.flip_v = cfg.get('flipY', False)
-
             return
 
         #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
@@ -206,7 +196,11 @@ class Config:
             aspect_ratio_169=config.getboolean(
                 'webcam', 'aspect_ratio_169',
                 fallback=False
-            )
+            ),
+            disable_video_streaming=config.getboolean(
+                'webcam', 'disable_video_streaming',
+                fallback=False
+            ),
         )
 
         logging_config = LoggingConfig(
