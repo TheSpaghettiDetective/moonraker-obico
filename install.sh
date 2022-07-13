@@ -21,7 +21,7 @@ LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_SERVER="https://app.obico.io"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
-OBICO_SERVICE_NAME="moonraker-obico.service"
+OBICO_SERVICE_NAME="moonraker-obico"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
@@ -243,7 +243,7 @@ EOF
 }
 
 service_existed() {
-  if [[ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}" ]]; then
+  if [[ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]]; then
     if [[ $UPDATE_SETTINGS = "y" ]]; then
       report_status "Stopping ${OBICO_SERVICE_NAME}..."
       systemctl stop "${OBICO_SERVICE_NAME}"
@@ -259,7 +259,7 @@ service_existed() {
 
 recreate_service() {
   report_status "Creating moonraker-obico systemctl service... You may need to enter password to run sudo."
-  sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}" <<EOF
+  sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
 Description=Obico for Moonraker
@@ -529,7 +529,7 @@ fi
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
-OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}.service"
+OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
 OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico${SUFFIX}.log"
 
 if ! service_existed ; then
