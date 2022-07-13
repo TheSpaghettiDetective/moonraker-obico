@@ -479,7 +479,7 @@ while getopts "hn:m:p:c:l:fus" arg; do
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
         f) RESET_CONFIG="y";;
-        n) SUFFIX=${OPTARG};;
+        n) SUFFIX="-${OPTARG}";;
         s) UPDATE_SETTINGS="y";;
         u) uninstall ;;
         *) usage && exit 0;;
@@ -523,14 +523,14 @@ ensure_writtable "${MOONRAKER_CONFIG_FILE}"
 ensure_writtable "${LOG_DIR}"
 
 if [ -z "${SUFFIX}" -a "${MOONRAKER_PORT}" -ne "7125" ]; then
-  SUFFIX=${MOONRAKER_PORT}
+  SUFFIX="-${MOONRAKER_PORT}"
 fi
 
 OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
-OBICO_SERVICE_NAME="moonraker-obico-${SUFFIX}.service"
-OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico-${SUFFIX}.log"
+OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}.service"
+OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico${SUFFIX}.log"
 
 if ! service_existed ; then
   recreate_service
