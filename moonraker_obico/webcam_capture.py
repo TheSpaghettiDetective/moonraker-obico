@@ -105,7 +105,7 @@ class JpegPoster:
         data = {'viewing_boost': 'true'} if viewing_boost else {}
 
         resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True)
-        _logger.debug('Jpeg posted to server - {0}'.format(resp))
+        _logger.debug('Jpeg posted to server - viewing_boost: {0} - {1}'.format(viewing_boost, resp))
 
     def pic_post_loop(self):
         while True:
