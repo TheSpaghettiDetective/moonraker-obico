@@ -26,18 +26,16 @@ PI_CAM_RESOLUTIONS = {
     'ultra_high': ((1640, 1232), (1920, 1080)),
 }
 
-
 def bitrate_for_dim(img_w, img_h):
     dim = img_w * img_h
     if dim <= 480 * 270:
-        return 1000000
+        return 400*1000
     if dim <= 960 * 540:
-        return 5000000
-    if dim <= 1640 * 922:
-        return 20000000
+        return 1300*1000
+    if dim <= 1280 * 720:
+        return 2000*1000
     else:
-        return 6000000
-
+        return 3000*1000
 
 def cpu_watch_dog(watched_process, max, interval):
 
@@ -73,7 +71,7 @@ def set_ffmpeg_if_needed():
             FFMPEG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'rpi_os.11', '32bits', 'ffmpeg')
     except:
         pass
- 
+
 
 class WebcamStreamer:
 
