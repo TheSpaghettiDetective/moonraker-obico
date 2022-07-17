@@ -141,6 +141,7 @@ h264-sample: {
 	audioiface = "127.0.0.1"
 	video = {VIDEO_ENABLED}
 	videoport = 8004
+	videortcpport = 8005
 	videoiface = "127.0.0.1"
 	videopt = 96
 	videortpmap = "H264/90000"
