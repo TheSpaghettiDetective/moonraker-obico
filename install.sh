@@ -41,7 +41,7 @@ Global options:
           -u   Show uninstallation instructions
 
 Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
-          -m   Moonraker server hostname or ip address
+          -H   Moonraker server hostname or ip address
           -p   Moonraker server port
           -c   Moonraker config file path
           -l   The directory for moonraker-obico log files, which are rotated based on size.
@@ -471,10 +471,10 @@ trap 'unknown_error' INT
 OBICO_DIR=$(realpath $(dirname "$0"))
 
 # Parse command line arguments
-while getopts "hn:m:p:c:l:fus" arg; do
+while getopts "hn:H:p:c:l:fus" arg; do
     case $arg in
         h) usage && exit 0;;
-        m) mr_host=${OPTARG};;
+        H) mr_host=${OPTARG};;
         p) mr_port=${OPTARG};;
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
