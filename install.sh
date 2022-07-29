@@ -174,7 +174,7 @@ ensure_deps() {
     mkdir -p "${OBICO_ENV}"
     virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
   fi
-  "${OBICO_ENV}"/bin/pip3 install -r "${OBICO_DIR}"/requirements.txt
+  "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
   echo ""
 }
 
@@ -250,7 +250,6 @@ service_existed() {
       systemctl stop "${OBICO_SERVICE_NAME}"
       return 1
     else
-      report_status "moonraker-obico systemctl service already existed. Skipping..."
       return 0
     fi
   else
@@ -547,9 +546,10 @@ if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_E
   exit 0
 fi
 
+trap - ERR
+trap - INT
+
 if [ $SKIP_LINKING != "y" ]; then
-  trap - ERR
-  trap - INT
 
   if link_to_server ; then
     systemctl restart "${OBICO_SERVICE_NAME}"
