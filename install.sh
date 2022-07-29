@@ -26,6 +26,7 @@ CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 RESET_CONFIG="n"
 UPDATE_SETTINGS="n"
+SKIP_LINKING="n"
 
 usage() {
   if [ -n "$1" ]; then
@@ -69,7 +70,7 @@ EOF
     read -p "Continue anyway? [y/N]: " -e -i "N" cont
     echo ""
 
-    if [[ "${cont^^}" != "Y" ]] ; then
+    if [ "${cont^^}" != "Y" ] ; then
       exit 0
     fi
   fi
@@ -90,7 +91,7 @@ discover_sys_settings() {
     has_fluidd=true
   fi
 
-  if [[ "${has_mainsail}" = true && "${has_fluidd}" = true ]] ; then
+  if [ "${has_mainsail}" = true && "${has_fluidd}" = true ] ; then
     return 1
   fi
 
@@ -117,15 +118,15 @@ discover_sys_settings() {
 
   mr_config_file="${mr_config_path}/moonraker.conf"
 
-  if [[ ! -f "${mr_config_file}" ]] ; then
+  if [ ! -f "${mr_config_file}" ] ; then
     return 1
   fi
 
-  if [[ "${has_mainsail}" = true ]] ; then
+  if [ "${has_mainsail}" = true ] ; then
     toolchain_msg='Mainsail'
   fi
 
-  if [[ "${has_fluidd}" = true ]] ; then
+  if [ "${has_fluidd}" = true ] ; then
     toolchain_msg='Fluidd'
   fi
 
@@ -136,7 +137,7 @@ discover_sys_settings() {
   read -p "Is this correct? [Y/n]: " -e -i "Y" correct
   echo ""
 
-  if [[ "${correct^^}" == "Y" ]] ; then
+  if [ "${correct^^}" == "Y" ] ; then
     KLIPPER_CONF_DIR="${mr_config_path}"
     LOG_DIR="${mr_log_path}"
     MOONRAKER_CONFIG_FILE="${mr_config_file}"
@@ -165,7 +166,7 @@ ensure_deps() {
   sudo apt-get install --yes ${PKGLIST}
 
   echo -e ""
-  if [[ -f "${HOME}/moonraker-env/bin/activate" ]] ; then
+  if [ -f "${HOME}/moonraker-env/bin/activate" ] ; then
     OBICO_ENV="${HOME}/moonraker-env"
   else
     OBICO_ENV="${HOME}/moonraker-obico-env"
@@ -179,14 +180,14 @@ ensure_deps() {
 
 ensure_writtable() {
   dest_path="$1"
-  if [[ ! -w "$1" ]] ; then
+  if [ ! -w "$1" ] ; then
     exit_on_error "$1 doesn't exist or can't be changed."
   fi
 }
 
 cfg_existed() {
-  if [[ -f "${OBICO_CFG_FILE}" ]] ; then
-    if [[ $RESET_CONFIG = "y" ]]; then
+  if [ -f "${OBICO_CFG_FILE}" ] ; then
+    if [ $RESET_CONFIG = "y" ]; then
       backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
       echo -e "${yellow}\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
       cp  ${OBICO_CFG_FILE} ${backup_config_file}
@@ -243,8 +244,8 @@ EOF
 }
 
 service_existed() {
-  if [[ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]]; then
-    if [[ $UPDATE_SETTINGS = "y" ]]; then
+  if [ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]; then
+    if [ $UPDATE_SETTINGS = "y" ]; then
       report_status "Stopping ${OBICO_SERVICE_NAME}..."
       systemctl stop "${OBICO_SERVICE_NAME}"
       return 1
@@ -321,7 +322,7 @@ prompt_for_sentry() {
   echo -e "The debugging info included in the report will be anonymized.\n"
   read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
   echo ""
-  if [[ "${opt_in^^}" == "Y" ]] ; then
+  if [ "${opt_in^^}" == "Y" ] ; then
 		cat <<EOF >> "${OBICO_CFG_FILE}"
 
 [misc]
@@ -471,7 +472,7 @@ trap 'unknown_error' INT
 OBICO_DIR=$(realpath $(dirname "$0"))
 
 # Parse command line arguments
-while getopts "hn:H:p:c:l:fus" arg; do
+while getopts "hn:H:p:c:l:fLus" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -481,6 +482,7 @@ while getopts "hn:H:p:c:l:fus" arg; do
         f) RESET_CONFIG="y";;
         n) SUFFIX="-${OPTARG}";;
         s) UPDATE_SETTINGS="y";;
+        L) SKIP_LINKING="y";;
         u) uninstall ;;
         *) usage && exit 0;;
     esac
@@ -545,11 +547,14 @@ if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_E
   exit 0
 fi
 
-trap - ERR
-trap - INT
+if [ $SKIP_LINKING != "y" ]; then
+  trap - ERR
+  trap - INT
 
-if link_to_server ; then
-  systemctl restart "${OBICO_SERVICE_NAME}"
-  prompt_for_sentry
-  finished
+  if link_to_server ; then
+    systemctl restart "${OBICO_SERVICE_NAME}"
+    prompt_for_sentry
+  fi
 fi
+
+finished
