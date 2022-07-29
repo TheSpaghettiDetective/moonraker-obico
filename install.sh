@@ -501,7 +501,6 @@ if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "
   if ! { [ -n "${mr_host}" ] && [ -n "${mr_port}" ] && [ -n "${mr_config}" ] && [ -n "${log_path}" ]; }; then
     usage "Please specify all Moonraker setting options. See usage below." && exit 1
   else
-    manual_setting_warning
     MOONRAKER_HOST="${mr_host}"
     MOONRAKER_PORT="${mr_port}"
     eval MOONRAKER_CONFIG_FILE="${mr_config}"
