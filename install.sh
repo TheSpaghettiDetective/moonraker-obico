@@ -24,8 +24,8 @@ OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 OBICO_SERVICE_NAME="moonraker-obico"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
-RESET_CONFIG="n"
-UPDATE_SETTINGS="n"
+OVERWRITE_CONFIG="n"
+RECREATE_SERVICE="n"
 SKIP_LINKING="n"
 
 usage() {
@@ -187,7 +187,7 @@ ensure_writtable() {
 
 cfg_existed() {
   if [ -f "${OBICO_CFG_FILE}" ] ; then
-    if [ $RESET_CONFIG = "y" ]; then
+    if [ $OVERWRITE_CONFIG = "y" ]; then
       backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
       echo -e "${yellow}\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
       cp  ${OBICO_CFG_FILE} ${backup_config_file}
@@ -245,7 +245,7 @@ EOF
 
 service_existed() {
   if [ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]; then
-    if [ $UPDATE_SETTINGS = "y" ]; then
+    if [ $RECREATE_SERVICE = "y" ]; then
       report_status "Stopping ${OBICO_SERVICE_NAME}..."
       systemctl stop "${OBICO_SERVICE_NAME}"
       return 1
@@ -478,9 +478,9 @@ while getopts "hn:H:p:c:l:fLus" arg; do
         p) mr_port=${OPTARG};;
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
-        f) RESET_CONFIG="y";;
         n) SUFFIX="-${OPTARG}";;
-        s) UPDATE_SETTINGS="y";;
+        f) OVERWRITE_CONFIG="y";;
+        s) RECREATE_SERVICE="y";;
         L) SKIP_LINKING="y";;
         u) uninstall ;;
         *) usage && exit 0;;
