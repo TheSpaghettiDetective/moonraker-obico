@@ -19,7 +19,6 @@ MOONRAKER_HOST="127.0.0.1"
 MOONRAKER_PORT="7125"
 LOG_DIR="${HOME}/klipper_logs"
 OBICO_DIR="${HOME}/moonraker-obico"
-OBICO_SERVER="https://app.obico.io"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 OBICO_SERVICE_NAME="moonraker-obico"
 CURRENT_USER=${USER}
@@ -205,18 +204,21 @@ cfg_existed() {
 }
 
 create_config() {
-  cat <<EOF
+  if [ -z "${OBICO_SERVER}" ]; then
+    cat <<EOF
 
 ================================= Obico Server URL ==============================================
 
-EOF
+Now tell us what Obico Server you want to link your printer to.
+You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
+For self-hosted server, specify `http://server_ip:port`. For instance, http://192.168.0.5:3334.
 
-  echo -e "Now tell us what Obico Server you want to link your printer to."
-  echo -e "You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io\n"
-  echo -e "For self-hosted server, specify \`http://server_ip:port\`. For instance, http://192.168.0.5:3334.\n"
-  read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "${OBICO_SERVER}" user_input
-  echo ""
-  OBICO_SERVER="${user_input}"
+EOF
+    read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
+    echo ""
+    OBICO_SERVER="${user_input}"
+  fi
+
   report_status "Creating config file ${OBICO_CFG_FILE} ..."
   cat <<EOF > "${OBICO_CFG_FILE}"
 [server]
@@ -475,7 +477,7 @@ trap 'unknown_error' INT
 OBICO_DIR=$(realpath $(dirname "$0"))
 
 # Parse command line arguments
-while getopts "hn:H:p:c:l:fLus" arg; do
+while getopts "hn:H:p:c:l:S:fLus" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -483,6 +485,7 @@ while getopts "hn:H:p:c:l:fLus" arg; do
         c) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
         n) SUFFIX="-${OPTARG}";;
+        S) OBICO_SERVER="${OPTARG}";;
         f) OVERWRITE_CONFIG="y";;
         s) RECREATE_SERVICE="y";;
         L) SKIP_LINKING="y";;
