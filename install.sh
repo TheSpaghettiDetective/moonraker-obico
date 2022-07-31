@@ -39,9 +39,12 @@ Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended
 
 Global options:
           -f   Reset moonraker-obico config file, including removing the linked printer
+          -s   Recreate the system service even if one already existed
+          -L   Skip the step to link to the Obico server.
           -u   Show uninstallation instructions
 
 Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
+          -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
           -H   Moonraker server hostname or ip address
           -p   Moonraker server port
           -c   Moonraker config file path
@@ -365,11 +368,11 @@ report_status() {
 welcome() {
   cat <<EOF
 
-=====================================================================================================
-###                                                                                               ###
-###                       Install and Configure Obico for Klipper                                 ###
-###                                                                                               ###
-=====================================================================================================
+======================================================================================================
+###                                                                                                ###
+###                       Install and Configure Obico for Klipper                                  ###
+###                                                                                                ###
+======================================================================================================
 
 EOF
 }
@@ -415,15 +418,16 @@ EOF
 }
 
 finished() {
-  echo -e "\n\n\n"
+  echo -e "\n\n\n${cyan}"
   cat $(dirname "$0")/scripts/banner
+  echo -e "${default}"
   cat <<EOF
-===================================================================================================
-###                                                                                             ###
-###                                      SUCCESS!!!                                             ###
-###                            Now enjoy Obico for Klipper!                                     ###
-###                                                                                             ###
-===================================================================================================
+====================================================================================================
+###                                                                                              ###
+###                                       SUCCESS!!!                                             ###
+###                             Now enjoy Obico for Klipper!                                     ###
+###                                                                                              ###
+====================================================================================================
 
 The changes we have made to your system:
 
@@ -550,7 +554,6 @@ trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
-
   if link_to_server ; then
     systemctl restart "${OBICO_SERVICE_NAME}"
     prompt_for_sentry
