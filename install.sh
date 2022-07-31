@@ -48,6 +48,7 @@ Moonraker setting options (${yellow}if any of them are specified, all need to be
           -p   Moonraker server port
           -c   Moonraker config file path
           -l   The directory for moonraker-obico log files, which are rotated based on size.
+          -S   The URL of the obico server to link the printer to, e.g., https://app.obico.io
 EOF
   exit 0
 }
