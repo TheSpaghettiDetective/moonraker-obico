@@ -42,7 +42,7 @@ cd ~/moonraker-obico
 Need help? Stop by:
 
 - The Obico's help docs: https://obico.io/help/
-- The Obico community: https://discord.gg/hsMwGpD
+- The Obico community: https://obico.io/discord/
 
 """)
         sys.exit(1)
