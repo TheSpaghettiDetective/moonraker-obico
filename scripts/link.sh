@@ -7,6 +7,7 @@ OBICO_DIR=$(realpath $(dirname "$0")/..)
 . "${OBICO_DIR}/scripts/funcs.sh"
 
 SUFFIX=""
+KEEP_QUIET="n"
 
 usage() {
   if [ -n "$1" ]; then
@@ -21,16 +22,25 @@ Link or re-link a printer to the Obico Server
 Global options:
           -c   The path to the moonraker-obico.cfg file
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
+          -q   Keep quiet
 EOF
 }
 
 
 link_to_server() {
-  cat <<EOF
+  if [ ! $KEEP_QUIET = "y" ]; then
+    cat <<EOF
 
 =============================== Link Printer to Obico Server ======================================
 
+To link to your Obico Server account, you need to obtain the 6-digit verification code
+in the Obico mobile or web app, and enter the code below.
+
+If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+
 EOF
+  fi
+
   if ! PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"; then
     return 1
   fi
@@ -84,11 +94,12 @@ EOF
   fi
 }
 
-while getopts "hc:n:" arg; do
+while getopts "hqc:n:" arg; do
     case $arg in
         h) usage && exit 0;;
         c) OBICO_CFG_FILE=${OPTARG};;
         n) SUFFIX="-${OPTARG}";;
+        q) KEEP_QUIET="y";;
         *) usage && exit 1;;
     esac
 done
@@ -100,11 +111,14 @@ fi
 ensure_venv
 
 if link_to_server; then
-  prompt_for_sentry
-  success
+  if [ ! $KEEP_QUIET = "y" ]; then
+    prompt_for_sentry
+    success
+  fi
 else
-  oops
-  cat <<EOF
+  if [ ! $KEEP_QUIET = "y" ]; then
+    oops
+    cat <<EOF
 ${red}
 The process to link to your Obico Server account didn't finish.
 ${default}
@@ -117,5 +131,6 @@ cd ~/moonraker-obico
 -------------------------------------------------------------------------------------------------
 
 EOF
-  need_help
+    need_help
+  fi
 fi
