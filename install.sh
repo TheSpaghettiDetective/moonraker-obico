@@ -1,16 +1,10 @@
 #!/bin/bash
 
-# Copied from get.rvm.io. Not sure what they do
-shopt -s extglob
-set -o errtrace
-set -o errexit
-set -o pipefail
+set -e
 
-green=$(echo -en "\e[92m")
-yellow=$(echo -en "\e[93m")
-red=$(echo -en "\e[91m")
-cyan=$(echo -en "\e[96m")
-default=$(echo -en "\e[39m")
+OBICO_DIR=$(realpath $(dirname "$0"))
+
+. "${OBICO_DIR}/scripts/funcs.sh"
 
 SUFFIX=""
 KLIPPER_CONF_DIR="${HOME}/klipper_config"
@@ -18,9 +12,7 @@ MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
 MOONRAKER_HOST="127.0.0.1"
 MOONRAKER_PORT="7125"
 LOG_DIR="${HOME}/klipper_logs"
-OBICO_DIR="${HOME}/moonraker-obico"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
-OBICO_SERVICE_NAME="moonraker-obico"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 OVERWRITE_CONFIG="n"
@@ -46,7 +38,7 @@ Moonraker setting options (${yellow}if any of them are specified, all need to be
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
           -H   Moonraker server hostname or ip address
           -p   Moonraker server port
-          -c   Moonraker config file path
+          -C   Moonraker config file path
           -l   The directory for moonraker-obico log files, which are rotated based on size.
           -S   The URL of the obico server to link the printer to, e.g., https://app.obico.io
 EOF
@@ -94,7 +86,7 @@ discover_sys_settings() {
     has_fluidd=true
   fi
 
-  if [ "${has_mainsail}" = true && "${has_fluidd}" = true ] ; then
+  if [ "${has_mainsail}" = true ] && [ "${has_fluidd}" = true ] ; then
     return 1
   fi
 
@@ -169,14 +161,7 @@ ensure_deps() {
   sudo apt-get install --yes ${PKGLIST}
 
   echo -e ""
-  if [ -f "${HOME}/moonraker-env/bin/activate" ] ; then
-    OBICO_ENV="${HOME}/moonraker-env"
-  else
-    OBICO_ENV="${HOME}/moonraker-obico-env"
-    report_status "Creating python virtual environment for moonraker-obico..."
-    mkdir -p "${OBICO_ENV}"
-    virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
-  fi
+  ensure_venv
   "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
   echo ""
 }
@@ -310,15 +295,6 @@ EOF
 	fi
 }
 
-link_to_server() {
-  cat <<EOF
-
-=============================== Link Printer to Obico Server ======================================
-
-EOF
-  PYTHONPATH=$(dirname "$0"):${PYTHONPATH} ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
-}
-
 prompt_for_sentry() {
 	if grep -q "sentry_opt" "${OBICO_CFG_FILE}" ; then
 		return 0
@@ -364,37 +340,6 @@ EOF
 }
 
 # Helper functions
-report_status() {
-  echo -e "###### $1"
-}
-
-welcome() {
-  cat <<EOF
-
-======================================================================================================
-###                                                                                                ###
-###                       Install and Configure Obico for Klipper                                  ###
-###                                                                                                ###
-======================================================================================================
-
-EOF
-}
-
-oops() {
-  cat <<EOF
-
-   ____
-  / __ \\
- | |  | | ___   ___   ___   ___  _ __  ___
- | |  | |/ _ \\ / _ \\ / _ \\ / _ \\| '_ \\/ __|
- | |__| | (_) | (_) | (_) | (_) | |_) \\__ \\  _   _   _
-  \\____/ \\___/ \\___/ \\___/ \\___/| .__/|___/ (_) (_) (_)
-                                | |
-                                |_|
-
-
-EOF
-}
 
 exit_on_error() {
   oops
@@ -421,9 +366,8 @@ EOF
 }
 
 finished() {
-  echo -e "\n\n\n${cyan}"
-  cat $(dirname "$0")/scripts/banner
-  echo -e "${default}"
+  echo -e "\n\n\n"
+  banner
   cat <<EOF
 ====================================================================================================
 ###                                                                                              ###
@@ -475,15 +419,13 @@ EOF
 trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
-OBICO_DIR=$(realpath $(dirname "$0"))
-
 # Parse command line arguments
-while getopts "hn:H:p:c:l:S:fLus" arg; do
+while getopts "hc:n:H:p:C:l:S:fLus" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
         p) mr_port=${OPTARG};;
-        c) mr_config=${OPTARG};;
+        C) mr_config=${OPTARG};;
         l) log_path=${OPTARG%/};;
         n) SUFFIX="-${OPTARG}";;
         S) OBICO_SERVER="${OPTARG}";;
@@ -501,7 +443,7 @@ ensure_not_octoprint
 ensure_deps
 ensure_json_parser
 
-if $(dirname "$0")/scripts/tsd_service_existed.sh ; then
+if "${OBICO_DIR}/scripts/tsd_service_existed.sh" ; then
   exit 0
 fi
 
@@ -526,15 +468,15 @@ else
 
 fi
 
-ensure_writtable "${KLIPPER_CONF_DIR}"
-ensure_writtable "${MOONRAKER_CONFIG_FILE}"
-ensure_writtable "${LOG_DIR}"
-
 if [ -z "${SUFFIX}" -a "${MOONRAKER_PORT}" -ne "7125" ]; then
   SUFFIX="-${MOONRAKER_PORT}"
 fi
 
-OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
+ensure_writtable "${KLIPPER_CONF_DIR}"
+ensure_writtable "${MOONRAKER_CONFIG_FILE}"
+ensure_writtable "${LOG_DIR}"
+
+[ -z "${OBICO_CFG_FILE}" ] && OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
 OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
 OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
@@ -550,7 +492,7 @@ fi
 
 recreate_update_file
 
-if $(dirname "$0")/scripts/migrated_from_tsd.sh "${KLIPPER_CONF_DIR}" "${OBICO_ENV}"; then
+if "${OBICO_DIR}/scripts/migrated_from_tsd.sh" "${KLIPPER_CONF_DIR}" "${OBICO_ENV}"; then
   exit 0
 fi
 
@@ -558,8 +500,7 @@ trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
-  if link_to_server ; then
-    systemctl restart "${OBICO_SERVICE_NAME}"
+  if "${OBICO_DIR}/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"; then
     prompt_for_sentry
   fi
 fi
