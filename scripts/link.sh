@@ -2,7 +2,7 @@
 
 set -e
 
-OBICO_DIR=$(realpath $(dirname "$0"))
+OBICO_DIR=$(realpath $(dirname "$0")/..)
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
