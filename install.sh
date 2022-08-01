@@ -11,6 +11,7 @@ KLIPPER_CONF_DIR="${HOME}/klipper_config"
 MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
 MOONRAKER_HOST="127.0.0.1"
 MOONRAKER_PORT="7125"
+OBICO_SERVICE_NAME="moonraker-obico"
 LOG_DIR="${HOME}/klipper_logs"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
@@ -353,7 +354,7 @@ To uninstall Obico for Klipper, please run:
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}"
 sudo systemctl disable "${OBICO_SERVICE_NAME}"
-sudo rm "/etc/systemd/system/${OBICO_SERVICE_NAME}"
+sudo rm "/etc/systemd/system/${OBICO_SERVICE_NAME}.service"
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 rm -rf ~/moonraker-obico
