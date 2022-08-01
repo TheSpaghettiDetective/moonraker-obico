@@ -16,6 +16,8 @@ NC='\033[0m' # No Color
 if __name__ == '__main__':
 
     def linking_interrupted(signum, frame):
+        print('')
+        sys.exit(1)
         print("""
 
    ____

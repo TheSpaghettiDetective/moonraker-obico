@@ -22,7 +22,6 @@ Global options:
           -c   The path to the moonraker-obico.cfg file
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
 EOF
-  exit 1
 }
 
 
@@ -38,8 +37,9 @@ EOF
   systemctl restart "${OBICO_SERVICE_NAME}"
 }
 
-while getopts "c:n:" arg; do
+while getopts "hc:n:" arg; do
     case $arg in
+        h) usage && exit 0;;
         c) OBICO_CFG_FILE=${OPTARG};;
         n) SUFFIX="-${OPTARG}";;
         *) usage && exit 1;;

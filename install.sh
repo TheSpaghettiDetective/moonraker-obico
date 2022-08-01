@@ -42,7 +42,6 @@ Moonraker setting options (${yellow}if any of them are specified, all need to be
           -l   The directory for moonraker-obico log files, which are rotated based on size.
           -S   The URL of the obico server to link the printer to, e.g., https://app.obico.io
 EOF
-  exit 0
 }
 
 manual_setting_warning() {
@@ -356,16 +355,12 @@ cd ~/moonraker-obico
 ./install.sh
 -------------------------------------------------------------------------------------------------
 
-Need help? Stop by:
-
-- The Obico's help docs: https://obico.io/help/
-- The Obico community: https://obico.io/discord/
-
 EOF
+  need_help
   exit 1
 }
 
-finished() {
+success() {
   echo -e "\n\n\n"
   banner
   cat <<EOF
@@ -414,6 +409,16 @@ EOF
   exit 0
 }
 
+need_help() {
+  cat <<EOF
+Need help? Stop by:
+
+- The Obico's help docs: https://obico.io/help/
+- The Obico community: https://obico.io/discord/
+
+EOF
+}
+
 ## Main flow for installation starts here:
 
 trap 'unknown_error' ERR
@@ -433,7 +438,7 @@ while getopts "hc:n:H:p:C:l:S:fLus" arg; do
         s) RECREATE_SERVICE="y";;
         L) SKIP_LINKING="y";;
         u) uninstall ;;
-        *) usage && exit 0;;
+        *) usage && exit 1;;
     esac
 done
 
@@ -500,9 +505,25 @@ trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
-  if "${OBICO_DIR}/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"; then
+  if "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"; then
     prompt_for_sentry
+    success
+  else
+    oops
+    cat <<EOF
+${red}
+The process to link to your Obico Server account didn't finish.
+${default}
+
+To resume the linking process at a later time, run:
+
+-------------------------------------------------------------------------------------------------
+cd ~/moonraker-obico
+./install.sh
+-------------------------------------------------------------------------------------------------
+
+EOF
+    need_help
   fi
 fi
 
-finished
