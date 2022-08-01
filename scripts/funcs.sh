@@ -55,3 +55,13 @@ oops() {
 EOF
 }
 
+need_help() {
+  cat <<EOF
+Need help? Stop by:
+
+- The Obico's help docs: https://obico.io/help/
+- The Obico community: https://obico.io/discord/
+
+EOF
+}
+

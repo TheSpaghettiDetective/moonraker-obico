@@ -31,10 +31,57 @@ link_to_server() {
 =============================== Link Printer to Obico Server ======================================
 
 EOF
-  PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
+  if ! PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"; then
+    return 1
+  fi
 
   OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
   systemctl restart "${OBICO_SERVICE_NAME}"
+}
+
+success() {
+  echo -e "\n\n\n"
+  banner
+  cat <<EOF
+====================================================================================================
+###                                                                                              ###
+###                                       SUCCESS!!!                                             ###
+###                             Now enjoy Obico for Klipper!                                     ###
+###                                                                                              ###
+====================================================================================================
+
+The changes we have made to your system:
+
+- System service: /etc/systemd/system/${OBICO_SERVICE_NAME}
+- Config file: ${OBICO_CFG_FILE}
+- Update file: ${OBICO_UPDATE_FILE}
+- Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
+- Log file: ${OBICO_LOG_FILE}
+
+To remove Obico for Klipper, run:
+
+cd ~/moonraker-obico
+./install.sh -u
+
+EOF
+
+}
+
+prompt_for_sentry() {
+	if grep -q "sentry_opt" "${OBICO_CFG_FILE}" ; then
+		return 0
+  fi
+  echo -e "\nOne last thing: Do you want to opt in bug reporting to help us make Obico better?"
+  echo -e "The debugging info included in the report will be anonymized.\n"
+  read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
+  echo ""
+  if [ "${opt_in^^}" == "Y" ] ; then
+		cat <<EOF >> "${OBICO_CFG_FILE}"
+
+[misc]
+sentry_opt: in
+EOF
+  fi
 }
 
 while getopts "hc:n:" arg; do
@@ -51,4 +98,24 @@ if [ -z "${OBICO_CFG_FILE}" ]; then
 fi
 
 ensure_venv
-link_to_server
+
+if link_to_server; then
+  prompt_for_sentry
+  success
+else
+  oops
+  cat <<EOF
+${red}
+The process to link to your Obico Server account didn't finish.
+${default}
+
+To resume the linking process at a later time, run:
+
+-------------------------------------------------------------------------------------------------
+cd ~/moonraker-obico
+./install.sh
+-------------------------------------------------------------------------------------------------
+
+EOF
+  need_help
+fi

@@ -294,24 +294,6 @@ EOF
 	fi
 }
 
-prompt_for_sentry() {
-	if grep -q "sentry_opt" "${OBICO_CFG_FILE}" ; then
-		return 0
-  fi
-  echo -e "\nOne last thing: Do you want to opt in bug reporting to help us make Obico better?"
-  echo -e "The debugging info included in the report will be anonymized.\n"
-  read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
-  echo ""
-  if [ "${opt_in^^}" == "Y" ] ; then
-		cat <<EOF >> "${OBICO_CFG_FILE}"
-
-[misc]
-sentry_opt: in
-EOF
-  fi
-}
-
-
 ensure_json_parser() {
 cat <<EOF > ${JSON_PARSE_PY}
 def find(element, json):
@@ -360,34 +342,6 @@ EOF
   exit 1
 }
 
-success() {
-  echo -e "\n\n\n"
-  banner
-  cat <<EOF
-====================================================================================================
-###                                                                                              ###
-###                                       SUCCESS!!!                                             ###
-###                             Now enjoy Obico for Klipper!                                     ###
-###                                                                                              ###
-====================================================================================================
-
-The changes we have made to your system:
-
-- System service: /etc/systemd/system/${OBICO_SERVICE_NAME}
-- Config file: ${OBICO_CFG_FILE}
-- Update file: ${OBICO_UPDATE_FILE}
-- Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
-- Log file: ${OBICO_LOG_FILE}
-
-To remove Obico for Klipper, run:
-
-cd ~/moonraker-obico
-./install.sh -u
-
-EOF
-
-}
-
 unknown_error() {
   exit_on_error "Installation interrupted by user or for unknown error."
 }
@@ -407,16 +361,6 @@ rm -rf ~/moonraker-obico
 EOF
 
   exit 0
-}
-
-need_help() {
-  cat <<EOF
-Need help? Stop by:
-
-- The Obico's help docs: https://obico.io/help/
-- The Obico community: https://obico.io/discord/
-
-EOF
 }
 
 ## Main flow for installation starts here:
@@ -505,25 +449,5 @@ trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
-  if "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"; then
-    prompt_for_sentry
-    success
-  else
-    oops
-    cat <<EOF
-${red}
-The process to link to your Obico Server account didn't finish.
-${default}
-
-To resume the linking process at a later time, run:
-
--------------------------------------------------------------------------------------------------
-cd ~/moonraker-obico
-./install.sh
--------------------------------------------------------------------------------------------------
-
-EOF
-    need_help
-  fi
+  "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"
 fi
-
