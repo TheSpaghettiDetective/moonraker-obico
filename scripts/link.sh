@@ -45,7 +45,11 @@ EOF
     return 1
   fi
 
-  OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
+  if [ -z "${SUFFIX}" ] || [ "${SUFFIX}" == '-' ]; then
+    OBICO_SERVICE_NAME="moonraker-obico"
+  else
+    OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
+  fi
   systemctl restart "${OBICO_SERVICE_NAME}"
 }
 

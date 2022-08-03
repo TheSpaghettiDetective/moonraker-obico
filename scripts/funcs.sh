@@ -23,7 +23,7 @@ report_status() {
 
 banner() {
   echo -e "${cyan}"
-  cat $(dirname "$0")/scripts/banner
+  cat "${OBICO_DIR}/scripts/banner"
   echo -e "${default}"
 }
 
