@@ -14,14 +14,13 @@ import signal
 
 import requests  # type: ignore
 
-from .wsconn import WSConn, Event
 from .version import VERSION
 from .utils import get_tags, FatalError, DEBUG, resp_to_exception, sanitize_filename
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
-from .moonraker_conn import MoonrakerConn
+from .moonraker_conn import MoonrakerConn, MoonrakerWSConn, Event
 from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
