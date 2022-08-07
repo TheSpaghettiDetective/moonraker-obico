@@ -12,7 +12,7 @@ class WebSocketConnectionException(Exception):
 
 class WebSocketClient:
 
-    def __init__(self, url, token=None, on_ws_msg=None, on_ws_close=None, on_ws_open=None, subprotocols=None, waitsecs=120):
+    def __init__(self, url, header=None, on_ws_msg=None, on_ws_close=None, on_ws_open=None, subprotocols=None, waitsecs=120):
         self._mutex = threading.RLock()
 
         def on_error(ws, error):
@@ -34,7 +34,6 @@ class WebSocketClient:
                 on_ws_open(ws)
 
         _logger.debug('Connecting to websocket: {}'.format(url))
-        header = ["authorization: bearer " + token] if token else None
         self.ws = websocket.WebSocketApp(
             url,
             on_message=on_message,
@@ -89,7 +88,8 @@ if __name__ == "__main__":
     token = config.get('auth_token')
     print('Connecting to:\n{}\nwith token:\n{}\n'.format(url, token))
     websocket.enableTrace(True)
-    ws = WebSocketClient(url, token=token, on_ws_msg=on_msg, on_ws_close=on_close)
+    header = ["authorization: bearer " + token] if token else None
+    ws = WebSocketClient(url, header=header, on_ws_msg=on_msg, on_ws_close=on_close)
     time.sleep(1)
     ws.close()
     time.sleep(1)
