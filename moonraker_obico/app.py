@@ -20,7 +20,7 @@ from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
-from .moonraker_conn import MoonrakerConn, MoonrakerWSConn, Event
+from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
@@ -193,11 +193,6 @@ class App(object):
                 }
             )
 
-        elif event.name == 'moonrakerconn_ready':
-            # moonraker connection is up and initalized,
-            # let's request a full state update
-            self.moonrakerconn.request_status_update()
-
         elif event.name == 'last_job':
             self._received_last_print(event.data)
 
@@ -257,15 +252,13 @@ class App(object):
 
     def _recurring_klippy_status_request(self):
         def enqueue():
-            if self.moonrakerconn.ready:
-                self.moonrakerconn.request_status_update()
+            self.moonrakerconn.request_status_update()
 
         return self._ticks_interval(REQUEST_KLIPPY_STATE_TICKS, enqueue)
 
     def _recurring_list_jobs_request(self):
         def enqueue():
-            if self.moonrakerconn.ready:
-                self.moonrakerconn.request_job_list(limit=3, order='desc')
+            self.moonrakerconn.request_job_list(limit=3, order='desc')
 
         return self._ticks_interval(5, enqueue)
 
@@ -477,7 +470,7 @@ class App(object):
             return {'error': 'Currently downloading or printing!'}
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
-        if not self.moonrakerconn or not self.moonrakerconn.ready:
+        if not self.moonrakerconn:
             return {
                         'error': 'Printer is not connected!',
                     }
@@ -497,7 +490,7 @@ class App(object):
         )
 
     def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
-        if not self.moonrakerconn or not self.moonrakerconn.ready:
+        if not self.moonrakerconn:
             return {
                         'error': 'Printer is not connected!',
                     }

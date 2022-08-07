@@ -13,9 +13,10 @@ import bson
 import websocket
 
 from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
-
+from .ws import WebSocketClient, WebSocketConnectionException
 
 _logger = logging.getLogger('obico.moonraker_conn')
+_ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
 
 class MoonrakerConn:
     max_backoff_secs = 30
@@ -35,14 +36,8 @@ class MoonrakerConn:
         self.sentry = sentry
         self._on_event = on_event
         self.shutdown: bool = False
-        self.ready: bool = False
         self.q = queue.Queue(maxsize=1000)
         self.conn = None
-        self.timer = Timer(self.push_event)
-        self.reconn_backoff = ExpoBackoff(
-            self.max_backoff_secs,
-            max_attempts=None,
-        )
 
     ## REST API part
 
@@ -94,85 +89,75 @@ class MoonrakerConn:
     ## WebSocket part
 
     def start(self) -> None:
-        self.timer.reset(None)
-        self.ready = False
 
-        self.ensure_api_key()
-        self.find_all_heaters()
+        def on_mr_ws_open(ws):
+            _logger.info('connection is ready')
+            self.request_printer_info()
+            self.request_subscribe()
+            self.request_status_update()
+            self.push_event(Event(sender=self.id, name='connected', data={}))
 
-        self.conn = MoonrakerWSConn(
-            id=self.id,
-            sentry=self.sentry,
-            url=self.config.ws_url(),
-            token=self.config.api_key,
-            on_event=self.push_event,
-            ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
+
+        def on_mr_ws_close(ws):
+            import ipdb; ipdb.set_trace()
+            self.push_event(
+                Event(sender=self.id, name='mr_disconnected', data={'exc': None})
+            )
+
+        def on_message(ws, raw):
+            if ( _ignore_pattern.search(raw) is not None ):
+                return
+
+            data = json.loads(raw)
+            if data.get('method') == 'notify_klippy_disconnected':
+                self.push_event(Event(sender=self.id, name='klippy_gone', data={}))
+                return
+
+            self.push_event(
+                Event(sender=self.id, name='message', data=data)
+            )
+
+
+        reconn_backoff = ExpoBackoff(
+            self.max_backoff_secs,
+            max_attempts=None,
         )
 
-        self.conn.start()
-        _logger.debug('waiting for connection')
-        self.wait_for(self._received_connected)
-
-        self.app_config.webcam.update_from_moonraker(self)
-
         while self.shutdown is False:
-            _logger.info('waiting for klipper ready')
-            self.ready = False
             try:
-                while True:
-                    rid = self.request_printer_info()
-                    try:
-                        self.wait_for(
-                            self._received_printer_ready(rid),
-                            self.ready_timeout_msecs)
-                        break
-                    except FlowTimeout:
-                        continue
+                self.ensure_api_key()
+                self.find_all_heaters()
+                self.app_config.webcam.update_from_moonraker(self)
 
-                _logger.debug('subscribing')
-                sub_id = self.request_subscribe()
-                self.wait_for(self._received_subscription(sub_id))
+                if not self.conn or not self.conn.connected():
+                    header=['X-Api-Key: {}'.format(self.config.api_key), ],
+                    self.conn = WebSocketClient(
+                                url=self.config.ws_url(),
+                                header=header,
+                                on_ws_msg=on_message,
+                                on_ws_open=on_mr_ws_open,
+                                on_ws_close=on_mr_ws_close,)
+                    time.sleep(0.2)  # Wait for connection
 
-                _logger.debug('requesting last job')
-                self.request_job_list(order='desc', limit=1)
-                self.wait_for(self._received_last_job)
+                # _logger.debug('requesting last job')
+                # self.request_job_list(order='desc', limit=1)
+                # self.wait_for(self._received_last_job)
 
-                self.ready = True
                 self.reconn_backoff.reset()
-                _logger.info('connection is ready')
-                self.on_event(
-                    Event(sender=self.id, name=f'{self.id}_ready', data={})
-                )
 
                 # forwarding events
                 self.loop_forever(self.on_event)
-            except self.KlippyGone:
-                _logger.warning('klipper got disconnected')
-                continue
-            except FlowError as err:
-                if hasattr(err, 'exc'):
-                    _logger.error(f'{err} ({err.exc}), reconnecting')
-                else:
-                    _logger.error(f'got error ({err}), reconnecting')
-                self.reconn_backoff.more(err)
-            except FlowTimeout as err:
-                _logger.error('got flow related timeout, reconnecting')
-                self.reconn_backoff.more(err)
-            except ShutdownException:
-                _logger.error('shutting down')
-                break
-            except FatalError as exc:
-                _logger.error(f'got fatal error ({exc})')
-                self.on_event(
-                    Event(
-                        sender=self.id, name='fatal_error',
-                        data={'exc': exc}
-                    )
-                )
-                self.close()
+            except WebSocketConnectionException as e:
+                _logger.warning(e)
+                reconn_backoff.more(e)
+            except Exception as e:
+                self.sentry.captureException(with_tags=True)
+                reconn_backoff.more(e)
 
     def loop_forever(self, process_fn):
-        self.wait_for(process_fn, timeout_msecs=None, loop_forever=True)
+        while self.shutdown is False:
+            event = self.q.get()
+            self.on_event(event)
 
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
@@ -191,8 +176,9 @@ class MoonrakerConn:
             return False
 
     def close(self):
-        self.push_event(Event(name='shutdown', data={}))
         self.shutdown = True
+        if not self.conn:
+            self.conn.close()
 
     def on_event(self, event):
         if self.shutdown:
@@ -200,74 +186,13 @@ class MoonrakerConn:
 
         self._on_event(event)
 
-    def wait_for(self, process_fn, timeout_msecs=-1, loop_forever=False):
-        if timeout_msecs == -1:
-            self.timer.reset(self.flow_step_timeout_msecs)
-        else:
-            self.timer.reset(timeout_msecs)
-
-        while self.shutdown is False:
-            event = self.q.get()
-
-            if self._wait_for(event, process_fn, timeout_msecs):
-                if not loop_forever:
-                    return
-
-    def _wait_for(self, event, process_fn, timeout_msecs):
-        if event.data.get('method') == 'notify_klippy_disconnected':
-            self.on_event(Event(sender=self.id, name='klippy_gone', data={}))
-            raise self.KlippyGone
-
-        if event.name == 'shutdown':
-            self.shutdown = True
-            if self.conn:
-                self.conn.close()
-            raise ShutdownException()
-
-        if event.name == 'mr_disconnected':
-            self.ready = False
-            self.on_event(event)
-            raise FlowError('diconnected')
-
-        if event.name == 'timeout' and event.data['timer_id'] == self.timer.id:
-            raise FlowTimeout('timed out')
-
-        if process_fn(event):
-            return True
-
-        return None
-
-    def _received_connected(self, event):
-        if event.name == 'connected':
-            return True
-
-    def _received_printer_ready(self, id):
-        def wait_for_id(event):
-            if (
-                (
-                    'result' in event.data and
-                    event.data['result'].get('state') == 'ready' and
-                    event.data.get('id') == id
-                ) or (
-                    event.data.get('method') == 'notify_klippy_ready'
-                )
-            ):
-                return True
-        return wait_for_id
-
-    def _received_subscription(self, sub_id):
-        def wait_for_sub_id(event):
-            if 'result' in event.data and event.data.get('id') == sub_id:
-                return True
-        return wait_for_sub_id
-
-    def _received_last_job(self, event):
-        if 'jobs' in event.data.get('result', {}):
-            jobs = event.data.get('result', {}).get('jobs', [None]) or [None]
-            self.on_event(
-                Event(sender=self.id, name='last_job', data=jobs[0])
-            )
-            return True
+    # def _received_last_job(self, event):
+    #     if 'jobs' in event.data.get('result', {}):
+    #         jobs = event.data.get('result', {}).get('jobs', [None]) or [None]
+    #         self.on_event(
+    #             Event(sender=self.id, name='last_job', data=jobs[0])
+    #         )
+    #         return True
 
     def _jsonrpc_request(self, method, **params):
         if not self.conn:
@@ -360,146 +285,9 @@ class MoonrakerConn:
         )
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
-class Timer(object):
-
-    def __init__(self, push_event):
-        self.id = 0
-        self.push_event = push_event
-
-    def reset(self, timeout_msecs):
-        self.id += 1
-        if timeout_msecs is not None:
-            thread = threading.Thread(
-                target=self.ticktack,
-                args=(self.id, timeout_msecs)
-            )
-            thread.daemon = True
-            thread.start()
-
-    def ticktack(self, timer_id, msecs):
-        time.sleep(msecs / 1000.0)
-
-        if self.id != timer_id:
-            return
-
-        self.push_event(Event(name='timeout', data={'timer_id': timer_id}))
-
 
 @dataclasses.dataclass
 class Event:
     name: str
     data: Dict
     sender: Optional[str] = None
-
-
-class MoonrakerWSConn(object):
-
-    def __init__(
-        self, id, sentry, url, token, on_event,
-        subprotocols=None, ignore_pattern=None
-    ):
-        self.shutdown = False
-        self.id = id
-        self.sentry = sentry
-        self.url = url
-        self.token = token
-        self._on_event = on_event
-        self.wsock = None
-        self.subprotocols = subprotocols
-        self.ignore_pattern = ignore_pattern
-
-    def send(self, data, as_binary=False):
-        if as_binary:
-            raw = bson.dumps(data)
-            opcode = websocket.ABNF.OPCODE_BINARY
-        else:
-            raw = json.dumps(data, default=str)
-            opcode = websocket.ABNF.OPCODE_TEXT
-
-        if ( self.wsock and self.wsock.sock and self.wsock.sock.connected):
-            _logger.debug(f'Sending to Moonraker WS: {raw}')
-            self.wsock.send(raw, opcode=opcode)
-        else:
-            _logger.error(f'unable to send {raw}')
-
-    def on_event(self, event):
-        if self.shutdown:
-            return
-
-        self._on_event(event)
-
-    def close(self):
-        self.shutdown = True
-        self.wsock.close()
-
-    def start(self):
-        def on_ws_error(ws, error):
-            _logger.warning(f'connection error ({error})')
-            if self.wsock:
-                if self.wsock != ws:
-                    return
-
-                self.wsock.close()
-
-        def on_ws_close(ws, *args, **kwargs):
-            _logger.debug('connection closed')
-            if self.wsock and self.wsock == ws:
-                self.wsock = None
-                try:
-                    self.on_event(
-                        Event(
-                            sender=self.id,
-                            name='mr_disconnected',
-                            data={'exc': None}
-                        )
-                    )
-                except queue.Full:
-                    self.sentry.captureException(with_tags=True)
-
-        def on_ws_open(ws):
-            if self.wsock:
-                if self.wsock != ws:
-                    return
-
-                try:
-                    self.on_event(
-                        Event(sender=self.id, name='connected', data={}))
-                except queue.Full:
-                    self.sentry.captureException(with_tags=True)
-
-        def on_ws_message(ws, raw):
-            if (
-                self.ignore_pattern and
-                self.ignore_pattern.search(raw) is not None
-            ):
-                return
-
-            try:
-                self.on_event(
-                    Event(
-                        sender=self.id, name='message', data=json.loads(raw)
-                    )
-                )
-            except queue.Full:
-                self.sentry.captureException(with_tags=True)
-
-        _logger.info(f'connecting to {self.url}')
-        self.wsock = websocket.WebSocketApp(
-            self.url,
-            on_message=on_ws_message,
-            on_open=on_ws_open,
-            on_close=on_ws_close,
-            on_error=on_ws_error,
-            header=['X-Api-Key: {}'.format(self.token), ],
-            subprotocols=self.subprotocols,
-        )
-
-        wst = threading.Thread(
-            target=self.wsock.run_forever,
-            kwargs=dict(
-                ping_interval=20,
-                ping_timeout=10,
-            )
-        )
-        wst.daemon = True
-        wst.start()

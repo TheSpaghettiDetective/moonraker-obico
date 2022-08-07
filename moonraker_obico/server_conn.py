@@ -72,9 +72,10 @@ class ServerConn:
                 (data, as_binary) = self.message_queue_to_server.get()
 
                 if not self.ss or not self.ss.connected():
+                    header = ["authorization: bearer " + self.config.server.auth_token]
                     self.ss = WebSocketClient(
                         self.config.server.ws_url(),
-                        token=self.config.server.auth_token,
+                        header=header,
                         on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
                         on_ws_close=on_server_ws_close,)
