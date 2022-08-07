@@ -184,7 +184,7 @@ class App(object):
             self._on_moonrakerconn_event(event)
 
     def _on_moonrakerconn_event(self, event):
-        if event.name in ('disconnected', 'connection_error', 'klippy_gone'):
+        if event.name in ('mr_disconnected', 'klippy_gone'):
             # clear app's klippy state
             self._received_klippy_update(
                 {

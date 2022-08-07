@@ -102,7 +102,6 @@ class MoonrakerConn:
 
         self.conn = MoonrakerWSConn(
             id=self.id,
-            auth_header_fmt='X-Api-Key: {}',
             sentry=self.sentry,
             url=self.config.ws_url(),
             token=self.config.api_key,
@@ -225,21 +224,7 @@ class MoonrakerConn:
                 self.conn.close()
             raise ShutdownException()
 
-        if event.name == 'connection_error':
-            self.ready = False
-            self.on_event(event)
-            exc = event.data.get('exc')
-            if (
-                exc and
-                hasattr(exc, 'status_code') and
-                exc.status_code in (401, 403)
-            ):
-                raise FatalError(f'{self.id} failed to authenticate', exc)
-
-            message = str(exc) if exc else 'connection error'
-            raise FlowError(message, exc=exc)
-
-        if event.name == 'disconnected':
+        if event.name == 'mr_disconnected':
             self.ready = False
             self.on_event(event)
             raise FlowError('diconnected')
@@ -410,7 +395,7 @@ class Event:
 class MoonrakerWSConn(object):
 
     def __init__(
-        self, id, sentry, url, token, on_event, auth_header_fmt,
+        self, id, sentry, url, token, on_event,
         subprotocols=None, ignore_pattern=None
     ):
         self.shutdown = False
@@ -419,17 +404,23 @@ class MoonrakerWSConn(object):
         self.url = url
         self.token = token
         self._on_event = on_event
-        self.to_server_q = queue.Queue(maxsize=1000)
         self.wsock = None
-        self.auth_header_fmt = auth_header_fmt
         self.subprotocols = subprotocols
         self.ignore_pattern = ignore_pattern
 
-    def send(self, data, is_binary=False):
-        try:
-            self.to_server_q.put_nowait((data, is_binary, False))
-        except queue.Full:
-            _logger.exception('sending queue is full')
+    def send(self, data, as_binary=False):
+        if as_binary:
+            raw = bson.dumps(data)
+            opcode = websocket.ABNF.OPCODE_BINARY
+        else:
+            raw = json.dumps(data, default=str)
+            opcode = websocket.ABNF.OPCODE_TEXT
+
+        if ( self.wsock and self.wsock.sock and self.wsock.sock.connected):
+            _logger.debug(f'Sending to Moonraker WS: {raw}')
+            self.wsock.send(raw, opcode=opcode)
+        else:
+            _logger.error(f'unable to send {raw}')
 
     def on_event(self, event):
         if self.shutdown:
@@ -439,37 +430,16 @@ class MoonrakerWSConn(object):
 
     def close(self):
         self.shutdown = True
-        try:
-            self.to_server_q.put_nowait((None, False, True))
-        except queue.Full:
-            _logger.exception('sending queue is full')
+        self.wsock.close()
 
     def start(self):
-        server_thread = threading.Thread(
-            target=self.sender_loop)
-        server_thread.daemon = True
-        server_thread.start()
-
-    def _connect_websocket(self):
         def on_ws_error(ws, error):
-            _logger.debug(f'connection error ({error})')
+            _logger.warning(f'connection error ({error})')
             if self.wsock:
                 if self.wsock != ws:
                     return
 
                 self.wsock.close()
-                self.wsock = None
-
-                try:
-                    self.on_event(
-                        Event(
-                            sender=self.id,
-                            name='connection_error',
-                            data={'exc': error},
-                        )
-                    )
-                except queue.Full:
-                    self.sentry.captureException(with_tags=True)
 
         def on_ws_close(ws, *args, **kwargs):
             _logger.debug('connection closed')
@@ -479,7 +449,7 @@ class MoonrakerWSConn(object):
                     self.on_event(
                         Event(
                             sender=self.id,
-                            name='disconnected',
+                            name='mr_disconnected',
                             data={'exc': None}
                         )
                     )
@@ -520,7 +490,7 @@ class MoonrakerWSConn(object):
             on_open=on_ws_open,
             on_close=on_ws_close,
             on_error=on_ws_error,
-            header=[self.auth_header_fmt.format(self.token), ],
+            header=['X-Api-Key: {}'.format(self.token), ],
             subprotocols=self.subprotocols,
         )
 
@@ -533,43 +503,3 @@ class MoonrakerWSConn(object):
         )
         wst.daemon = True
         wst.start()
-
-    def sender_loop(self):
-        try:
-            self._connect_websocket()
-            while self.shutdown is False:
-                (data, as_binary, shutdown) = self.to_server_q.get()
-
-                if shutdown:
-                    self.shutdown = True
-                    if self.wsock:
-                        self.wsock.close()
-                    break
-
-                if as_binary:
-                    raw = bson.dumps(data)
-                    opcode = websocket.ABNF.OPCODE_BINARY
-                else:
-                    raw = json.dumps(data, default=str)
-                    opcode = websocket.ABNF.OPCODE_TEXT
-
-                if (
-                    self.wsock and
-                    self.wsock.sock and
-                    self.wsock.sock.connected
-                ):
-                    _logger.debug(f'sending {raw}')
-                    self.wsock.send(raw, opcode=opcode)
-                else:
-                    _logger.error(f'unable to send {raw}')
-        except Exception as e:
-            try:
-                self.on_event(
-                    Event(
-                        sender=self.id,
-                        name='connection_error',
-                        data={'exception': e})
-                )
-            except queue.Full:
-                self.sentry.captureException(with_tags=True)
-            _logger.warning(e)
