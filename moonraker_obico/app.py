@@ -115,7 +115,7 @@ class App(object):
         jpeg_post_thread.daemon = True
         jpeg_post_thread.start()
 
-        thread = threading.Thread(target=self.scheduler_loop)
+        thread = threading.Thread(target=self.status_polling_loop)
         thread.daemon = True
         thread.start()
 
@@ -219,16 +219,13 @@ class App(object):
                 self._received_klippy_update(event.data['result'])
 
 
-    def scheduler_loop(self, sleep_secs=1):
-        # scheduler for events,
-        # lightweight tasks only!
-        loops = (
-            self._recurring_klippy_status_request(),
-            # self._recurring_list_jobs_request(),
-        )
+    def status_polling_loop(self, sleep_secs=1):
         while self.shutdown is False:
-            for loop in loops:
-                next(loop)
+            try:
+                self.moonrakerconn.request_status_update()
+            except Exception:
+                self.sentry.captureException()
+
             time.sleep(sleep_secs)
 
     def _ticks_interval(self, interval_ticks, fn, times=None, cur_counter=0):

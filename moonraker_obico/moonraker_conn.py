@@ -99,7 +99,6 @@ class MoonrakerConn:
 
 
         def on_mr_ws_close(ws):
-            import ipdb; ipdb.set_trace()
             self.push_event(
                 Event(sender=self.id, name='mr_disconnected', data={'exc': None})
             )
@@ -130,7 +129,7 @@ class MoonrakerConn:
                 self.app_config.webcam.update_from_moonraker(self)
 
                 if not self.conn or not self.conn.connected():
-                    header=['X-Api-Key: {}'.format(self.config.api_key), ],
+                    header=['X-Api-Key: {}'.format(self.config.api_key), ]
                     self.conn = WebSocketClient(
                                 url=self.config.ws_url(),
                                 header=header,
@@ -143,7 +142,7 @@ class MoonrakerConn:
                 # self.request_job_list(order='desc', limit=1)
                 # self.wait_for(self._received_last_job)
 
-                self.reconn_backoff.reset()
+                reconn_backoff.reset()
 
                 # forwarding events
                 self.loop_forever(self.on_event)
@@ -195,7 +194,7 @@ class MoonrakerConn:
     #         return True
 
     def _jsonrpc_request(self, method, **params):
-        if not self.conn:
+        if not self.conn or not self.conn.connected():
             return
 
         next_id = self.next_id()
