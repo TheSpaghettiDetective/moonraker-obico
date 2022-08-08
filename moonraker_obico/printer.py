@@ -11,7 +11,7 @@ from .version import VERSION
 class PrinterState:
     eventtime: float = 0.0
     status: Dict = dataclasses.field(default_factory=dict)
-    current_print_ts: int = -1
+    current_print_ts: int = None
     last_print: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
@@ -61,7 +61,7 @@ class PrinterState:
             data = {
                 'current_print_ts': self.current_print_ts,
                 'octoprint_data': self.to_octoprint_state(),
-            }
+            } if self.current_print_ts is not None else {}      # Print status is un-deterministic when current_print_ts is None
             if print_event:
                 data['octoprint_event'] = {'event_type': print_event}
 
