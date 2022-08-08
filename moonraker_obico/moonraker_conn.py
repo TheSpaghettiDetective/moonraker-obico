@@ -15,6 +15,9 @@ import websocket
 from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
 
+
+REQUEST_STATE_INTERVAL_SECONDS = 10
+
 _logger = logging.getLogger('obico.moonraker_conn')
 _ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
 
@@ -35,6 +38,7 @@ class MoonrakerConn:
         self.shutdown: bool = False
         self.conn = None
         self.ws_message_queue_to_moonraker = queue.Queue(maxsize=1000)
+        self.moonraker_state_requested_ts = 0
 
     ## REST API part
 
@@ -86,6 +90,22 @@ class MoonrakerConn:
     ## WebSocket part
 
     def start(self) -> None:
+
+        thread = threading.Thread(target=self.message_to_moonraker_loop)
+        thread.daemon = True
+        thread.start()
+
+        while self.shutdown is False:
+            try:
+                if self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
+                    self.request_status_update()
+
+            except Exception as e:
+                self.sentry.captureException(tags=get_tags())
+
+            time.sleep(1)
+
+    def message_to_moonraker_loop(self):
 
         def on_mr_ws_open(ws):
             _logger.info('connection is ready')
@@ -208,6 +228,8 @@ class MoonrakerConn:
         return self._jsonrpc_request('printer.objects.list', objects=objects)
 
     def request_status_update(self, objects=None):
+        self.moonraker_state_requested_ts = time.time()
+
         if objects is None:
             objects = {
                 "webhooks": None,
