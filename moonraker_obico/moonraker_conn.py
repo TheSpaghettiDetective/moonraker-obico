@@ -37,7 +37,7 @@ class MoonrakerConn:
         self._on_event = on_event
         self.shutdown: bool = False
         self.conn = None
-        self.ws_message_queue_to_moonraker = queue.Queue(maxsize=1000)
+        self.ws_message_queue_to_moonraker = queue.Queue(maxsize=16)
         self.moonraker_state_requested_ts = 0
 
     ## REST API part
@@ -86,6 +86,13 @@ class MoonrakerConn:
         if 'heaters' in data.get('status', {}):
             self.heaters = data['status']['heaters']['available_heaters']  # noqa: E501
             return True
+
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    def find_last_job(self):
+        data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
+
+        jobs = data.get('jobs', [None]) or [None]
+        self.push_event(Event(sender=self.id, name='last_job', data=jobs[0]))
 
     ## WebSocket part
 
@@ -146,6 +153,7 @@ class MoonrakerConn:
                 if not self.conn or not self.conn.connected():
                     self.ensure_api_key()
                     self.find_all_heaters()
+                    # self.find_last_job()
                     self.app_config.webcam.update_from_moonraker(self)
 
                     if not self.conn or not self.conn.connected():
@@ -157,10 +165,6 @@ class MoonrakerConn:
                                     on_ws_open=on_mr_ws_open,
                                     on_ws_close=on_mr_ws_close,)
                         time.sleep(0.2)  # Wait for connection
-
-                    # _logger.debug('requesting last job')
-                    # self.request_job_list(order='desc', limit=1)
-                    # self.wait_for(self._received_last_job)
 
                 _logger.debug("Sending to Moonraker: \n{}".format(data))
                 self.conn.send(json.dumps(data, default=str))
@@ -186,14 +190,6 @@ class MoonrakerConn:
         self.shutdown = True
         if not self.conn:
             self.conn.close()
-
-    # def _received_last_job(self, event):
-    #     if 'jobs' in event.data.get('result', {}):
-    #         jobs = event.data.get('result', {}).get('jobs', [None]) or [None]
-    #         self.on_event(
-    #             Event(sender=self.id, name='last_job', data=jobs[0])
-    #         )
-    #         return True
 
     def _jsonrpc_request(self, method, **params):
         next_id = self.next_id()
