@@ -23,9 +23,6 @@ class MoonrakerConn:
     flow_step_timeout_msecs = 2000
     ready_timeout_msecs = 60000
 
-    class KlippyGone(Exception):
-        pass
-
     def __init__(self, app_config, sentry, on_event):
         self.id: str = 'moonrakerconn'
         self._next_id: int = 0
@@ -36,8 +33,8 @@ class MoonrakerConn:
         self.sentry = sentry
         self._on_event = on_event
         self.shutdown: bool = False
-        self.q = queue.Queue(maxsize=1000)
         self.conn = None
+        self.ws_message_queue_to_moonraker = queue.Queue(maxsize=1000)
 
     ## REST API part
 
@@ -124,28 +121,30 @@ class MoonrakerConn:
 
         while self.shutdown is False:
             try:
-                self.ensure_api_key()
-                self.find_all_heaters()
-                self.app_config.webcam.update_from_moonraker(self)
+                data = self.ws_message_queue_to_moonraker.get()
 
                 if not self.conn or not self.conn.connected():
-                    header=['X-Api-Key: {}'.format(self.config.api_key), ]
-                    self.conn = WebSocketClient(
-                                url=self.config.ws_url(),
-                                header=header,
-                                on_ws_msg=on_message,
-                                on_ws_open=on_mr_ws_open,
-                                on_ws_close=on_mr_ws_close,)
-                    time.sleep(0.2)  # Wait for connection
+                    self.ensure_api_key()
+                    self.find_all_heaters()
+                    self.app_config.webcam.update_from_moonraker(self)
 
-                # _logger.debug('requesting last job')
-                # self.request_job_list(order='desc', limit=1)
-                # self.wait_for(self._received_last_job)
+                    if not self.conn or not self.conn.connected():
+                        header=['X-Api-Key: {}'.format(self.config.api_key), ]
+                        self.conn = WebSocketClient(
+                                    url=self.config.ws_url(),
+                                    header=header,
+                                    on_ws_msg=on_message,
+                                    on_ws_open=on_mr_ws_open,
+                                    on_ws_close=on_mr_ws_close,)
+                        time.sleep(0.2)  # Wait for connection
 
+                    # _logger.debug('requesting last job')
+                    # self.request_job_list(order='desc', limit=1)
+                    # self.wait_for(self._received_last_job)
+
+                _logger.debug("Sending to Moonraker: \n{}".format(data))
+                self.conn.send(json.dumps(data, default=str))
                 reconn_backoff.reset()
-
-                # forwarding events
-                self.loop_forever(self.on_event)
             except WebSocketConnectionException as e:
                 _logger.warning(e)
                 reconn_backoff.more(e)
@@ -153,37 +152,20 @@ class MoonrakerConn:
                 self.sentry.captureException(with_tags=True)
                 reconn_backoff.more(e)
 
-    def loop_forever(self, process_fn):
-        while self.shutdown is False:
-            event = self.q.get()
-            self.on_event(event)
-
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
         return next_id
 
     def push_event(self, event):
         if self.shutdown:
-            _logger.debug(f'is shutdown, dropping event {event}')
-            return False
+            return
 
-        try:
-            self.q.put_nowait(event)
-            return True
-        except queue.Full:
-            _logger.error(f'event queue is full, dropping {event}')
-            return False
+        self._on_event(event)
 
     def close(self):
         self.shutdown = True
         if not self.conn:
             self.conn.close()
-
-    def on_event(self, event):
-        if self.shutdown:
-            return
-
-        self._on_event(event)
 
     # def _received_last_job(self, event):
     #     if 'jobs' in event.data.get('result', {}):
@@ -194,9 +176,6 @@ class MoonrakerConn:
     #         return True
 
     def _jsonrpc_request(self, method, **params):
-        if not self.conn or not self.conn.connected():
-            return
-
         next_id = self.next_id()
         payload = {
             "jsonrpc": "2.0",
@@ -207,7 +186,11 @@ class MoonrakerConn:
         if params:
             payload['params'] = params
 
-        self.conn.send(payload)
+        try:
+            self.ws_message_queue_to_moonraker.put_nowait(payload)
+        except queue.Full:
+            _logger.warning("Moonraker message queue is full, msg dropped")
+
         return next_id
 
     def request_websocket_id(self):
