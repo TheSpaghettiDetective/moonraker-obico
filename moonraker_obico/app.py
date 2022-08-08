@@ -31,7 +31,6 @@ _default_int_handler = None
 _default_term_handler = None
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
-REQUEST_KLIPPY_STATE_TICKS = 10
 
 POST_STATUS_INTERVAL_SECONDS = 50
 if DEBUG:
@@ -114,10 +113,6 @@ class App(object):
         jpeg_post_thread = threading.Thread(target=self.jpeg_poster.pic_post_loop)
         jpeg_post_thread.daemon = True
         jpeg_post_thread.start()
-
-        thread = threading.Thread(target=self.status_polling_loop)
-        thread.daemon = True
-        thread.start()
 
         thread = threading.Thread(target=self.event_loop)
         thread.daemon = True
@@ -218,46 +213,6 @@ class App(object):
                 # full state update from moonraker
                 self._received_klippy_update(event.data['result'])
 
-
-    def status_polling_loop(self, sleep_secs=1):
-        while self.shutdown is False:
-            try:
-                self.moonrakerconn.request_status_update()
-            except Exception:
-                self.sentry.captureException()
-
-            time.sleep(sleep_secs)
-
-    def _ticks_interval(self, interval_ticks, fn, times=None, cur_counter=0):
-        tick_counter = cur_counter
-        while self.shutdown is False:
-            tick_counter -= 1
-            if tick_counter < 1:
-                tick_counter = interval_ticks
-
-                fn()
-
-                if times is not None:
-                    times -= 1
-                    if times <= 0:
-                        return
-
-            yield
-
-    def _schedule_after_ticks(self, ticks, fn):
-        return self._ticks_interval(ticks, fn, times=1, cur_counter=ticks)
-
-    def _recurring_klippy_status_request(self):
-        def enqueue():
-            self.moonrakerconn.request_status_update()
-
-        return self._ticks_interval(REQUEST_KLIPPY_STATE_TICKS, enqueue)
-
-    def _recurring_list_jobs_request(self):
-        def enqueue():
-            self.moonrakerconn.request_job_list(limit=3, order='desc')
-
-        return self._ticks_interval(5, enqueue)
 
     def _download_and_print(self, gcode_file):
         filename = gcode_file['filename']
