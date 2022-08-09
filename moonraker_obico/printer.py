@@ -1,5 +1,4 @@
 from typing import Optional, Dict, Any
-import dataclasses
 import threading
 import time
 import pathlib
@@ -7,52 +6,59 @@ import pathlib
 from .config import Config
 from .version import VERSION
 
-@dataclasses.dataclass
 class PrinterState:
-    eventtime: float = 0.0
-    status: Dict = dataclasses.field(default_factory=dict)
-    current_print_ts: int = None
-    last_print: Optional[Dict[str, Any]] = None
+    STATE_OFFLINE = 'Offline'
+    STATE_OPERATIONAL = 'Operational'
+    STATE_PRINTING = 'Printing'
+    STATE_PAUSED = 'Paused'
+    STATE_ERROR = 'Error'
 
-    def __post_init__(self):
+    ACTIVE_STATES = [STATE_PRINTING, STATE_PAUSED]
+
+    def __init__(self):
         self._mutex = threading.RLock()
+        self.status = {}
+        self.current_print_ts = None
+
+    def has_active_job(self) -> bool:
+        return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
 
     def is_printing(self) -> bool:
         with self._mutex:
             return self.status.get('print_stats', {}).get('state') == 'printing'
 
-    def got_metadata(self) -> bool:
+    # Return: The old status.
+    def update_status(self, new_status: Dict) -> Dict:
         with self._mutex:
-            filepath = self.status.get('print_stats', {}).get('filename', '')
-            return (
-                filepath != '' and
-                self.last_print is not None and
-                filepath == self.last_print.get('filename')
-            )
+            old_status = self.status
+            self.status = new_status
+        return old_status
 
-    def get_file_size(self) -> Optional[int]:
+    # Return: The old current_print_ts.
+    def set_current_print_ts(self, new_current_print_ts):
         with self._mutex:
-            if self.got_metadata() and self.last_print:
-                return self.last_print.get('metadata', {}).get('size')
-        return None
+            old_current_print_ts = self.current_print_ts
+            self.current_print_ts = new_current_print_ts
+        return old_current_print_ts
 
-    def get_state_str_from(self, data: Dict) -> str:
+    @classmethod
+    def get_state_from_status(cls, data: Dict) -> str:
         klippy_state = data.get(
             'webhooks', {}
         ).get('state', 'disconnected')
 
         if klippy_state in ('disconnected', 'startup'):
-            return 'Offline'
+            return PrinterState.STATE_OFFLINE
         elif klippy_state != 'ready':
-            return 'Error'
+            return PrinterState.STATE_ERROR
 
         return {
-            'standby': 'Operational',
-            'printing': 'Printing',
-            'paused': 'Paused',
-            'complete': 'Operational',
-            'cancelled': 'Operational',
-        }.get(data.get('print_stats', {}).get('state', 'unknown'), 'Error')
+            'standby': PrinterState.STATE_OPERATIONAL,
+            'printing': PrinterState.STATE_PRINTING,
+            'paused': PrinterState.STATE_PAUSED,
+            'complete': PrinterState.STATE_OPERATIONAL,
+            'cancelled': PrinterState.STATE_OPERATIONAL
+        }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_ERROR)
 
     def to_dict(
         self, print_event: Optional[str] = None, config: Optional[Config] = None
@@ -82,7 +88,7 @@ class PrinterState:
 
     def to_octoprint_state(self) -> Dict:
         with self._mutex:
-            state = self.get_state_str_from(self.status)
+            state = self.get_state_from_status(self.status)
             print_stats = self.status.get('print_stats') or dict()
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
             error_text = (
