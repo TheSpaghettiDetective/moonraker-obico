@@ -17,7 +17,12 @@ class WebSocketClient:
 
         def on_error(ws, error):
             _logger.warning('Server WS ERROR: {}'.format(error))
-            self.close()
+
+            def run(*args):
+                self.close()
+
+            # https://websocket-client.readthedocs.io/en/latest/threading.html
+            threading.Thread(target=run).start()
 
         def on_message(ws, msg):
             if on_ws_msg:
@@ -30,8 +35,13 @@ class WebSocketClient:
 
         def on_open(ws):
             _logger.debug('WS Opened')
-            if on_ws_open:
-                on_ws_open(ws)
+
+            def run(*args):
+                if on_ws_open:
+                    on_ws_open(ws)
+
+            # https://websocket-client.readthedocs.io/en/latest/threading.html
+            threading.Thread(target=run).start()
 
         _logger.debug('Connecting to websocket: {}'.format(url))
         self.ws = websocket.WebSocketApp(

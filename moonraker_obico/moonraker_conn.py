@@ -32,6 +32,7 @@ class MoonrakerConn:
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
         self.heaters: Optional[List[str]] = None
+        self.klippy_ready = threading.Event()  # Based on https://moonraker.readthedocs.io/en/latest/web_api/#websocket-setup
 
         self.sentry = sentry
         self._on_event = on_event
@@ -81,6 +82,10 @@ class MoonrakerConn:
             self.config.api_key = self.api_get('access/api_key', raise_for_status=True)
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    def get_server_info(self):
+        return self.api_get('server/info')
+
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_all_heaters(self):
         data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
         if 'heaters' in data.get('status', {}):
@@ -88,7 +93,7 @@ class MoonrakerConn:
             return True
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
-    def find_last_job(self):
+    def find_most_recent_job(self):
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
 
         jobs = data.get('jobs', [None]) or [None]
@@ -115,29 +120,35 @@ class MoonrakerConn:
     def message_to_moonraker_loop(self):
 
         def on_mr_ws_open(ws):
-            _logger.info('connection is ready')
+            _logger.info('connection is open')
+
+            while not self.klippy_ready.is_set():
+                time.sleep(0.1)
+                result = self.get_server_info()
+                if result and result.get("klippy_state") == 'ready':
+                    self.find_all_heaters()  # TODO: Why is heaters a prerequisite for this class to function correctly?
+                    self.klippy_ready.set()
+
+            # self.find_most_recent_job()
+            self.app_config.webcam.update_from_moonraker(self)
             self.request_printer_info()
             self.request_subscribe()
             self.request_status_update()
-            self.push_event(Event(sender=self.id, name='connected', data={}))
 
 
         def on_mr_ws_close(ws):
+            self.klippy_ready.clear()
             self.push_event(
-                Event(sender=self.id, name='mr_disconnected', data={'exc': None})
+                Event(sender=self.id, name='mr_disconnected')
             )
 
         def on_message(ws, raw):
             if ( _ignore_pattern.search(raw) is not None ):
                 return
 
-            data = json.loads(raw)
-            if data.get('method') == 'notify_klippy_disconnected':
-                self.push_event(Event(sender=self.id, name='klippy_gone', data={}))
-                return
-
+            print(f'mr message: {raw}')
             self.push_event(
-                Event(sender=self.id, name='message', data=data)
+                Event(sender=self.id, name='message', data=json.loads(raw))
             )
 
 
@@ -152,9 +163,6 @@ class MoonrakerConn:
 
                 if not self.conn or not self.conn.connected():
                     self.ensure_api_key()
-                    self.find_all_heaters()
-                    # self.find_last_job()
-                    self.app_config.webcam.update_from_moonraker(self)
 
                     if not self.conn or not self.conn.connected():
                         header=['X-Api-Key: {}'.format(self.config.api_key), ]
@@ -164,7 +172,9 @@ class MoonrakerConn:
                                     on_ws_msg=on_message,
                                     on_ws_open=on_mr_ws_open,
                                     on_ws_close=on_mr_ws_close,)
-                        time.sleep(0.2)  # Wait for connection
+
+                        self.klippy_ready.wait()
+                        _logger.info('Klippy ready')
 
                 _logger.debug("Sending to Moonraker: \n{}".format(data))
                 self.conn.send(json.dumps(data, default=str))
@@ -221,7 +231,8 @@ class MoonrakerConn:
             'webhooks': ('state', 'state_message'),
             'history': None,
         }
-        return self._jsonrpc_request('printer.objects.list', objects=objects)
+        return self._jsonrpc_request('printer.objects.subscribe', objects=objects)
+        # return self._jsonrpc_request('printer.objects.list', objects=objects)
 
     def request_status_update(self, objects=None):
         self.moonraker_state_requested_ts = time.time()
