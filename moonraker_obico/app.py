@@ -15,7 +15,7 @@ import signal
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags, FatalError, DEBUG, resp_to_exception, sanitize_filename
+from .utils import get_tags, DEBUG, sanitize_filename
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
