@@ -11,6 +11,7 @@ import backoff
 import json
 import bson
 import websocket
+from collections import deque
 
 from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -40,6 +41,7 @@ class MoonrakerConn:
         self.conn = None
         self.ws_message_queue_to_moonraker = queue.Queue(maxsize=16)
         self.moonraker_state_requested_ts = 0
+        self.status_update_request_ids = deque(maxlen=25)  # contains "last" 25 status_update_request_ids
 
     ## REST API part
 
@@ -86,6 +88,11 @@ class MoonrakerConn:
         return self.api_get('server/info')
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    @backoff.on_predicate(backoff.expo, max_value=60)
+    def wait_for_klippy_ready(self):
+        return self.get_server_info().get("klippy_state") == 'ready'
+
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_all_heaters(self):
         data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
         if 'heaters' in data.get('status', {}):
@@ -122,14 +129,10 @@ class MoonrakerConn:
         def on_mr_ws_open(ws):
             _logger.info('connection is open')
 
-            while not self.klippy_ready.is_set():
-                time.sleep(0.1)
-                result = self.get_server_info()
-                if result and result.get("klippy_state") == 'ready':
-                    self.find_all_heaters()  # TODO: Why is heaters a prerequisite for this class to function correctly?
-                    self.klippy_ready.set()
+            self.wait_for_klippy_ready()
+            self.find_all_heaters()  # We need to find all heaters as their names have to be specified in the objects query request
+            self.klippy_ready.set()
 
-            # self.find_most_recent_job()
             self.app_config.webcam.update_from_moonraker(self)
             self.request_printer_info()
             self.request_subscribe()
@@ -139,16 +142,24 @@ class MoonrakerConn:
         def on_mr_ws_close(ws):
             self.klippy_ready.clear()
             self.push_event(
-                Event(sender=self.id, name='mr_disconnected')
+                Event(sender=self.id, name='mr_disconnected', data={})
             )
 
         def on_message(ws, raw):
             if ( _ignore_pattern.search(raw) is not None ):
                 return
 
-            print(f'mr message: {raw}')
+            data = json.loads(raw)
+            _logger.debug(f'Received from Moonraker: {data}')
+
+            if data.get('id', -1) in self.status_update_request_ids:
+                self.push_event(
+                    Event(sender=self.id, name='status_update', data=data)
+                )
+                return
+
             self.push_event(
-                Event(sender=self.id, name='message', data=json.loads(raw))
+                Event(sender=self.id, name='message', data=data)
             )
 
 
@@ -232,7 +243,6 @@ class MoonrakerConn:
             'history': None,
         }
         return self._jsonrpc_request('printer.objects.subscribe', objects=objects)
-        # return self._jsonrpc_request('printer.objects.list', objects=objects)
 
     def request_status_update(self, objects=None):
         self.moonraker_state_requested_ts = time.time()
@@ -252,7 +262,7 @@ class MoonrakerConn:
             for heater in (self.heaters or ()):
                 objects[heater] = None
 
-        return self._jsonrpc_request('printer.objects.query', objects=objects)
+        self.status_update_request_ids.append(self._jsonrpc_request('printer.objects.query', objects=objects))
 
     def request_pause(self):
         return self._jsonrpc_request('printer.print.pause')
@@ -262,13 +272,6 @@ class MoonrakerConn:
 
     def request_resume(self):
         return self._jsonrpc_request('printer.print.resume')
-
-    def request_job_list(self, **kwargs):
-        # kwargs: start before since limit order
-        return self._jsonrpc_request('server.history.list', **kwargs)
-
-    def request_job(self, job_id):
-        return self._jsonrpc_request('server.history.get_job', uid=job_id)
 
     def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
         # TODO check axes

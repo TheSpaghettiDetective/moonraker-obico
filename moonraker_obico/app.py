@@ -205,9 +205,9 @@ class App(object):
             elif event.data.get('method', '') == 'notify_history_changed':
                 self.moonrakerconn.request_status_update()
 
-            elif 'status' in event.data.get('result', ()):
-                # full state update from moonraker
-                self._received_klippy_update(event.data['result'])
+        elif event.name == 'status_update':
+            # full state update from moonraker
+            self._received_klippy_update(event.data['result'])
 
 
     def _download_and_print(self, gcode_file):
@@ -251,9 +251,6 @@ class App(object):
         self.server_conn.post_status_update_to_server(print_event=print_event)
 
     def _received_klippy_update(self, data):
-        # import pprint
-        # pp = pprint.PrettyPrinter(indent=4)
-        # pp.pprint(data)
         printer_state = self.model.printer_state
 
         prev_status = printer_state.update_status(data['status'])
@@ -269,15 +266,18 @@ class App(object):
             )
             self.boost_status_update()
 
-        if printer_state.has_active_job():
+        if printer_state.current_print_ts is None:
             # This should cover all the edge cases when there is an active job, but current_print_ts is not set,
             # e.g., moonraker-obico is restarted in the middle of a print
-            if printer_state.current_print_ts is None or printer_state.current_print_ts == -1:
-                cur_job = self.moonrakerconn.find_most_recent_job()
-                if cur_job:
-                    printer_state.set_current_print_ts(int(cur_job.get('start_time', '0')))
-                else:
-                    _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
+            if printer_state.has_active_job():
+                if printer_state.current_print_ts == -1:
+                    cur_job = self.moonrakerconn.find_most_recent_job()
+                    if cur_job:
+                        printer_state.set_current_print_ts(int(cur_job.get('start_time', '0')))
+                    else:
+                        _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
+            else:
+                printer_state.set_current_print_ts(-1)
 
         if cur_state == PrinterState.STATE_PRINTING and prev_state == PrinterState.STATE_PAUSED:
             self.post_print_event('PrintResumed')
