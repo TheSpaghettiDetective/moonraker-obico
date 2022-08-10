@@ -13,7 +13,7 @@ import bson
 import websocket
 from collections import deque
 
-from .utils import get_tags, ExpoBackoff
+from .utils import get_tags
 from .ws import WebSocketClient, WebSocketConnectionException
 
 
@@ -23,7 +23,6 @@ _logger = logging.getLogger('obico.moonraker_conn')
 _ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
 
 class MoonrakerConn:
-    max_backoff_secs = 30
     flow_step_timeout_msecs = 2000
     ready_timeout_msecs = 60000
 
@@ -116,7 +115,7 @@ class MoonrakerConn:
 
         while self.shutdown is False:
             try:
-                if self.klippy_ready and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
+                if self.klippy_ready.wait() and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
                     self.request_status_update()
 
             except Exception as e:
@@ -141,6 +140,7 @@ class MoonrakerConn:
             self.push_event(
                 Event(sender=self.id, name='mr_disconnected', data={})
             )
+            self.request_status_update()  # Trigger a re-connection to Moonraker
 
         def on_message(ws, raw):
             if ( _ignore_pattern.search(raw) is not None ):
@@ -158,12 +158,6 @@ class MoonrakerConn:
             self.push_event(
                 Event(sender=self.id, name='message', data=data)
             )
-
-
-        reconn_backoff = ExpoBackoff(
-            self.max_backoff_secs,
-            max_attempts=None,
-        )
 
         self.request_status_update()  # "Seed" a request in ws_message_queue_to_moonraker to trigger the initial connection to Moonraker
 
@@ -188,13 +182,11 @@ class MoonrakerConn:
 
                 _logger.debug("Sending to Moonraker: \n{}".format(data))
                 self.conn.send(json.dumps(data, default=str))
-                reconn_backoff.reset()
             except WebSocketConnectionException as e:
                 _logger.warning(e)
-                reconn_backoff.more(e)
             except Exception as e:
-                self.sentry.captureException(with_tags=True)
-                reconn_backoff.more(e)
+                _logger.warning(e)
+                self.sentry.captureException(tags=get_tags())
 
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
