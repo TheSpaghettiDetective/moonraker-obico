@@ -68,6 +68,7 @@ class PrinterState:
                 'current_print_ts': self.current_print_ts,
                 'octoprint_data': self.to_octoprint_state(),
             } if self.current_print_ts is not None else {}      # Print status is un-deterministic when current_print_ts is None
+
             if print_event:
                 data['octoprint_event'] = {'event_type': print_event}
 
