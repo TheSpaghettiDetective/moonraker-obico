@@ -13,7 +13,7 @@ import bson
 import websocket
 from collections import deque
 
-from .utils import FlowTimeout, ShutdownException, FlowError, FatalError, ExpoBackoff
+from .utils import get_tags, ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
 
 
@@ -116,7 +116,7 @@ class MoonrakerConn:
 
         while self.shutdown is False:
             try:
-                if self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
+                if self.klippy_ready and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
                     self.request_status_update()
 
             except Exception as e:
@@ -134,10 +134,7 @@ class MoonrakerConn:
             self.klippy_ready.set()
 
             self.app_config.webcam.update_from_moonraker(self)
-            self.request_printer_info()
             self.request_subscribe()
-            self.request_status_update()
-
 
         def on_mr_ws_close(ws):
             self.klippy_ready.clear()
@@ -167,6 +164,8 @@ class MoonrakerConn:
             self.max_backoff_secs,
             max_attempts=None,
         )
+
+        self.request_status_update()  # "Seed" a request in ws_message_queue_to_moonraker to trigger the initial connection to Moonraker
 
         while self.shutdown is False:
             try:
@@ -229,12 +228,6 @@ class MoonrakerConn:
             _logger.warning("Moonraker message queue is full, msg dropped")
 
         return next_id
-
-    def request_websocket_id(self):
-        return self._jsonrpc_request('server.websocket.id')
-
-    def request_printer_info(self):
-        return self._jsonrpc_request('printer.info')
 
     def request_subscribe(self, objects=None):
         objects = objects if objects else {

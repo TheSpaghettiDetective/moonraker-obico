@@ -21,47 +21,9 @@ import requests
 _logger = logging.getLogger('obico.utils')
 
 DEBUG = os.environ.get('DEBUG')
-CAM_EXCLUSIVE_USE = os.path.join(tempfile.gettempdir(), '.using_picam')
 
 # Update printer settings at max 30 minutes interval,
 # as they are relatively static.
-
-
-
-class ShutdownException(Exception):
-    pass
-
-
-class FlowError(Exception):
-
-    def __init__(self, message, exc=None):
-        self.exc = exc
-        super().__init__(message)
-
-
-class FlowTimeout(Exception):
-    pass
-
-
-class FatalError(Exception):
-    def __init__(self, message, exc=None):
-        self.exc = exc
-        super().__init__(message)
-
-
-class AuthenticationError(Exception):
-
-    def __init__(self, message, exc=None):
-        self.exc = exc
-        super().__init__(message)
-
-
-def resp_to_exception(resp: requests.Response) -> Optional[Exception]:
-    try:
-        resp.raise_for_status()
-    except Exception as exc:
-        return exc
-
 
 def sanitize_filename(fname):
     if "/" in fname or "\\" in fname:
@@ -184,19 +146,6 @@ def get_tags():
     with tags_mutex:
         system_tags = tags
         return system_tags
-
-
-def not_using_pi_camera():
-    try:
-        os.remove(CAM_EXCLUSIVE_USE)
-    except Exception:
-        pass
-
-
-def using_pi_camera():
-    # touch CAM_EXCLUSIVE_USE to indicate the
-    # intention of exclusive use of pi camera
-    open(CAM_EXCLUSIVE_USE, 'a').close()
 
 
 def get_image_info(data):

@@ -147,10 +147,6 @@ class ServerConn:
             return None
 
         if raise_exception:
-            # if resp.status_code in (401, 403):
-            #     raise AuthenticationError(
-            #             f'HTTP {resp.status_code}',
-            #             exc=resp_to_exception(resp))
             resp.raise_for_status()
 
         return resp
