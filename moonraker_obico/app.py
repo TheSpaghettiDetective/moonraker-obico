@@ -15,7 +15,7 @@ import signal
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags, DEBUG, sanitize_filename
+from .utils import get_tags, sanitize_filename
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -31,10 +31,6 @@ _default_int_handler = None
 _default_term_handler = None
 
 DEFAULT_LINKED_PRINTER = {'is_pro': False}
-
-POST_STATUS_INTERVAL_SECONDS = 50
-if DEBUG:
-    POST_STATUS_INTERVAL_SECONDS = 10
 
 
 ACKREF_EXPIRE_SECS = 300
@@ -273,7 +269,6 @@ class App(object):
                     prev_state, cur_state
                 )
             )
-            self.boost_status_update()
 
         if cur_state == PrinterState.STATE_OFFLINE:
             printer_state.set_current_print_ts(None)  # Offline means actually printing status unknown. It may or may not be printing.
@@ -322,16 +317,13 @@ class App(object):
 
     def process_server_msg(self, msg):
         _logger.debug(f'Received from server: {msg}')
-        need_status_boost = False
 
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
-            need_status_boost = True
             if self.model.remote_status['viewing']:
                 self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
-            need_status_boost = True
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
                     # FIXME do we need this dance?
@@ -351,7 +343,6 @@ class App(object):
                 #    self.start_print(**command.get('args'))
 
         if 'passthru' in msg:
-            need_status_boost = True
             passthru = msg['passthru']
             target = (passthru.get('target'), passthru.get('func'))
             args = passthru.get('args', ())
@@ -380,12 +371,6 @@ class App(object):
 
         if msg.get('janus') and self.janus:
             self.janus.pass_to_janus(msg.get('janus'))
-
-        if need_status_boost:
-            self.boost_status_update()
-
-    def boost_status_update(self):
-        self.server_conn.status_update_booster = 20
 
     def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
         if (
