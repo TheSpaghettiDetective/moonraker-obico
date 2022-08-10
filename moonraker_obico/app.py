@@ -242,6 +242,14 @@ class App(object):
             f'uploading "{filename}" finished.')
 
 
+    def find_current_print_ts(self, cur_status):
+        cur_job = self.moonrakerconn.find_most_recent_job()
+        if cur_job:
+            return int(cur_job.get('start_time', '0'))
+        else:
+            _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
+            return None
+
     def post_print_event(self, print_event):
         ts = self.model.printer_state.current_print_ts
         if ts == -1:
@@ -249,6 +257,7 @@ class App(object):
 
         _logger.info(f'print event: {print_event} ({ts})')
         self.server_conn.post_status_update_to_server(print_event=print_event)
+
 
     def _received_klippy_update(self, data):
         printer_state = self.model.printer_state
@@ -266,22 +275,27 @@ class App(object):
             )
             self.boost_status_update()
 
+        if cur_state == PrinterState.STATE_OFFLINE:
+            printer_state.set_current_print_ts(None)  # Offline means actually printing status unknown. It may or may not be printing.
+            self.server_conn.post_status_update_to_server()
+            return
+
         if printer_state.current_print_ts is None:
             # This should cover all the edge cases when there is an active job, but current_print_ts is not set,
             # e.g., moonraker-obico is restarted in the middle of a print
             if printer_state.has_active_job():
-                if printer_state.current_print_ts == -1:
-                    cur_job = self.moonrakerconn.find_most_recent_job()
-                    if cur_job:
-                        printer_state.set_current_print_ts(int(cur_job.get('start_time', '0')))
-                    else:
-                        _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
+                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
             else:
                 printer_state.set_current_print_ts(-1)
 
-        if cur_state == PrinterState.STATE_PRINTING and prev_state == PrinterState.STATE_PAUSED:
-            self.post_print_event('PrintResumed')
-            return
+        if cur_state == PrinterState.STATE_PRINTING:
+            if prev_state == PrinterState.STATE_PAUSED:
+                self.post_print_event('PrintResumed')
+                return
+            if prev_state == PrinterState.STATE_OPERATIONAL:
+                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
+                self.post_print_event('PrintStarted')
+                return
 
         if cur_state == PrinterState.STATE_PAUSED and prev_state == PrinterState.STATE_PRINTING:
             self.post_print_event('PrintPaused')

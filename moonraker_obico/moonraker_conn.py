@@ -101,9 +101,7 @@ class MoonrakerConn:
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_most_recent_job(self):
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
-
-        jobs = data.get('jobs', [None]) or [None]
-        self.push_event(Event(sender=self.id, name='last_job', data=jobs[0]))
+        return (data.get('jobs', [None]) or [None])[0]
 
     ## WebSocket part
 
