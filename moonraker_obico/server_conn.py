@@ -6,14 +6,12 @@ import backoff
 import queue
 import bson
 import json
-import threading
 
 from .utils import ExpoBackoff, get_tags
 from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
 
-POST_STATUS_INTERVAL_SECONDS = 50.0
 
 _logger = logging.getLogger('obico.server_conn')
 
@@ -28,32 +26,11 @@ class ServerConn:
         self.status_posted_to_server_ts = 0
         self.ss = None
         self.message_queue_to_server = queue.Queue(maxsize=1000)
-        self.status_update_booster = 0    # update status at higher frequency when self.status_update_booster > 0
 
 
     ## WebSocket part of the server connection
 
     def start(self):
-        thread = threading.Thread(target=self.message_to_server_loop)
-        thread.daemon = True
-        thread.start()
-
-        while True:
-            try:
-                interval_in_seconds = POST_STATUS_INTERVAL_SECONDS
-                if self.status_update_booster > 0:
-                    interval_in_seconds /= 5
-
-                if self.status_posted_to_server_ts < time.time() - interval_in_seconds:
-                    self.post_status_update_to_server(config=self.config)
-
-            except Exception as e:
-                self.sentry.captureException(tags=get_tags())
-
-            time.sleep(1)
-
-
-    def message_to_server_loop(self):
 
         def on_server_ws_close(ws):
             if self.ss and self.ss.ws and self.ss.ws == ws:
