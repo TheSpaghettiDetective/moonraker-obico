@@ -50,7 +50,7 @@ EOF
   else
     OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
   fi
-  systemctl restart "${OBICO_SERVICE_NAME}"
+  sudo systemctl restart "${OBICO_SERVICE_NAME}"
 }
 
 success() {
