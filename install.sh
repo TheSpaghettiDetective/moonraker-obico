@@ -238,7 +238,7 @@ service_existed() {
   if [ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]; then
     if [ $RECREATE_SERVICE = "y" ]; then
       report_status "Stopping ${OBICO_SERVICE_NAME}..."
-      systemctl stop "${OBICO_SERVICE_NAME}"
+      sudo systemctl stop "${OBICO_SERVICE_NAME}"
       return 1
     else
       return 0
@@ -273,7 +273,7 @@ EOF
   echo ""
   report_status "${OBICO_SERVICE_NAME} service created and enabled."
   report_status "Launching ${OBICO_SERVICE_NAME} service..."
-  systemctl start "${OBICO_SERVICE_NAME}"
+  sudo systemctl start "${OBICO_SERVICE_NAME}"
 }
 
 recreate_update_file() {
