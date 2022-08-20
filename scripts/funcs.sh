@@ -2,6 +2,7 @@
 
 green=$(echo -en "\e[92m")
 yellow=$(echo -en "\e[93m")
+magenta=$(echo -en "\e[35m")
 red=$(echo -en "\e[91m")
 cyan=$(echo -en "\e[96m")
 default=$(echo -en "\e[39m")
@@ -18,7 +19,7 @@ ensure_venv() {
 }
 
 report_status() {
-  echo -e "###### $1\n"
+  echo -e "${magenta}###### $1\n${default}"
 }
 
 banner() {
@@ -29,13 +30,13 @@ banner() {
 
 welcome() {
   cat <<EOF
-
+${cyan}
 ======================================================================================================
 ###                                                                                                ###
 ###                       Install and Configure Obico for Klipper                                  ###
 ###                                                                                                ###
 ======================================================================================================
-
+${default}
 EOF
 }
 

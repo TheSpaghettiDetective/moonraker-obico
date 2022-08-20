@@ -194,12 +194,12 @@ cfg_existed() {
 create_config() {
   if [ -z "${OBICO_SERVER}" ]; then
     cat <<EOF
-
+${cyan}
 ================================= Obico Server URL ==============================================
-
+${default}
 Now tell us what Obico Server you want to link your printer to.
 You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
-For self-hosted server, specify `http://server_ip:port`. For instance, http://192.168.0.5:3334.
+For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
 
 EOF
     read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
