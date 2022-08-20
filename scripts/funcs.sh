@@ -18,7 +18,7 @@ ensure_venv() {
 }
 
 report_status() {
-  echo -e "###### $1"
+  echo -e "###### $1\n"
 }
 
 banner() {
