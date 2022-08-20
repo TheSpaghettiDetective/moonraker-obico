@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     if config.server.auth_token:
         print(RED+"""
-!!!WARNING: Moonraker-obico already linked found!
+!!!WARNING: Moonraker-obico already linked!
 Proceed only if you want to re-link your printer to the Obico server.
 For more information, visit:
 https://obico.io/docs/user-guides/relink-klipper
