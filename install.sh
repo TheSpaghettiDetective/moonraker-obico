@@ -48,7 +48,9 @@ EOF
 manual_setting_warning() {
   cat <<EOF
 ${yellow}
-!!!WARNING: You are manually specifying the Moonraker settings. This can be error prone.
+We couldn't automatically detect the settings. Please enter them below to continue.
+
+!!!WARNING: Manually entering the Moonraker settings can be error prone.
 We highly recommend using KIAUH if you have a non-standard Klipper installation, e.g., running multiple Moonraker instances.
 ${default}
 EOF
@@ -72,7 +74,7 @@ EOF
 }
 
 discover_sys_settings() {
-  report_status "Detecting the softwares and settings of your Klipper system ...\n"
+  report_status "Detecting the softwares and settings of your Klipper system ..."
 
   if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/database/list") ; then
     return 1
@@ -142,7 +144,7 @@ discover_sys_settings() {
 }
 
 prompt_for_settings() {
-  echo -e "We couldn't automatically detect the settings. Please enter them below to continue:\n"
+  manual_setting_warning
   read -p "Moonraker port: " -e -i "${MOONRAKER_PORT}" user_input
   eval MOONRAKER_PORT="${user_input}"
   read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
@@ -192,12 +194,12 @@ cfg_existed() {
 create_config() {
   if [ -z "${OBICO_SERVER}" ]; then
     cat <<EOF
-
+${cyan}
 ================================= Obico Server URL ==============================================
-
+${default}
 Now tell us what Obico Server you want to link your printer to.
 You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
-For self-hosted server, specify `http://server_ip:port`. For instance, http://192.168.0.5:3334.
+For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
 
 EOF
     read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
@@ -412,7 +414,6 @@ if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "
 else
 
   if ! discover_sys_settings ; then
-    manual_setting_warning
     prompt_for_settings
   fi
 
