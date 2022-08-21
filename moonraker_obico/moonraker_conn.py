@@ -285,7 +285,7 @@ class MoonrakerConn:
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
     def request_set_temperature(self, heater, target_temp) -> Dict:
-        script = f'SET_HEATER_TEMPERATURE HEATER=heater_{heater} TARGET={target_temp}'
+        script = f'SET_HEATER_TEMPERATURE HEATER={heater} TARGET={target_temp}'
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
 
