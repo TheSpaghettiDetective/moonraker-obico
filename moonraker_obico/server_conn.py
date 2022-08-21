@@ -37,8 +37,7 @@ class ServerConn:
                 self.ss = None
 
         def on_server_ws_open(ws):
-            if self.ss and self.ss.ws and self.ss.ws == ws:
-                self.post_status_update_to_server() # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
+            self.post_status_update_to_server(config=self.config) # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
         def on_message(ws, msg):
             self.process_server_msg(json.loads(msg))

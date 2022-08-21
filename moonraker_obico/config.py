@@ -55,14 +55,10 @@ class ServerConfig:
 
 @dataclasses.dataclass
 class WebcamConfig:
-    disable_video_streaming: bool = False
-    snapshot_url: str = ''
-    snapshot_ssl_validation: bool = False
-    stream_url: str = ''
-    flip_h: bool = False
-    flip_v: bool = False
-    rotate_90: bool = False
-    aspect_ratio_169: bool = False
+
+    def __init__(self, webcam_config_section):
+        self.webcam_config_section = webcam_config_section
+        self.moonraker_webcam_config = {}
 
     def update_from_moonraker(self, mr_conn):
 
@@ -72,8 +68,12 @@ class WebcamConfig:
         if result:
             # TODO: Just pick the last webcam before we have a way to support multiple cameras
             for cfg in result.get('value', {}).values():
-                self.snapshot_url = self.webcam_full_url(cfg.get('urlSnapshot', None))
-                self.stream_url = self.webcam_full_url(cfg.get('urlStream', None))
+                self.moonraker_webcam_config = dict(
+                    snapshot_url = cfg.get('urlSnapshot', None),
+                    stream_url = cfg.get('urlStream', None),
+                    flip_h = cfg.get('flipX', False),
+                    flip_v = cfg.get('flipY', False),
+                )
             return
 
         # webcam configs not found in the standard location. Try fluidd's flavor
@@ -84,11 +84,47 @@ class WebcamConfig:
                 if not cfg.get('enabled', False):
                     continue
 
-                self.stream_url = self.webcam_full_url(cfg.get('url', None))
+                self.moonraker_webcam_config = dict(
+                    stream_url = self.webcam_full_url(cfg.get('url', None)),
+                    flip_h = cfg.get('flipX', False),
+                    flip_v = cfg.get('flipY', False),
+                )
             return
 
         #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
 
+
+    @property
+    def snapshot_url(self):
+        return self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url')
+
+    @property
+    def disable_video_streaming(self):
+        return self.webcam_config_section.getboolean('disable_video_streaming', False)
+
+    @property
+    def snapshot_ssl_validation(self):
+        return False
+
+    @property
+    def stream_url(self):
+        return self.webcam_config_section.get('stream_url') or self.moonraker_webcam_config.get('stream_url')
+
+    @property
+    def flip_h(self):
+        return self.webcam_config_section.getboolean('flip_h') or self.moonraker_webcam_config.get('flip_h')
+
+    @property
+    def flip_v(self):
+        return self.webcam_config_section.getboolean('flip_v') or self.moonraker_webcam_config.get('flip_v')
+
+    @property
+    def rotate_90(self):
+        return self.webcam_config_section.getboolean('rotate_90', False)
+
+    @property
+    def aspect_ratio_169(self):
+        return self.webcam_config_section.getboolean('aspect_ratio_169', False)
 
     @classmethod
     def webcam_full_url(cls, url):
@@ -169,39 +205,7 @@ class Config:
             )
         )
 
-        webcam_config = WebcamConfig(
-            snapshot_url=config.get(
-                'webcam', 'snapshot_url',
-                fallback=''),
-            snapshot_ssl_validation=config.getboolean(
-                'webcam', 'snapshot_ssl_validation',
-                fallback=False
-            ),
-            stream_url=config.get(
-                'webcam', 'stream_url',
-                fallback='http://127.0.0.1:8080/?action=stream'
-            ),
-            flip_h=config.getboolean(
-                'webcam', 'flip_h',
-                fallback=False
-            ),
-            flip_v=config.getboolean(
-                'webcam', 'flip_v',
-                fallback=False
-            ),
-            rotate_90=config.getboolean(
-                'webcam', 'rotate_90',
-                fallback=False
-            ),
-            aspect_ratio_169=config.getboolean(
-                'webcam', 'aspect_ratio_169',
-                fallback=False
-            ),
-            disable_video_streaming=config.getboolean(
-                'webcam', 'disable_video_streaming',
-                fallback=False
-            ),
-        )
+        webcam_config = WebcamConfig(webcam_config_section=config['webcam'])
 
         logging_config = LoggingConfig(
             path=config.get(
