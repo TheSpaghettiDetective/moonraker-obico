@@ -33,7 +33,6 @@ class MoonrakerConn:
         self._next_id: int = 0
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
-        self.heaters: Optional[List[str]] = None
         self.klippy_ready = threading.Event()  # Based on https://moonraker.readthedocs.io/en/latest/web_api/#websocket-setup
 
         self.sentry = sentry
@@ -97,8 +96,9 @@ class MoonrakerConn:
     def find_all_heaters(self):
         data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
         if 'heaters' in data.get('status', {}):
-            self.heaters = data['status']['heaters']['available_heaters']  # noqa: E501
-            return True
+            return data['status']['heaters']['available_heaters']  # noqa: E501
+        else:
+            return []
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_most_recent_job(self):
@@ -129,10 +129,10 @@ class MoonrakerConn:
             _logger.info('connection is open')
 
             self.wait_for_klippy_ready()
-            self.find_all_heaters()  # We need to find all heaters as their names have to be specified in the objects query request
+            self.app_config.webcam.update_from_moonraker(self)
+            self.app_config.update_heater_mapping(self.find_all_heaters())  # We need to find all heaters as their names have to be specified in the objects query request
             self.klippy_ready.set()
 
-            self.app_config.webcam.update_from_moonraker(self)
             self.request_subscribe()
 
         def on_mr_ws_close(ws):
@@ -244,7 +244,7 @@ class MoonrakerConn:
                 "gcode_move": None,
             }
 
-            for heater in (self.heaters or ()):
+            for heater in (self.app_config.all_mr_heaters()):
                 objects[heater] = None
 
         self.status_update_request_ids.append(self._jsonrpc_request('printer.objects.query', objects=objects))
@@ -282,6 +282,10 @@ class MoonrakerConn:
         script = "G28 %s" % " ".join(
             map(lambda x: "%s0" % x.upper(), axes)
         )
+        return self._jsonrpc_request('printer.gcode.script', script=script)
+
+    def request_set_temperature(self, heater, target_temp) -> Dict:
+        script = f'SET_HEATER_TEMPERATURE HEATER=heater_{heater} TARGET={target_temp}'
         return self._jsonrpc_request('printer.gcode.script', script=script)
 
 

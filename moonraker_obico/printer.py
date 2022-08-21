@@ -15,8 +15,9 @@ class PrinterState:
 
     ACTIVE_STATES = [STATE_PRINTING, STATE_PAUSED]
 
-    def __init__(self):
+    def __init__(self, app_config: Config):
         self._mutex = threading.RLock()
+        self.app_config = app_config
         self.status = {}
         self.current_print_ts = None
 
@@ -61,7 +62,7 @@ class PrinterState:
         }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_ERROR)
 
     def to_dict(
-        self, print_event: Optional[str] = None, config: Optional[Config] = None
+        self, print_event: Optional[str] = None, with_config: Optional[bool] = False,
     ) -> Dict:
         with self._mutex:
             data = {
@@ -72,7 +73,8 @@ class PrinterState:
             if print_event:
                 data['octoprint_event'] = {'event_type': print_event}
 
-            if config:
+            if with_config:
+                config = self.app_config
                 data["octoprint_settings"] = dict(
                     webcam=dict(
                         flipV=config.webcam.flip_v,
@@ -102,18 +104,8 @@ class PrinterState:
             heaters = self.status.get('heaters', {}).get('available_heaters', ())
             for heater in heaters:
                 data = self.status.get(heater, {})
-                if heater.startswith('extruder'):
-                    try:
-                        tool_no = int(heater[8:])
-                    except ValueError:
-                        tool_no = 0
-                    name = f'tool{tool_no}'
-                elif heater == "heater_bed":
-                    name = 'bed'
-                else:
-                    continue
 
-                temps[name] = {
+                temps[self.app_config.get_mapped_server_heater_name(heater)] = {
                     'actual': round(data.get('temperature', 0.), 2),
                     'offset': 0,
                     'target': data.get('target', 0.),

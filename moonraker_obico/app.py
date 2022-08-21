@@ -366,6 +366,9 @@ class App(object):
             elif target == ('_printer', 'home'):
                 ret_value = self._process_home_message(ack_ref, axes=args[0])
 
+            elif target == ('_printer', 'set_temperature'):
+                ret_value = self._process_set_temperature_message(ack_ref, heater=args[0], target_temp=args[1])
+
             if ack_ref is not None:
                 self.server_conn.send_ws_msg_to_server({'passthru': {'ref': ack_ref, 'ret': ret_value}})
 
@@ -419,6 +422,18 @@ class App(object):
         _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
         self.moonrakerconn.request_home(axes=axes)
 
+    def _process_set_temperature_message(self, ack_ref: str, heater, target_temp) -> None:
+        if not self.moonrakerconn:
+            return {
+                        'error': 'Printer is not connected!',
+                    }
+        mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
+        if not mr_heater:
+            _logger.error(f'Can not find corresponding heater for {heater} in Moonraker.')
+        else:
+            _logger.info(f'set_temperature request for {mr_heater} -> {target_temp} with ack_ref {ack_ref}')
+        self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -437,7 +452,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    config = Config.load_from(args.config_path)
+    config = Config(args.config_path)
 
     if args.log_path:
         config.logging.path = args.log_path
@@ -451,7 +466,7 @@ if __name__ == '__main__':
         config=config,
         remote_status={'viewing': False, 'should_watch': False},
         linked_printer=DEFAULT_LINKED_PRINTER,
-        printer_state=PrinterState(),
+        printer_state=PrinterState(config),
         seen_refs=collections.deque(maxlen=100),
     )
     app = App(model)

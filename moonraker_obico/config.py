@@ -144,33 +144,16 @@ class LoggingConfig:
     level: str = 'DEBUG'
 
 
-@dataclasses.dataclass
 class Config:
-    moonraker: MoonrakerConfig
-    server: ServerConfig
-    webcam: WebcamConfig
-    logging: LoggingConfig
 
-    _config_path: str
-    _config: ConfigParser
+    def __init__(self, config_path: str):
+        self._heater_mapping = {}
 
-    sentry_opt: str = 'out'
-
-    def write(self) -> None:
-        with open(self._config_path, 'w') as f:
-            self._config.write(f)
-
-    def update_tsd_auth_token(self, auth_token: str):
-        self.server.auth_token = auth_token
-        self._config.set('server', 'auth_token', auth_token)
-        self.write()
-
-    @classmethod
-    def load_from(cls, config_path: str) -> 'Config':
+        self._config_path = config_path
         config = ConfigParser()
         config.read([config_path, ])
 
-        moonraker_config = MoonrakerConfig(
+        self.moonraker = MoonrakerConfig(
             host=config.get(
                 'moonraker', 'host',
                 fallback='127.0.0.1'
@@ -185,7 +168,7 @@ class Config:
             ),
         )
 
-        tsd_config = ServerConfig(
+        self.server = ServerConfig(
             url=config.get(
                 'server', 'url',
                 fallback='https://app.obico.io'),
@@ -205,9 +188,9 @@ class Config:
             )
         )
 
-        webcam_config = WebcamConfig(webcam_config_section=config['webcam'])
+        self.webcam = WebcamConfig(webcam_config_section=config['webcam'])
 
-        logging_config = LoggingConfig(
+        self.logging = LoggingConfig(
             path=config.get(
                 'logging', 'path',
                 fallback=''
@@ -218,20 +201,39 @@ class Config:
             ),
 		)
 
-        sentry_opt = config.get(
+        self.sentry_opt = config.get(
             'misc', 'sentry_opt',
             fallback='out'
         )
 
-        return Config(
-            moonraker=moonraker_config,
-            server=tsd_config,
-            webcam=webcam_config,
-            logging=logging_config,
-            _config=config,
-            _config_path=config_path,
-            sentry_opt=sentry_opt,
-        )
+
+    def write(self) -> None:
+        with open(self._config_path, 'w') as f:
+            self._config.write(f)
+
+    def update_tsd_auth_token(self, auth_token: str):
+        self.server.auth_token = auth_token
+        self._config.set('server', 'auth_token', auth_token)
+        self.write()
+
+    def update_heater_mapping(self, available_heaters):
+        tool_no = 0
+        for heater in sorted(available_heaters):
+            if heater == "heater_bed":
+                self._heater_mapping['heater_bed'] = 'bed'
+            else:
+                self._heater_mapping[heater] = f'tool{tool_no}'
+                tool_no += 1
+
+    def get_mapped_server_heater_name(self, mr_heater_name):
+        return self._heater_mapping.get(mr_heater_name)
+
+    def get_mapped_mr_heater_name(self, server_heater_name):
+        mr_heater_name = list(self._heater_mapping.keys())[list(self._heater_mapping.values()).index(server_heater_name)]
+        return mr_heater_name
+
+    def all_mr_heaters(self):
+         return self._heater_mapping.keys()
 
     def get_sentry(self):
         sentryClient = raven.Client(
