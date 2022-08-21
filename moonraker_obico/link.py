@@ -27,7 +27,7 @@ if __name__ == '__main__':
         help='Path to config file (ini)'
     )
     args = parser.parse_args()
-    config = Config.load_from(args.config_path)
+    config = Config(args.config_path)
 
     if config.server.auth_token:
         print(RED+"""
@@ -53,7 +53,7 @@ To abort, simply press 'Enter'.
             raise_for_status(resp, with_content=True)
             data = resp.json()
             auth_token = data['printer']['auth_token']
-            config.update_tsd_auth_token(auth_token)
+            config.update_server_auth_token(auth_token)
             print('\n###### Sccuessfully linked to your Obico Server account!')
             break
         except Exception:

@@ -206,12 +206,14 @@ class Config:
             fallback='out'
         )
 
+        self._config = config
+
 
     def write(self) -> None:
         with open(self._config_path, 'w') as f:
             self._config.write(f)
 
-    def update_tsd_auth_token(self, auth_token: str):
+    def update_server_auth_token(self, auth_token: str):
         self.server.auth_token = auth_token
         self._config.set('server', 'auth_token', auth_token)
         self.write()

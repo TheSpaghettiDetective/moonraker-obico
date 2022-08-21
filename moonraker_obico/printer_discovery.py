@@ -264,7 +264,7 @@ if __name__ == '__main__':
         help='Path to config file (ini)'
     )
     args = parser.parse_args()
-    config = Config.load_from(args.config_path)
+    config = Config(args.config_path)
 
     discovery = PrinterDiscovery(config=config.server)
     discovery.start_and_block()
