@@ -67,15 +67,15 @@ class PrinterState:
         with self._mutex:
             data = {
                 'current_print_ts': self.current_print_ts,
-                'octoprint_data': self.to_octoprint_state(),
+                'status': self.to_status(),
             } if self.current_print_ts is not None else {}      # Print status is un-deterministic when current_print_ts is None
 
             if print_event:
-                data['octoprint_event'] = {'event_type': print_event}
+                data['event'] = {'event_type': print_event}
 
             if with_config:
                 config = self.app_config
-                data["octoprint_settings"] = dict(
+                data["settings"] = dict(
                     webcam=dict(
                         flipV=config.webcam.flip_v,
                         flipH=config.webcam.flip_h,
@@ -89,7 +89,7 @@ class PrinterState:
                 )
             return data
 
-    def to_octoprint_state(self) -> Dict:
+    def to_status(self) -> Dict:
         with self._mutex:
             state = self.get_state_from_status(self.status)
             print_stats = self.status.get('print_stats') or dict()
