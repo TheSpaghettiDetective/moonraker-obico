@@ -12,6 +12,7 @@ class PrinterState:
     STATE_PRINTING = 'Printing'
     STATE_PAUSED = 'Paused'
     STATE_ERROR = 'Error'
+    STATE_CANCELLING = 'Cancelling'
 
     ACTIVE_STATES = [STATE_PRINTING, STATE_PAUSED]
 
@@ -96,7 +97,7 @@ class PrinterState:
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
             error_text = (
                 print_stats.get('message', 'Unknown error')
-                if state == 'Error'
+                if state == PrinterState.STATE_ERROR
                 else ''
             )
 
@@ -114,7 +115,7 @@ class PrinterState:
             filepath = print_stats.get('filename', '')
             filename = pathlib.Path(filepath).name if filepath else ''
 
-            if state == 'Offline':
+            if state == PrinterState.STATE_OFFLINE:
                 return {}
 
             completion = self.status.get('virtual_sdcard', {}).get('progress')
@@ -126,13 +127,13 @@ class PrinterState:
                 'state': {
                     'text': error_text or state,
                     'flags': {
-                        'operational': state not in ['Error', 'Offline'],
-                        'paused': state == 'Paused',
-                        'printing': state == 'Printing',
-                        'cancelling': state == 'Cancelling',
+                        'operational': state not in [PrinterState.STATE_ERROR, PrinterState.STATE_OFFLINE],
+                        'paused': state == PrinterState.STATE_PAUSED,
+                        'printing': state == PrinterState.STATE_PRINTING,
+                        'cancelling': state == PrinterState.STATE_CANCELLING,
                         'pausing': False,
-                        'error': state == 'Error',
-                        'ready': state == 'Operational',
+                        'error': state == PrinterState.STATE_ERROR,
+                        'ready': state == PrinterState.STATE_OPERATIONAL,
                         'closedOrError': False,  # OctoPrint uses this flag to indicate the printer is connectable. It should always be false until we support connecting moonraker to printer
                     }
                 },
