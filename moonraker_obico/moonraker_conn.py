@@ -149,7 +149,7 @@ class MoonrakerConn:
             data = json.loads(raw)
             _logger.debug(f'Received from Moonraker: {data}')
 
-            if data.get('id', -1) in self.status_update_request_ids:
+            if data.get('id', -1) in self.status_update_request_ids and 'result' in data:
                 self.push_event(
                     Event(sender=self.id, name='status_update', data=data)
                 )
