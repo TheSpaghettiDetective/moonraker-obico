@@ -133,7 +133,7 @@ class PrinterState:
                         'pausing': False,
                         'error': state == 'Error',
                         'ready': state == 'Operational',
-                        'closedOrError': state in ['Error', 'Offline'],
+                        'closedOrError': False,  # OctoPrint uses this flag to indicate the printer is connectable. It should always be false until we support connecting moonraker to printer
                     }
                 },
                 'currentZ': None,
