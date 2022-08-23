@@ -11,6 +11,7 @@ import queue
 import json
 import re
 import signal
+import backoff
 
 import requests  # type: ignore
 
@@ -30,9 +31,6 @@ _logger = logging.getLogger('obico.app')
 _default_int_handler = None
 _default_term_handler = None
 
-DEFAULT_LINKED_PRINTER = {'is_pro': False}
-
-
 ACKREF_EXPIRE_SECS = 300
 
 
@@ -50,10 +48,10 @@ class App(object):
         def is_configured(self):
             return True  # FIXME
 
-    def __init__(self, model: Model):
+    def __init__(self):
         self.shutdown = False
-        self.model = model
-        self.sentry = self.model.config.get_sentry()
+        self.model = None
+        self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
         self.webcam_streamer = None
@@ -73,13 +71,44 @@ class App(object):
             _logger.error(f'event queue is full, dropping event {event}')
             return False
 
-    def start(self):
+    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    def wait_for_auth_token(self, args):
+        while True:
+            config = Config(args.config_path)
+            if config.server.auth_token:
+                linked_printer = ServerConn(config, None, None, None).get_linked_printer()
+
+                if args.log_path:
+                    config.logging.path = args.log_path
+                if args.debug:
+                    config.logging.level = 'DEBUG'
+                setup_logging(config.logging)
+
+                _logger.info(f'starting moonraker-obico (v{VERSION})')
+                _logger.info('Linked printer: {}'.format(linked_printer))
+
+                self.model = App.Model(
+                    config=config,
+                    remote_status={'viewing': False, 'should_watch': False},
+                    linked_printer=linked_printer,
+                    printer_state=PrinterState(config),
+                    seen_refs=collections.deque(maxlen=100),
+                )
+                self.sentry = self.model.config.get_sentry()
+                break
+
+            _logger.warning('auth_token not configured. Retry after 2s')
+            time.sleep(2)
+
+    def start(self, args):
         # TODO: This doesn't work as ffmpeg seems to mess with signals as well
         # global _default_int_handler, _default_term_handler
         # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
         # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
 
-        _logger.info(f'starting moonraker-obico (v{VERSION})')
+        self.wait_for_auth_token(args)
+        get_tags()
+
         _logger.debug(self.model.config.server)
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
@@ -451,23 +480,4 @@ if __name__ == '__main__':
         help='Enable debug logging'
     )
     args = parser.parse_args()
-
-    config = Config(args.config_path)
-
-    if args.log_path:
-        config.logging.path = args.log_path
-    if args.debug:
-        config.logging.level = 'DEBUG'
-    setup_logging(config.logging)
-
-    get_tags()
-
-    model = App.Model(
-        config=config,
-        remote_status={'viewing': False, 'should_watch': False},
-        linked_printer=DEFAULT_LINKED_PRINTER,
-        printer_state=PrinterState(config),
-        seen_refs=collections.deque(maxlen=100),
-    )
-    app = App(model)
-    app.start()
+    App().start(args)

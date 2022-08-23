@@ -84,20 +84,9 @@ class ServerConn:
 
     ## REST API part of the server connection
 
-    @backoff.on_predicate(backoff.expo, max_value=1200)
     def get_linked_printer(self):
-        if not self.config.server.auth_token:
-            raise Exception('auth_token not configured. Exiting the process...')
-
-        try:
-            resp = self.send_http_request('GET', '/api/v1/octo/printer/', raise_exception=True)
-        except Exception:
-            return None  # Triggers a backoff
-
-        printer = resp.json()['printer']
-        _logger.info('Linked printer: {}'.format(printer))
-
-        return printer
+        resp = self.send_http_request('GET', '/api/v1/octo/printer/', raise_exception=True)
+        return resp.json()['printer']
 
 
     def send_http_request(
