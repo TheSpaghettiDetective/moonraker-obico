@@ -49,10 +49,9 @@ class PrinterState:
             'webhooks', {}
         ).get('state', 'disconnected')
 
-        if klippy_state in ('disconnected', 'startup'):
+        # TODO: We need to have better understanding on the webhooks.state.
+        if klippy_state != 'ready':
             return PrinterState.STATE_OFFLINE
-        elif klippy_state != 'ready':
-            return PrinterState.STATE_ERROR
 
         return {
             'standby': PrinterState.STATE_OPERATIONAL,
