@@ -85,7 +85,7 @@ class WebcamConfig:
                     continue
 
                 self.moonraker_webcam_config = dict(
-                    stream_url = self.webcam_full_url(cfg.get('url', None)),
+                    stream_url = cfg.get('url', None),
                     flip_h = cfg.get('flipX', False),
                     flip_v = cfg.get('flipY', False),
                 )
@@ -96,7 +96,7 @@ class WebcamConfig:
 
     @property
     def snapshot_url(self):
-        return self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url')
+        return self.webcam_full_url(self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url'))
 
     @property
     def disable_video_streaming(self):
@@ -108,7 +108,7 @@ class WebcamConfig:
 
     @property
     def stream_url(self):
-        return self.webcam_config_section.get('stream_url') or self.moonraker_webcam_config.get('stream_url')
+        return self.webcam_full_url(self.webcam_config_section.get('stream_url') or self.moonraker_webcam_config.get('stream_url'))
 
     @property
     def flip_h(self):
