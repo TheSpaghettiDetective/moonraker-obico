@@ -68,7 +68,7 @@ To abort, simply press 'Enter'.
             data = resp.json()
             auth_token = data['printer']['auth_token']
             config.update_server_auth_token(auth_token)
-            print('\n###### Sccuessfully linked to your Obico Server account!')
+            print('\n###### Successfully linked to your Obico Server account!')
             break
         except Exception:
             print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
