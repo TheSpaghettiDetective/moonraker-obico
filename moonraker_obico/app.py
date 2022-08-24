@@ -75,14 +75,16 @@ class App(object):
     def wait_for_auth_token(self, args):
         while True:
             config = Config(args.config_path)
+            if args.log_path:
+                config.logging.path = args.log_path
+            if args.debug:
+                config.logging.level = 'DEBUG'
+            setup_logging(config.logging)
+
             if config.server.auth_token:
+                _logger.info('Fetching linked printer...')
                 linked_printer = ServerConn(config, None, None, None).get_linked_printer()
 
-                if args.log_path:
-                    config.logging.path = args.log_path
-                if args.debug:
-                    config.logging.level = 'DEBUG'
-                setup_logging(config.logging)
 
                 _logger.info(f'starting moonraker-obico (v{VERSION})')
                 _logger.info('Linked printer: {}'.format(linked_printer))
