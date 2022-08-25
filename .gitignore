@@ -3,8 +3,6 @@
 .idea
 .vscode
 *.iml
-*.log
-*.log.*
 build
 dist
 *.egg*
