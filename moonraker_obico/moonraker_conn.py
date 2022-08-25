@@ -135,7 +135,7 @@ class MoonrakerConn:
 
             self.request_subscribe()
 
-        def on_mr_ws_close(ws):
+        def on_mr_ws_close(ws, **kwargs):
             self.klippy_ready.clear()
             self.push_event(
                 Event(sender=self.id, name='mr_disconnected', data={})

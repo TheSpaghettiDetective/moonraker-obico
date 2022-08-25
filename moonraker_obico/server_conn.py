@@ -18,6 +18,7 @@ _logger = logging.getLogger('obico.server_conn')
 class ServerConn:
 
     def __init__(self, config: Config, printer_state: PrinterState, process_server_msg, sentry):
+        self.should_reconnect = True
         self.config: Config = config
         self.printer_state: PrinterState() = printer_state
         self.process_server_msg = process_server_msg
@@ -25,16 +26,20 @@ class ServerConn:
 
         self.status_posted_to_server_ts = 0
         self.ss = None
-        self.message_queue_to_server = queue.Queue(maxsize=1000)
+        self.message_queue_to_server = queue.Queue(maxsize=50)
 
 
     ## WebSocket part of the server connection
 
     def start(self):
 
-        def on_server_ws_close(ws):
+        def on_server_ws_close(ws, close_status_code):
             if self.ss and self.ss.ws and self.ss.ws == ws:
                 self.ss = None
+
+            if close_status_code == 4321:
+                _logger.error('Shared auth_token detected. Shutting down.')
+                self.should_reconnect = False
 
         def on_server_ws_open(ws):
             self.post_status_update_to_server(with_config=True) # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
@@ -43,7 +48,7 @@ class ServerConn:
             self.process_server_msg(json.loads(msg))
 
         server_ws_backoff = ExpoBackoff(300)
-        while True:
+        while self.should_reconnect:
             try:
                 (data, as_binary) = self.message_queue_to_server.get()
 
@@ -70,6 +75,7 @@ class ServerConn:
             except Exception as e:
                 self.sentry.captureException(tags=get_tags())
                 server_ws_backoff.more(e)
+
 
     def send_ws_msg_to_server(self, data, as_binary=False):
         try:

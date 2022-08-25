@@ -96,7 +96,7 @@ class JanusConn:
 
     def start_janus_ws(self):
 
-        def on_close(ws):
+        def on_close(ws, **kwargs):
             self.janus_ws_backoff.more(Exception('Janus WS connection closed!'))
             if not self.shutting_down:
                 _logger.warning('Reconnecting to Janus WS.')
