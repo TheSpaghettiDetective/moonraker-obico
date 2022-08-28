@@ -11,8 +11,6 @@ class PrinterState:
     STATE_OPERATIONAL = 'Operational'
     STATE_PRINTING = 'Printing'
     STATE_PAUSED = 'Paused'
-    STATE_ERROR = 'Error'
-    STATE_CANCELLING = 'Cancelling'
 
     ACTIVE_STATES = [STATE_PRINTING, STATE_PAUSED]
 
@@ -58,8 +56,9 @@ class PrinterState:
             'printing': PrinterState.STATE_PRINTING,
             'paused': PrinterState.STATE_PAUSED,
             'complete': PrinterState.STATE_OPERATIONAL,
-            'cancelled': PrinterState.STATE_OPERATIONAL
-        }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_ERROR)
+            'cancelled': PrinterState.STATE_OPERATIONAL,
+            'error': PrinterState.STATE_OPERATIONAL, # state is "error" when printer quits a print due to an error, but opertional
+        }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_OFFLINE)
 
     def to_dict(
         self, print_event: Optional[str] = None, with_config: Optional[bool] = False,
@@ -94,11 +93,7 @@ class PrinterState:
             state = self.get_state_from_status(self.status)
             print_stats = self.status.get('print_stats') or dict()
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
-            error_text = (
-                print_stats.get('message', 'Unknown error')
-                if state == PrinterState.STATE_ERROR
-                else ''
-            )
+            has_error = self.status.get('print_stats', {}).get('state', '') == 'error'
 
             temps = {}
             heaters = self.status.get('heaters', {}).get('available_heaters', ())
@@ -124,17 +119,18 @@ class PrinterState:
             return {
                 '_ts': time.time(),
                 'state': {
-                    'text': error_text or state,
+                    'text': state,
                     'flags': {
-                        'operational': state not in [PrinterState.STATE_ERROR, PrinterState.STATE_OFFLINE],
+                        'operational': state not in [PrinterState.STATE_OFFLINE,],
                         'paused': state == PrinterState.STATE_PAUSED,
                         'printing': state == PrinterState.STATE_PRINTING,
-                        'cancelling': state == PrinterState.STATE_CANCELLING,
+                        'cancelling': False,
                         'pausing': False,
-                        'error': state == PrinterState.STATE_ERROR,
+                        'error': has_error,
                         'ready': state == PrinterState.STATE_OPERATIONAL,
                         'closedOrError': False,  # OctoPrint uses this flag to indicate the printer is connectable. It should always be false until we support connecting moonraker to printer
-                    }
+                    },
+                    'error': print_stats.get('message') if has_error else None
                 },
                 'currentZ': None,
                 'job': {
