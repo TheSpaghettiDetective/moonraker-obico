@@ -111,7 +111,8 @@ class App(object):
         self.wait_for_auth_token(args)
         get_tags()
 
-        _logger.debug(self.model.config.server)
+        _cfg = self.model.config._config
+        _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
