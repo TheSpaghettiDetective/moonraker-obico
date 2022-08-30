@@ -60,40 +60,6 @@ class WebcamConfig:
         self.webcam_config_section = webcam_config_section
         self.moonraker_webcam_config = {}
 
-    def update_from_moonraker(self, mr_conn):
-
-        # Check for the standard namespace for webcams
-        result = mr_conn.api_get('server.database.item', raise_for_status=False, namespace='webcams')
-
-        if result:
-            # TODO: Just pick the last webcam before we have a way to support multiple cameras
-            for cfg in result.get('value', {}).values():
-                self.moonraker_webcam_config = dict(
-                    snapshot_url = cfg.get('urlSnapshot', None),
-                    stream_url = cfg.get('urlStream', None),
-                    flip_h = cfg.get('flipX', False),
-                    flip_v = cfg.get('flipY', False),
-                )
-            return
-
-        # webcam configs not found in the standard location. Try fluidd's flavor
-        result = mr_conn.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
-        if result:
-            # TODO: Just pick the last webcam before we have a way to support multiple cameras
-            for cfg in result.get('value', {}).get('cameras', []):
-                if not cfg.get('enabled', False):
-                    continue
-
-                self.moonraker_webcam_config = dict(
-                    stream_url = cfg.get('url', None),
-                    flip_h = cfg.get('flipX', False),
-                    flip_v = cfg.get('flipY', False),
-                )
-            return
-
-        #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
-
-
     @property
     def snapshot_url(self):
         return self.webcam_full_url(self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url'))
