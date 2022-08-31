@@ -41,6 +41,8 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 EOF
   fi
 
+  export OBICO_ENV # Expose OBICO_ENV to link.py so that it can print out the debugging command.
+
   if ! PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"; then
     return 1
   fi
