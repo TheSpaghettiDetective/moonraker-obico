@@ -74,5 +74,5 @@ To abort, simply press 'Enter'.
             print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
             if not debug:
                 print('If you keep getting this error, press ctrl-c to abort it and then run the following command to debug:')
-                print(CYAN + f'PYTHONPATH={os.environ.get("PYTHONPATH")} {os.environ.get("OBICO_ENV")}/bin/python3 {" ".join(sys.argv)} -d' + NC)
+                print(CYAN + f'PYTHONPATH={os.environ.get("PYTHONPATH")} {os.environ.get("OBICO_ENV")}/bin/python3 -m moonraker_obico.link {" ".join(sys.argv[1:])} -d' + NC)
 
