@@ -3,6 +3,7 @@ import logging
 import requests
 import signal
 import sys
+import os
 
 from .utils import raise_for_status
 from .config import Config
@@ -10,6 +11,7 @@ from .config import Config
 logging.basicConfig()
 
 
+CYAN='\033[0;96m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
@@ -26,8 +28,13 @@ if __name__ == '__main__':
         '-c', '--config', dest='config_path', required=True,
         help='Path to config file (ini)'
     )
+    parser.add_argument(
+        '-d', '--debug', default=False, action="store_true",
+        help='Print debugging info'
+    )
     args = parser.parse_args()
     config = Config(args.config_path)
+    debug = args.debug
 
     if config.server.auth_token:
         print(RED+"""
@@ -49,7 +56,14 @@ To abort, simply press 'Enter'.
             linking_interrupted(None, None)
 
         try:
+            if debug:
+                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{url}"')
+
             resp = requests.post(url, params={'code': code.strip()})
+
+            if debug:
+                print(f'## DEBUG: Server response code "{resp}"')
+
             raise_for_status(resp, with_content=True)
             data = resp.json()
             auth_token = data['printer']['auth_token']
@@ -58,4 +72,7 @@ To abort, simply press 'Enter'.
             break
         except Exception:
             print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
+            if not debug:
+                print('If you keep getting this error, press ctrl-c to abort it and then run the following command to debug:')
+                print(CYAN + f'PYTHONPATH={os.environ.get("PYTHONPATH")} {os.environ.get("OBICO_ENV")}/bin/python3 -m moonraker_obico.link {" ".join(sys.argv[1:])} -d' + NC)
 
