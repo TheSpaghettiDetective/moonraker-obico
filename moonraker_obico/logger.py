@@ -3,6 +3,7 @@ import logging.handlers
 import sys
 
 def setup_logging(logging_config):
+    handlers = []
     log_level_info = {'DEBUG': logging.DEBUG,
                       'INFO': logging.INFO,
                       'WARNING': logging.WARNING,
@@ -16,12 +17,19 @@ def setup_logging(logging_config):
         "%(asctime)s  %(levelname)8s  %(name)s - %(message)s"
     )
 
+
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(formatter)
-    logger.addHandler(sh)
+    handlers.append(sh)
 
     if logging_config.path:
         fh = logging.handlers.RotatingFileHandler(
             logging_config.path, maxBytes=100000000, backupCount=5)
         fh.setFormatter(formatter)
-        logger.addHandler(fh)
+        handlers.append(fh)
+
+    for hdlr in logger.handlers[:]:
+        logger.removeHandler(hdlr)
+
+    for hdlr in handlers:
+        logger.addHandler(hdlr)
