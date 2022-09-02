@@ -280,7 +280,7 @@ EOF
 
 recreate_update_file() {
   cat <<EOF > "${OBICO_UPDATE_FILE}"
-[update_manager moonraker-obico]
+[update_manager ${OBICO_SERVICE_NAME}]
 type: git_repo
 path: ~/moonraker-obico
 origin: ${OBICO_REPO}
