@@ -14,24 +14,12 @@ import socket
 from contextlib import closing
 from typing import Union
 from sarge import run, Capture
-from pathvalidate import sanitize_filename as sfn
 import backoff
 import requests
 
 _logger = logging.getLogger('obico.utils')
 
 DEBUG = os.environ.get('DEBUG')
-
-# Update printer settings at max 30 minutes interval,
-# as they are relatively static.
-
-def sanitize_filename(fname):
-    if "/" in fname or "\\" in fname:
-        raise ValueError("name must not contain / or \\")
-
-    result = sfn(fname)
-
-    return result.lstrip(".")
 
 
 class ExpoBackoff:
@@ -272,6 +260,35 @@ def to_unicode(
         return s_or_u.decode(encoding, errors=errors)
     else:
         return s_or_u
+
+
+# Courtesy of https://github.com/OctoPrint/OctoPrint/blob/f430257d7072a83692fc2392c683ed8c97ae47b6/src/octoprint/util/files.py#L27
+
+def sanitize_filename(name, really_universal=False):
+    """
+    Sanitizes the provided filename. Implementation differs between Python versions.
+    Under normal operation, ``pathvalidate.sanitize_filename`` will be used, leaving the
+    name as intact as possible while still being a legal file name under all operating
+    systems.
+    In all cases, a single leading ``.`` will be removed (as it denotes hidden files
+    on *nix).
+    Args:
+        name:          The file name to sanitize. Only the name, no path elements.
+    Returns:
+        the sanitized file name
+    """
+
+    name = to_unicode(name)
+
+    if name is None:
+        return None
+
+    if "/" in name or "\\" in name:
+        raise ValueError("name must not contain / or \\")
+
+    from pathvalidate import sanitize_filename as sfn
+    result = sfn(name)
+    return result.lstrip(".")
 
 
 def pi_version():

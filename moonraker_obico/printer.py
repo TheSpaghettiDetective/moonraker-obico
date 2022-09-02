@@ -5,6 +5,7 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
+from .utils import  sanitize_filename
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -106,8 +107,9 @@ class PrinterState:
                     'target': data.get('target', 0.),
                 }
 
-            filepath = print_stats.get('filename', '')
-            filename = pathlib.Path(filepath).name if filepath else ''
+            filepath = print_stats.get('filename')
+            filename = pathlib.Path(filepath).name if filepath else None
+            file_display_name = sanitize_filename(filename) if filename else None
 
             if state == PrinterState.STATE_OFFLINE:
                 return {}
@@ -137,10 +139,7 @@ class PrinterState:
                     'file': {
                         'name': filename,
                         'path': filepath,
-                        # 'display': "aa.gcode",
-                        # 'origin': "local",
-                        # 'size': 154006,
-                        # 'date': 1628534143
+                        'display': file_display_name,
                     },
                     'estimatedPrintTime': None,
                     'filament': {'length': None, 'volume': None},
