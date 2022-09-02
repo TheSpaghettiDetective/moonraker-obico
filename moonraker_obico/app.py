@@ -337,6 +337,8 @@ class App(object):
                     self.post_print_event('PrintFailed')
                 elif _state == 'complete':
                     self.post_print_event('PrintDone')
+                elif _state == 'error':
+                    self.post_print_event('PrintFailed')
                 else:
                     # FIXME
                     _logger.error(
