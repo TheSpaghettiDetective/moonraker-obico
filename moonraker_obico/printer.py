@@ -97,14 +97,13 @@ class PrinterState:
             has_error = self.status.get('print_stats', {}).get('state', '') == 'error'
 
             temps = {}
-            heaters = self.status.get('heaters', {}).get('available_heaters', ())
-            for heater in heaters:
+            for heater in self.app_config.all_mr_heaters():
                 data = self.status.get(heater, {})
 
                 temps[self.app_config.get_mapped_server_heater_name(heater)] = {
                     'actual': round(data.get('temperature', 0.), 2),
                     'offset': 0,
-                    'target': data.get('target', 0.),
+                    'target': data.get('target'), # "target = null" indicates this is a sensor, not a heater, and hence temperature can't be set
                 }
 
             filepath = print_stats.get('filename')

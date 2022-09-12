@@ -184,14 +184,27 @@ class Config:
         self._config.set('server', 'auth_token', auth_token)
         self.write()
 
-    def update_heater_mapping(self, available_heaters):
-        tool_no = 0
-        for heater in sorted(available_heaters):
-            if heater == "heater_bed":
-                self._heater_mapping['heater_bed'] = 'bed'
-            else:
-                self._heater_mapping[heater] = f'tool{tool_no}'
-                tool_no += 1
+    # Adopted from getHeaters, getTemperatureObjects, getTemperatureSensors in mainsail:/src/store/printer/getters.ts
+    def update_heater_mapping(self, heaters):
+        def capwords(s):
+            return ' '.join(elem.capitalize() for elem in s.split(' '))
+
+        for heater in sorted(heaters.get('available_heaters', [])):
+            name = heater
+            name_split = name.split(' ')
+            if len(name_split) > 1 and name_split[0] == 'heater_generic':
+                name = name_split[1]
+
+            if name.startswith('_'):
+                continue
+
+            self._heater_mapping[heater] = name
+
+        for sensor in sorted(heaters.get('available_sensors', [])):
+            name_split = sensor.split(' ')
+            if len(name_split) > 1 and name_split[0] == 'temperature_sensor' and not name_split[1].startswith('_'):
+                self._heater_mapping[sensor] = name_split[1]
+
 
     def get_mapped_server_heater_name(self, mr_heater_name):
         return self._heater_mapping.get(mr_heater_name)

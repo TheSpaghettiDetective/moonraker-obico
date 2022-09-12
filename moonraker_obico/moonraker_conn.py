@@ -96,7 +96,7 @@ class MoonrakerConn:
     def find_all_heaters(self):
         data = self.api_get('printer/objects/query', raise_for_status=True, heaters='') # heaters='' -> 'query?heaters=' by the behavior in requests
         if 'heaters' in data.get('status', {}):
-            return data['status']['heaters']['available_heaters']  # noqa: E501
+            return data['status']['heaters']
         else:
             return []
 
