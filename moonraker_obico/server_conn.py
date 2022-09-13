@@ -48,6 +48,8 @@ class ServerConn:
             self.process_server_msg(json.loads(msg))
 
         server_ws_backoff = ExpoBackoff(300)
+        self.send_ws_msg_to_server({}) # Initial null message to trigger server connection
+
         while self.should_reconnect:
             try:
                 (data, as_binary) = self.message_queue_to_server.get()
