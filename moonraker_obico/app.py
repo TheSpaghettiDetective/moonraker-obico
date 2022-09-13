@@ -108,6 +108,7 @@ class App(object):
         # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
         # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
 
+        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.wait_for_auth_token(args)
         get_tags()
 
@@ -118,9 +119,7 @@ class App(object):
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
 
-        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
-        self.model.linked_printer = self.server_conn.get_linked_printer()
-
+        self.moonrakerconn.update_webcam_config_from_moonraker()
         self.sentry.user_context({'id': self.model.config.server.auth_token})
 
         if not self.model.config.webcam.disable_video_streaming:
@@ -216,8 +215,8 @@ class App(object):
                 _logger.warning(f'error response from moonraker, {event}')
 
             elif event.data.get('method', '') in ('notify_klippy_disconnected', 'notify_klippy_shutdown'):
-                # notify_klippy_disconnected -> Click “Restart Klipper” or “Firmware restart” (same result)
-                # notify_klippy_shutdown -> Unplug printer USB cable
+                # Click "Restart Klipper" or "Firmware restart" (same result) -> notify_klippy_disconnected
+                # Unplug printer USB cable -> notify_klippy_shutdown
                 # clear app's klippy state to indicate the loss of connection to the printer
                 self._received_klippy_update({"status": {},})
 

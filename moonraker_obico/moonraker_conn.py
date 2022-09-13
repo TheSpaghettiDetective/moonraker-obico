@@ -105,34 +105,44 @@ class MoonrakerConn:
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
         return (data.get('jobs', [None]) or [None])[0]
 
-    def webcam_config_in_moonraker(self):
-        # Check for the standard namespace for webcams
-        result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
-        if result:
-            # TODO: Just pick the last webcam before we have a way to support multiple cameras
-            for cfg in result.get('value', {}).values():
-                return dict(
-                    snapshot_url = cfg.get('urlSnapshot', None),
-                    stream_url = cfg.get('urlStream', None),
-                    flip_h = cfg.get('flipX', False),
-                    flip_v = cfg.get('flipY', False),
-                )
+    def update_webcam_config_from_moonraker(self):
+        def webcam_config_in_moonraker():
+            # Check for the standard namespace for webcams
+            result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
+            if result:
+                # TODO: Just pick the last webcam before we have a way to support multiple cameras
+                for cfg in result.get('value', {}).values():
+                    return dict(
+                        snapshot_url = cfg.get('urlSnapshot', None),
+                        stream_url = cfg.get('urlStream', None),
+                        flip_h = cfg.get('flipX', False),
+                        flip_v = cfg.get('flipY', False),
+                    )
 
-        # webcam configs not found in the standard location. Try fluidd's flavor
-        result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
-        if result:
-            # TODO: Just pick the last webcam before we have a way to support multiple cameras
-            for cfg in result.get('value', {}).get('cameras', []):
-                if not cfg.get('enabled', False):
-                    continue
+            # webcam configs not found in the standard location. Try fluidd's flavor
+            result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
+            if result:
+                # TODO: Just pick the last webcam before we have a way to support multiple cameras
+                for cfg in result.get('value', {}).get('cameras', []):
+                    if not cfg.get('enabled', False):
+                        continue
 
-                return dict(
-                    stream_url = cfg.get('url', None),
-                    flip_h = cfg.get('flipX', False),
-                    flip_v = cfg.get('flipY', False),
-                )
+                    return dict(
+                        stream_url = cfg.get('url', None),
+                        flip_h = cfg.get('flipX', False),
+                        flip_v = cfg.get('flipY', False),
+                    )
 
-        #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+
+        mr_webcam_config = webcam_config_in_moonraker()
+        if mr_webcam_config:
+            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config}')
+            self.app_config.webcam.moonraker_webcam_config = mr_webcam_config
+        else:
+            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+            pass
+
 
     ## WebSocket part
 
@@ -158,14 +168,6 @@ class MoonrakerConn:
             _logger.info('connection is open')
 
             self.wait_for_klippy_ready()
-
-            mr_webcam_config = self.webcam_config_in_moonraker()
-            if mr_webcam_config:
-                _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config}')
-                self.app_config.webcam.moonraker_webcam_config = mr_webcam_config
-            else:
-                #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
-                pass
 
             self.app_config.update_heater_mapping(self.find_all_heaters())  # We need to find all heaters as their names have to be specified in the objects query request
             self.klippy_ready.set()
