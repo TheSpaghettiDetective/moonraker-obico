@@ -72,8 +72,9 @@ class SentryWrapper:
         def before_send(event, hint):
             if 'exc_info' in hint:
                 exc_type, exc_value, tb = hint['exc_info']
-                if isinstance(exc_value, requests.exceptions.RequestException):
-                    event['fingerprint'] = ['database-unavailable']
+                errors_to_ignore = (requests.exceptions.RequestException,)
+                if isinstance(exc_value, errors_to_ignore):
+                    return None
             return event
 
         sentry_sdk.init(
