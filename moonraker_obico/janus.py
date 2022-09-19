@@ -7,7 +7,7 @@ import backoff
 import json
 import socket
 
-from .utils import ExpoBackoff, get_tags, pi_version, to_unicode
+from .utils import ExpoBackoff, pi_version, to_unicode
 from .ws import WebSocketClient
 
 _logger = logging.getLogger('obico.janus')
@@ -73,7 +73,7 @@ class JanusConn:
                 elif not self.shutting_down:
                     self.janus_proc.wait()
                     msg = 'Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode)
-                    self.sentry.captureMessage(msg, tags=get_tags())
+                    self.sentry.captureMessage(msg)
                     janus_backoff.more(Exception(msg))
                     self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -148,4 +148,4 @@ class JanusConn:
             _logger.debug(msg)
             self.server_conn.send_ws_msg_to_server(dict(janus=raw_msg))
         except:
-            self.sentry.captureException(tags=get_tags())
+            self.sentry.captureException()
