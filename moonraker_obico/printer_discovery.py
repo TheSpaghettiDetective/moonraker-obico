@@ -187,7 +187,6 @@ class PrinterDiscovery(object):
 #                _logger.error('printer_discovery could not verify code')
 #                self.plugin.sentry.captureMessage(
 #                    'printer_discovery could not verify code',
-#                    tags=get_tags(),
 #                    extra={'code': code})
 #
             self.stop()

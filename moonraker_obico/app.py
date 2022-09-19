@@ -120,7 +120,6 @@ class App(object):
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
-        self.sentry.user_context({'id': self.model.config.server.auth_token})
 
         if not self.model.config.webcam.disable_video_streaming:
             _logger.info('Starting webcam streamer')

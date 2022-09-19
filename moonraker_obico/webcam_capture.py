@@ -12,8 +12,6 @@ import logging
 import time
 import threading
 
-from .utils import get_tags
-
 POST_PIC_INTERVAL_SECONDS = 10.0
 if os.environ.get('DEBUG'):
     POST_PIC_INTERVAL_SECONDS = 3.0
@@ -131,4 +129,4 @@ class JpegPoster:
                 self.last_jpg_post_ts = time.time()
                 self.post_pic_to_server(viewing_boost=False)
             except:
-                self.sentry.captureException(tags=get_tags())
+                self.sentry.captureException()

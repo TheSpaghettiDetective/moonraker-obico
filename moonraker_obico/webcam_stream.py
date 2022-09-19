@@ -10,7 +10,7 @@ from threading import Thread
 import psutil
 
 
-from .utils import get_image_info, pi_version, get_tags, to_unicode
+from .utils import get_image_info, pi_version, to_unicode
 from .janus import JANUS_SERVER
 from .webcam_capture import capture_jpeg
 
@@ -93,7 +93,7 @@ class WebcamStreamer:
             self.ffmpeg_from_mjpeg()
 
         except Exception:
-            self.sentry.captureException(tags=get_tags())
+            self.sentry.captureException()
 
             #TODO: sent notification to user
             raise
@@ -161,7 +161,7 @@ class WebcamStreamer:
                     returncode = self.ffmpeg_proc.wait()
                     msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
                     _logger.error(msg)
-                    self.sentry.captureMessage('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode), tags=get_tags())
+                    self.sentry.captureMessage('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
                     return
                 else:
                     ring_buffer.append(err)

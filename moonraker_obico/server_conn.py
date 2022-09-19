@@ -7,7 +7,7 @@ import queue
 import bson
 import json
 
-from .utils import ExpoBackoff, get_tags
+from .utils import ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
@@ -75,7 +75,7 @@ class ServerConn:
                 _logger.warning(e)
                 server_ws_backoff.more(e)
             except Exception as e:
-                self.sentry.captureException(tags=get_tags())
+                self.sentry.captureException()
                 server_ws_backoff.more(e)
 
 

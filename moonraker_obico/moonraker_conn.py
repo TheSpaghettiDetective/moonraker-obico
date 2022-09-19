@@ -13,7 +13,7 @@ import bson
 import websocket
 from collections import deque
 
-from .utils import get_tags, DEBUG
+from .utils import DEBUG
 from .ws import WebSocketClient, WebSocketConnectionException
 
 
@@ -160,7 +160,7 @@ class MoonrakerConn:
                     self.request_status_update()
 
             except Exception as e:
-                self.sentry.captureException(tags=get_tags())
+                self.sentry.captureException()
 
             time.sleep(1)
 
@@ -227,7 +227,7 @@ class MoonrakerConn:
                 _logger.warning(e)
             except Exception as e:
                 _logger.warning(e)
-                self.sentry.captureException(tags=get_tags())
+                self.sentry.captureException()
 
     def next_id(self) -> int:
         next_id = self._next_id = self._next_id + 1
