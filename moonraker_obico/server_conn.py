@@ -11,6 +11,7 @@ from .utils import ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
+from .webcam_capture import capture_jpeg
 
 
 _logger = logging.getLogger('obico.server_conn')
@@ -95,6 +96,17 @@ class ServerConn:
     def get_linked_printer(self):
         resp = self.send_http_request('GET', '/api/v1/octo/printer/', raise_exception=True)
         return resp.json()['printer']
+
+
+    def post_printer_event_to_server(self, event_title, event_text, event_type='PRINTER_ERROR', event_class='ERROR', attach_snapshot=False, **kwargs):
+        files = None
+        if attach_snapshot:
+            try:
+                files = {'snapshot': capture_jpeg(self)}
+            except:
+                pass
+        data = dict(event_title=event_title, event_text=event_text, event_type=event_type, event_class=event_class, **kwargs)
+        resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=data)
 
 
     def send_http_request(

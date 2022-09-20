@@ -75,9 +75,10 @@ def set_ffmpeg_if_needed():
 
 class WebcamStreamer:
 
-    def __init__(self, app_model, sentry):
+    def __init__(self, app_model, server_conn, sentry):
         self.config = app_model.config
         self.app_model = app_model
+        self.server_conn = server_conn
         self.sentry = sentry
 
         self.ffmpeg_proc = None
@@ -94,9 +95,13 @@ class WebcamStreamer:
 
         except Exception:
             self.sentry.captureException()
+            self.server_conn.post_printer_event_to_server(
+                'moonraker-obico: Webcam Streaming Failed',
+                'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
+                event_class='WARNING',
+                info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
+            )
 
-            #TODO: sent notification to user
-            raise
 
     def ffmpeg_from_mjpeg(self):
 
@@ -107,14 +112,10 @@ class WebcamStreamer:
                 ffmpeg_test_proc = psutil.Popen('{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder).split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
                     return encoder
-            return None
+            raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
         set_ffmpeg_if_needed()
-
         encoder = h264_encoder()
-        if not encoder:
-            # TODO: notification to user
-            return
 
         webcam_config = self.config.webcam
 
