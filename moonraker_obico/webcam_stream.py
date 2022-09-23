@@ -37,21 +37,27 @@ def bitrate_for_dim(img_w, img_h):
     else:
         return 3000*1000
 
-def cpu_watch_dog(watched_process, max, interval):
+def cpu_watch_dog(watched_process, max, interval, server_conn):
 
-    def watch_process_cpu(watched_process, max, interval):
+    def watch_process_cpu(watched_process, max, interval, server_conn):
         while True:
             if not watched_process.is_running():
                 return
 
             cpu_pct = watched_process.cpu_percent(interval=None)
             if cpu_pct > max:
+                server_conn.post_printer_event_to_server(
+                    'moonraker-obico: Webcam Streaming Using Excessive CPU',
+                    'The webcam streaming uses excessive CPU. This may negatively impact your print quality, or cause webcam streaming issues.',
+                    event_class='WARNING',
+                    info_url='https://obico.io/docs/user-guides/webcam-streaming-resolution-framerate-klipper/',
+                )
 				# TODO: Send notification to user when such thing is available on moonraker
                 pass
 
             time.sleep(interval)
 
-    watch_thread = Thread(target=watch_process_cpu, args=(watched_process, max, interval))
+    watch_thread = Thread(target=watch_process_cpu, args=(watched_process, max, interval, server_conn))
     watch_thread.daemon = True
     watch_thread.start()
 
@@ -149,7 +155,7 @@ class WebcamStreamer:
         self.ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
         self.ffmpeg_proc.nice(10)
 
-        cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20)
+        cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
 
         def monitor_ffmpeg_process():  # It's pointless to restart ffmpeg without calling pi_camera.record with the new input. Just capture unexpected exits not to see if it's a big problem
             ring_buffer = deque(maxlen=50)
