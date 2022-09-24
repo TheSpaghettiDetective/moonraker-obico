@@ -22,7 +22,7 @@ if DEBUG:
     REQUEST_STATE_INTERVAL_SECONDS = 10
 
 _logger = logging.getLogger('obico.moonraker_conn')
-_ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"|"method": "notify_gcode_response"')
+_ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
 
 class MoonrakerConn:
     flow_step_timeout_msecs = 2000
