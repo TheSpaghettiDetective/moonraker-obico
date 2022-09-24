@@ -148,7 +148,7 @@ class WebcamStreamer:
         self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
 
     def start_ffmpeg(self, ffmpeg_args):
-        ffmpeg_cmd = '{} {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
+        ffmpeg_cmd = '{} -loglevel error {} -bsf dump_extra -an -f rtp rtp://{}:8004?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
@@ -156,26 +156,14 @@ class WebcamStreamer:
         self.ffmpeg_proc.nice(10)
 
         cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
-
-        def monitor_ffmpeg_process():  # It's pointless to restart ffmpeg without calling pi_camera.record with the new input. Just capture unexpected exits not to see if it's a big problem
-            ring_buffer = deque(maxlen=50)
-            while True:
-                err = to_unicode(self.ffmpeg_proc.stderr.readline(), errors='replace')
-                if not err:  # EOF when process ends?
-                    if self.shutting_down:
-                        return
-
-                    returncode = self.ffmpeg_proc.wait()
-                    msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
-                    _logger.error(msg)
-                    self.sentry.captureMessage('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
-                    return
-                else:
-                    ring_buffer.append(err)
-
-        ffmpeg_thread = Thread(target=monitor_ffmpeg_process)
-        ffmpeg_thread.daemon = True
-        ffmpeg_thread.start()
+        try:
+            returncode = self.ffmpeg_proc.wait(timeout=10) # If ffmpeg fails, it usually does so without 10s
+            (stdoutdata, stderrdata) = self.ffmpeg_proc.communicate()
+            msg = 'STDOUT:\n{}\nSTDERR:\n{}\n'.format(stdoutdata, stderrdata)
+            _logger.error(msg)
+            raise Exception('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
+        except psutil.TimeoutExpired:
+           pass
 
     def restore(self):
         self.shutting_down = True
