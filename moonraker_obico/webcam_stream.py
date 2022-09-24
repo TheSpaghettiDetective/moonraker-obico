@@ -128,15 +128,13 @@ class WebcamStreamer:
         jpg = capture_jpeg(webcam_config, force_stream_url=True)
 
         if not jpg:
-            _logger.warning('Not a valid jpeg source. Quiting ffmpeg.')
-            return
+            raise Exception('Not a valid jpeg source. Quiting ffmpeg.')
 
         (_, img_w, img_h) = get_image_info(jpg)
         stream_url = webcam_config.stream_url
 
         if not stream_url:
-            # TODO: notification to user
-            return
+            raise Exception('stream_url not configured. Unable to stream the webcam.')
 
 
         bitrate = bitrate_for_dim(img_w, img_h)
