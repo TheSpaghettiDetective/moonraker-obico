@@ -52,8 +52,6 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
                     event_class='WARNING',
                     info_url='https://obico.io/docs/user-guides/webcam-streaming-resolution-framerate-klipper/',
                 )
-				# TODO: Send notification to user when such thing is available on moonraker
-                pass
 
             time.sleep(interval)
 
