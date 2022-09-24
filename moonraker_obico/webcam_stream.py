@@ -153,7 +153,6 @@ class WebcamStreamer:
         self.ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
         self.ffmpeg_proc.nice(10)
 
-        cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
         try:
             returncode = self.ffmpeg_proc.wait(timeout=10) # If ffmpeg fails, it usually does so without 10s
             (stdoutdata, stderrdata) = self.ffmpeg_proc.communicate()
@@ -162,6 +161,29 @@ class WebcamStreamer:
             raise Exception('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
         except psutil.TimeoutExpired:
            pass
+
+        cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
+        def monitor_ffmpeg_process():
+            # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
+            ring_buffer = deque(maxlen=50)
+            while True:
+                err = to_unicode(self.ffmpeg_proc.stderr.readline(), errors='replace')
+                if not err:  # EOF when process ends?
+                    if self.shutting_down:
+                        return
+
+                    returncode = self.ffmpeg_proc.wait()
+                    msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
+                    _logger.error(msg)
+                    self.sentry.captureMessage('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
+                    return
+                else:
+                    ring_buffer.append(err)
+
+        ffmpeg_thread = Thread(target=monitor_ffmpeg_process)
+        ffmpeg_thread.daemon = True
+        ffmpeg_thread.start()
+
 
     def restore(self):
         self.shutting_down = True
