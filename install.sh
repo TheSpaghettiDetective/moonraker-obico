@@ -7,12 +7,12 @@ OBICO_DIR=$(realpath $(dirname "$0"))
 . "${OBICO_DIR}/scripts/funcs.sh"
 
 SUFFIX=""
-KLIPPER_CONF_DIR="${HOME}/klipper_config"
-MOONRAKER_CONFIG_FILE="${KLIPPER_CONF_DIR}/moonraker.conf"
+MOONRAKER_CONF_DIR="${HOME}/printer_data/config"
+MOONRAKER_CONFIG_FILE="${MOONRAKER_CONF_DIR}/moonraker.conf"
+MOONRAKER_LOG_DIR="${HOME}/printer_data/logs"
 MOONRAKER_HOST="127.0.0.1"
 MOONRAKER_PORT="7125"
 OBICO_SERVICE_NAME="moonraker-obico"
-LOG_DIR="${HOME}/klipper_logs"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
@@ -76,68 +76,53 @@ EOF
 discover_sys_settings() {
   report_status "Detecting the softwares and settings of your Klipper system ..."
 
-  if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/database/list") ; then
+  mr_config_file="${HOME}/printer_data/config/moonraker.conf"
+  mr_log_path="${HOME}/printer_data/logs"
+
+  # In case it's moonraker before https://github.com/Arksine/moonraker/pull/491
+  if [ ! -f "${mr_config_file}" -o ! -d "${mr_log_path}" ]; then
+    mr_config_file="${HOME}/klipper_config/moonraker.conf"
+    mr_log_path="${HOME}/klipper_logs"
+  fi
+
+  if [ ! -f "${mr_config_file}" -o ! -d "${mr_log_path}" ]; then
     return 1
   fi
 
+  if ! mr_port=$(${OBICO_ENV}/bin/python3 -c "import configparser; c = configparser.ConfigParser(); c.read('${mr_config_file}'); print(c['server']['port'])"); then
+    return 1
+  fi
+
+  if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${mr_port}/server/database/list") ; then
+    return 1
+  fi
+
+  toolchain_msg=""
   if echo $mr_database | grep -qi 'mainsail' ; then
-    has_mainsail=true
+    toolchain_msg="${toolchain_msg} Mainsail installed"
   fi
 
   if echo $mr_database | grep -qi 'fluidd' ; then
-    has_fluidd=true
+    toolchain_msg="${toolchain_msg} Fluidd installed"
   fi
 
-  if [ "${has_mainsail}" = true ] && [ "${has_fluidd}" = true ] ; then
-    return 1
-  fi
-
-  if ! mr_info=$(curl -s "http://${MOONRAKER_HOST}:${MOONRAKER_PORT}/server/config") ; then
-    return 1
-  fi
-
-  # It seems that config can be in either config.server or config.file_manager
-  if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.config_path') ; then
-    if ! mr_config_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.file_manager.config_path') ; then
-      return 1
-    fi
-  fi
-
-  # It seems that log_path can be in either config.server or config.file_manager
-  if ! mr_log_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.server.log_path') ; then
-    if ! mr_log_path=$(echo $mr_info | ${OBICO_ENV}/bin/python3 ${JSON_PARSE_PY} 'result.config.file_manager.log_path') ; then
-      return 1
-    fi
-  fi
-
-  eval mr_config_path="${mr_config_path}"
-  eval mr_log_path="${mr_log_path}"
-
-  mr_config_file="${mr_config_path}/moonraker.conf"
-
-  if [ ! -f "${mr_config_file}" ] ; then
-    return 1
-  fi
-
-  if [ "${has_mainsail}" = true ] ; then
-    toolchain_msg='Mainsail'
-  fi
-
-  if [ "${has_fluidd}" = true ] ; then
-    toolchain_msg='Fluidd'
+  if [ -z "${toolchain_msg}" ]; then
+    toolchain_msg=" Not detected"
   fi
 
   echo -e "The following have been detected:\n"
   echo -e "- Web Server: Moonraker"
-  echo -e "- Web Frontend: ${toolchain_msg}"
-  echo -e "- Moonraker port: ${MOONRAKER_PORT}\n"
+  echo -e "- Web Frontend:${toolchain_msg}"
+  echo -e "- Moonraker host: ${MOONRAKER_HOST}"
+  echo -e "- Moonraker port: ${mr_port}\n"
   read -p "Is this correct? [Y/n]: " -e -i "Y" correct
   echo ""
 
   if [ "${correct^^}" == "Y" ] ; then
-    KLIPPER_CONF_DIR="${mr_config_path}"
-    LOG_DIR="${mr_log_path}"
     MOONRAKER_CONFIG_FILE="${mr_config_file}"
+    MOONRAKER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
+    MOONRAKER_LOG_DIR="${mr_log_path}"
+    MOONRAKER_PORT="${mr_port}"
     return 0
   fi
   return 1
@@ -149,9 +134,9 @@ prompt_for_settings() {
   eval MOONRAKER_PORT="${user_input}"
   read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
   eval MOONRAKER_CONFIG_FILE="${user_input}"
-  KLIPPER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
-  read -p "Klipper log directory: " -e -i "${LOG_DIR}" user_input
-  eval LOG_DIR="${user_input}"
+  MOONRAKER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
+  read -p "Klipper log directory: " -e -i "${MOONRAKER_LOG_DIR}" user_input
+  eval MOONRAKER_LOG_DIR="${user_input}"
   echo ""
 }
 
@@ -407,8 +392,8 @@ if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "
     MOONRAKER_HOST="${mr_host}"
     MOONRAKER_PORT="${mr_port}"
     eval MOONRAKER_CONFIG_FILE="${mr_config}"
-    eval KLIPPER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
-    eval LOG_DIR="${log_path}"
+    eval MOONRAKER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
+    eval MOONRAKER_LOG_DIR="${log_path}"
   fi
 
 else
@@ -423,15 +408,15 @@ if [ -z "${SUFFIX}" -a "${MOONRAKER_PORT}" -ne "7125" ]; then
   SUFFIX="-${MOONRAKER_PORT}"
 fi
 
-ensure_writtable "${KLIPPER_CONF_DIR}"
+ensure_writtable "${MOONRAKER_CONF_DIR}"
 ensure_writtable "${MOONRAKER_CONFIG_FILE}"
-ensure_writtable "${LOG_DIR}"
+ensure_writtable "${MOONRAKER_LOG_DIR}"
 
-[ -z "${OBICO_CFG_FILE}" ] && OBICO_CFG_FILE="${KLIPPER_CONF_DIR}/moonraker-obico.cfg"
-OBICO_UPDATE_FILE="${KLIPPER_CONF_DIR}/moonraker-obico-update.cfg"
-OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico.log"
+[ -z "${OBICO_CFG_FILE}" ] && OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
+OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
+OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
-OBICO_LOG_FILE="${LOG_DIR}/moonraker-obico${SUFFIX}.log"
+OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico${SUFFIX}.log"
 
 if ! service_existed ; then
   recreate_service
@@ -443,7 +428,7 @@ fi
 
 recreate_update_file
 
-if "${OBICO_DIR}/scripts/migrated_from_tsd.sh" "${KLIPPER_CONF_DIR}" "${OBICO_ENV}"; then
+if "${OBICO_DIR}/scripts/migrated_from_tsd.sh" "${MOONRAKER_CONF_DIR}" "${OBICO_ENV}"; then
   exit 0
 fi
 
