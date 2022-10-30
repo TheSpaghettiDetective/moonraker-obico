@@ -4,6 +4,8 @@ import time
 import websocket
 import logging
 import threading
+import inspect
+import sys
 
 _logger = logging.getLogger('obico.ws')
 
@@ -53,7 +55,16 @@ class WebSocketClient:
             header=header,
             subprotocols=subprotocols
         )
-        wst = threading.Thread(target=self.ws.run_forever)
+
+        # Websocket-client has changed their behavior on reconnecting. The latest version allows global
+        # setting on reconnecting interval. Let's disable that behavior to make it consistent with the older version.
+
+        if sys.version_info >= (3, 0):
+            run_forever_kwargs = {'reconnect': 0} if 'reconnect' in inspect.getfullargspec(websocket.WebSocketApp.run_forever).args else {}
+        else:
+            run_forever_kwargs = {'reconnect': 0} if 'reconnect' in inspect.getargspec(websocket.WebSocketApp.run_forever) else {}
+
+        wst = threading.Thread(target=self.ws.run_forever, kwargs=run_forever_kwargs)
         wst.daemon = True
         wst.start()
 
