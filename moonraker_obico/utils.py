@@ -30,7 +30,7 @@ DEBUG = os.environ.get('DEBUG')
 
 class ExpoBackoff:
 
-    def __init__(self, max_seconds, max_attempts=3):
+    def __init__(self, max_seconds, max_attempts=0):
         self.attempts = 0
         self.max_seconds = max_seconds
         self.max_attempts = max_attempts
@@ -40,25 +40,17 @@ class ExpoBackoff:
 
     def more(self, e):
         self.attempts += 1
-        if (
-            self.max_attempts is not None and
-            self.attempts >= self.max_attempts
-        ):
-            _logger.error('giving up on error: %s' % (e))
+        if self.max_attempts > 0 and self.attempts > self.max_attempts:
+            _logger.error('Giving up after %d attempts on error: %s' % (self.attempts, e))
             raise e
         else:
-            delay = self.get_delay(self.attempts, self.max_seconds)
-            _logger.error('backing off %f seconds: %s' % (delay, e))
+            delay = 2 ** (self.attempts-3)
+            if delay > self.max_seconds:
+                delay = self.max_seconds
+            delay *= 0.5 + random.random()
+            _logger.error('Attempt %d - backing off %f seconds: %s' % (self.attempts, delay, e))
 
             time.sleep(delay)
-
-    @classmethod
-    def get_delay(cls, attempts, max_seconds):
-        delay = 2 ** (attempts - 3)
-        if delay > max_seconds:
-            delay = max_seconds
-        delay *= 0.5 + random.random()
-        return delay
 
 
 class SentryWrapper:
