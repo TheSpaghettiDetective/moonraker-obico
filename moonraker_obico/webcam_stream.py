@@ -8,6 +8,7 @@ import sys
 from collections import deque
 from threading import Thread
 import psutil
+import backoff
 
 
 from .utils import get_image_info, pi_version, to_unicode
