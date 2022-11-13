@@ -109,6 +109,11 @@ class WebcamStreamer:
 
     def ffmpeg_from_mjpeg(self):
 
+        @backoff.on_exception(backoff.expo, Exception, max_tries=100)
+        @backoff.on_predicate(backoff.expo, max_tries=100)
+        def retry_capture_jpeg(webcam_config):
+            return capture_jpeg(webcam_config, force_stream_url=True)
+
         def h264_encoder():
             test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
             FNULL = open(os.devnull, 'w')
@@ -123,7 +128,7 @@ class WebcamStreamer:
 
         webcam_config = self.config.webcam
 
-        jpg = capture_jpeg(webcam_config, force_stream_url=True)
+        jpg = retry_capture_jpeg(webcam_config)
 
         if not jpg:
             raise Exception('Not a valid jpeg source. Quiting ffmpeg.')
