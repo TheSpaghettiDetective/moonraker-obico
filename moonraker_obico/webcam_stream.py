@@ -10,7 +10,6 @@ from threading import Thread
 import psutil
 import backoff
 
-
 from .utils import get_image_info, pi_version, to_unicode
 from .janus import JANUS_SERVER
 from .webcam_capture import capture_jpeg
@@ -110,10 +109,13 @@ class WebcamStreamer:
 
     def ffmpeg_from_mjpeg(self):
 
-        @backoff.on_exception(backoff.expo, Exception, max_tries=100)
-        @backoff.on_predicate(backoff.expo, max_tries=100)
-        def retry_capture_jpeg(webcam_config):
-            return capture_jpeg(webcam_config, force_stream_url=True)
+        @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
+        def get_webcam_resolution(webcam_config):
+            jpg = capture_jpeg(webcam_config, force_stream_url=True)
+            if not jpg:
+                raise Exception('Not a valid jpeg source. Quiting ffmpeg.')
+
+            return get_image_info(jpg)
 
         def h264_encoder():
             test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
@@ -129,12 +131,8 @@ class WebcamStreamer:
 
         webcam_config = self.config.webcam
 
-        jpg = retry_capture_jpeg(webcam_config)
+        (_, img_w, img_h) = get_webcam_resolution(webcam_config)
 
-        if not jpg:
-            raise Exception('Not a valid jpeg source. Quiting ffmpeg.')
-
-        (_, img_w, img_h) = get_image_info(jpg)
         stream_url = webcam_config.stream_url
 
         if not stream_url:
