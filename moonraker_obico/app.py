@@ -240,21 +240,21 @@ class App(object):
             self._received_klippy_update(event.data['result'])
 
 
-    def _download_and_print(self, gcode_file):
+    def _download_and_print(self, g_code_file):
         _logger.info(
-            f'downloading from {gcode_file["url"]}')
+            f'downloading from {g_code_file["url"]}')
 
-        safe_filename = sanitize_filename(gcode_file['safe_filename'])
+        safe_filename = sanitize_filename(g_code_file['safe_filename'])
         path = self.model.config.server.upload_dir
 
         r = requests.get(
-            gcode_file['url'],
+            g_code_file['url'],
             allow_redirects=True,
             timeout=60 * 30
         )
         r.raise_for_status()
 
-        self.model.printer_state.set_obico_gcode_file({'id': gcode_file['id']})
+        self.model.printer_state.set_obico_g_code_file({'id': g_code_file['id']})
 
         try:
             _logger.info(f'uploading "{safe_filename}" to moonraker')
@@ -270,7 +270,7 @@ class App(object):
             _logger.info(
                 f'uploading "{safe_filename}" finished.')
         except:
-            self.model.printer_state.set_obico_gcode_file(None)
+            self.model.printer_state.set_obico_g_code_file(None)
             _logger.error(f'Failed uploading "{safe_filename}" to moonraker')
 
 
@@ -397,7 +397,7 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == ('file_downloader', 'download'):
-                ret_value = self._process_download_message(gcode_file=args[0])
+                ret_value = self._process_download_message(g_code_file=args[0])
 
             elif target == ('_printer', 'jog'):
                 ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
@@ -414,18 +414,18 @@ class App(object):
         if msg.get('janus') and self.janus:
             self.janus.pass_to_janus(msg.get('janus'))
 
-    def _process_download_message(self, gcode_file: Dict) -> None:
-        if self.model.printer_state.get_obico_gcode_file() or self.model.printer_state.is_printing():
+    def _process_download_message(self, g_code_file: Dict) -> None:
+        if self.model.printer_state.get_obico_g_code_file() or self.model.printer_state.is_printing():
             return {'error': 'Currently downloading or printing!'}
 
         thread = threading.Thread(
             target=self._download_and_print,
-            args=(gcode_file, )
+            args=(g_code_file, )
         )
         thread.daemon = True
         thread.start()
 
-        return {'target_path': gcode_file['filename']}
+        return {'target_path': g_code_file['filename']}
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
         if not self.moonrakerconn:
