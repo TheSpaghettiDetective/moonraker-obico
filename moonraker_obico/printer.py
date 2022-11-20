@@ -13,6 +13,13 @@ class PrinterState:
     STATE_PRINTING = 'Printing'
     STATE_PAUSED = 'Paused'
 
+    EVENT_STARTED = 'PrintStarted'
+    EVENT_RESUMED = 'PrintResumed'
+    EVENT_PAUSED = 'PrintPaused'
+    EVENT_CANCELLED = 'PrintCancelled'
+    EVENT_DONE = 'PrintDone'
+    EVENT_FAILED = 'PrintFailed'
+
     ACTIVE_STATES = [STATE_PRINTING, STATE_PAUSED]
 
     def __init__(self, app_config: Config):
@@ -20,6 +27,7 @@ class PrinterState:
         self.app_config = app_config
         self.status = {}
         self.current_print_ts = None
+        self.obico_gcode_file = None
 
     def has_active_job(self) -> bool:
         return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
@@ -40,7 +48,18 @@ class PrinterState:
         with self._mutex:
             old_current_print_ts = self.current_print_ts
             self.current_print_ts = new_current_print_ts
+            if self.current_print_ts == -1:
+                self.set_obico_gcode_file(None)
+
         return old_current_print_ts
+
+    def set_obico_gcode_file(self, obico_gcode_file):
+        with self._mutex:
+            self.obico_gcode_file = obico_gcode_file
+
+    def get_obico_gcode_file(self):
+        with self._mutex:
+            return self.obico_gcode_file
 
     @classmethod
     def get_state_from_status(cls, data: Dict) -> str:
@@ -139,6 +158,7 @@ class PrinterState:
                         'name': filename,
                         'path': filepath,
                         'display': file_display_name,
+                        'obico_gcode_file_id': (self.get_obico_gcode_file() or {}).get('id'),
                     },
                     'estimatedPrintTime': None,
                     'filament': {'length': None, 'volume': None},

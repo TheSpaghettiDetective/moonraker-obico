@@ -43,7 +43,6 @@ class App(object):
         linked_printer: Dict
         printer_state: PrinterState
         seen_refs: collections.deque
-        downloading_gcode_file: bool = False
 
         def is_configured(self):
             return True  # FIXME
@@ -242,12 +241,10 @@ class App(object):
 
 
     def _download_and_print(self, gcode_file):
-        filename = gcode_file['filename']
-
         _logger.info(
-            f'downloading "{filename}" from {gcode_file["url"]}')
+            f'downloading from {gcode_file["url"]}')
 
-        safe_filename = sanitize_filename(filename)
+        safe_filename = sanitize_filename(gcode_file['safe_filename'])
         path = self.model.config.server.upload_dir
 
         r = requests.get(
@@ -257,20 +254,24 @@ class App(object):
         )
         r.raise_for_status()
 
-        self.model.downloading_gcode_file = False
+        self.model.printer_state.set_obico_gcode_file({'id': gcode_file['id']})
 
-        _logger.info(f'uploading "{filename}" to moonraker')
-        resp_data = self.moonrakerconn.api_post(
-                'server/files/upload',
-                filename=filename,
-                fileobj=r.content,
-                path=path,
-                print='true',
-        )
+        try:
+            _logger.info(f'uploading "{safe_filename}" to moonraker')
+            resp_data = self.moonrakerconn.api_post(
+                    'server/files/upload',
+                    filename=safe_filename,
+                    fileobj=r.content,
+                    path=path,
+                    print='true',
+            )
 
-        _logger.debug(f'upload response: {resp_data}')
-        _logger.info(
-            f'uploading "{filename}" finished.')
+            _logger.debug(f'upload response: {resp_data}')
+            _logger.info(
+                f'uploading "{safe_filename}" finished.')
+        except:
+            self.model.printer_state.set_obico_gcode_file(None)
+            _logger.error(f'Failed uploading "{safe_filename}" to moonraker')
 
 
     def find_current_print_ts(self, cur_status):
@@ -284,9 +285,10 @@ class App(object):
     def post_print_event(self, print_event):
         ts = self.model.printer_state.current_print_ts
         if ts == -1:
-            _logger.error('current_print_ts is -1 on a print_event, which is not supposed to happen.')
+            raise Exception('current_print_ts is -1 on a print_event, which is not supposed to happen.')
 
         _logger.info(f'print event: {print_event} ({ts})')
+
         self.server_conn.post_status_update_to_server(print_event=print_event)
 
 
@@ -320,28 +322,28 @@ class App(object):
 
         if cur_state == PrinterState.STATE_PRINTING:
             if prev_state == PrinterState.STATE_PAUSED:
-                self.post_print_event('PrintResumed')
+                self.post_print_event(PrinterState.EVENT_RESUMED)
                 return
             if prev_state == PrinterState.STATE_OPERATIONAL:
                 printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
-                self.post_print_event('PrintStarted')
+                self.post_print_event(PrinterState.EVENT_STARTED)
                 return
 
         if cur_state == PrinterState.STATE_PAUSED and prev_state == PrinterState.STATE_PRINTING:
-            self.post_print_event('PrintPaused')
+            self.post_print_event(PrinterState.EVENT_PAUSED)
             return
 
         if cur_state == PrinterState.STATE_OPERATIONAL and prev_state in PrinterState.ACTIVE_STATES:
                 _state = data['status'].get('print_stats', {}).get('state')
                 if _state == 'cancelled':
-                    self.post_print_event('PrintCancelled')
+                    self.post_print_event(PrinterState.EVENT_CANCELLED)
                     # PrintFailed as well to be consistent with OctoPrint
                     time.sleep(0.5)
-                    self.post_print_event('PrintFailed')
+                    self.post_print_event(PrinterState.EVENT_FAILED)
                 elif _state == 'complete':
-                    self.post_print_event('PrintDone')
+                    self.post_print_event(PrinterState.EVENT_DONE)
                 elif _state == 'error':
-                    self.post_print_event('PrintFailed')
+                    self.post_print_event(PrinterState.EVENT_FAILED)
                 else:
                     # FIXME
                     _logger.error(
@@ -395,7 +397,7 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == ('file_downloader', 'download'):
-                ret_value = self._process_download_message(ack_ref, gcode_file=args[0])
+                ret_value = self._process_download_message(gcode_file=args[0])
 
             elif target == ('_printer', 'jog'):
                 ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
@@ -412,23 +414,18 @@ class App(object):
         if msg.get('janus') and self.janus:
             self.janus.pass_to_janus(msg.get('janus'))
 
-    def _process_download_message(self, ack_ref: str, gcode_file: Dict) -> None:
-        if (
-            not self.model.downloading_gcode_file and
-            not self.model.printer_state.is_printing()
-        ):
-
-            thread = threading.Thread(
-                target=self._download_and_print,
-                args=(gcode_file, )
-            )
-            thread.daemon = True
-            thread.start()
-
-            self.model.downloading_gcode_file = True
-            return {'target_path': gcode_file['filename']}
-        else:
+    def _process_download_message(self, gcode_file: Dict) -> None:
+        if self.model.printer_state.get_obico_gcode_file() or self.model.printer_state.is_printing():
             return {'error': 'Currently downloading or printing!'}
+
+        thread = threading.Thread(
+            target=self._download_and_print,
+            args=(gcode_file, )
+        )
+        thread.daemon = True
+        thread.start()
+
+        return {'target_path': gcode_file['filename']}
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
         if not self.moonrakerconn:
