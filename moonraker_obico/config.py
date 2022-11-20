@@ -76,11 +76,11 @@ class WebcamConfig:
 
     @property
     def flip_h(self):
-        return self.webcam_config_section.getboolean('flip_h') or self.moonraker_webcam_config.get('flip_h')
+        return self.webcam_config_section.getboolean('flip_h') if 'flip_h' in self.webcam_config_section else self.moonraker_webcam_config.get('flip_h')
 
     @property
     def flip_v(self):
-        return self.webcam_config_section.getboolean('flip_v') or self.moonraker_webcam_config.get('flip_v')
+        return self.webcam_config_section.getboolean('flip_v') if 'flip_v' in self.webcam_config_section else self.moonraker_webcam_config.get('flip_v')
 
     @property
     def rotate_90(self):
