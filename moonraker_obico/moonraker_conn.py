@@ -62,12 +62,12 @@ class MoonrakerConn:
 
         return resp.json().get('result')
 
-    def api_post(self, mr_method, filename=None, fileobj=None, **post_params):
+    def api_post(self, mr_method, multipart_filename=None, multipart_fileobj=None, **post_params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
         _logger.debug(f'POST {url}')
 
         headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
-        files={'file': (filename, fileobj, 'application/octet-stream')} if filename and fileobj else None
+        files={'file': (multipart_filename, multipart_fileobj, 'application/octet-stream')} if multipart_filename and multipart_fileobj else None
         resp = requests.post(
             url,
             headers=headers,

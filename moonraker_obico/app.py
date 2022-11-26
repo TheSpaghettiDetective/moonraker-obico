@@ -12,6 +12,7 @@ import json
 import re
 import signal
 import backoff
+import pathlib
 
 import requests  # type: ignore
 
@@ -241,12 +242,11 @@ class App(object):
 
 
     def _download_and_print(self, g_code_file):
+
         _logger.info(
             f'downloading from {g_code_file["url"]}')
 
         safe_filename = sanitize_filename(g_code_file['safe_filename'])
-        path = self.model.config.server.upload_dir
-
         r = requests.get(
             g_code_file['url'],
             allow_redirects=True,
@@ -254,24 +254,34 @@ class App(object):
         )
         r.raise_for_status()
 
-        self.model.printer_state.set_obico_g_code_file({'id': g_code_file['id']})
-
         try:
             _logger.info(f'uploading "{safe_filename}" to moonraker')
             resp_data = self.moonrakerconn.api_post(
-                    'server/files/upload',
-                    filename=safe_filename,
-                    fileobj=r.content,
-                    path=path,
-                    print='true',
+                'server/files/upload',
+                multipart_filename=safe_filename,
+                multipart_fileobj=r.content,
+                path=self.model.config.server.upload_dir,
             )
-
             _logger.debug(f'upload response: {resp_data}')
+
+            filepath_on_mr = resp_data['item']['path']
+            file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath_on_mr)
+            basename = pathlib.Path(filepath_on_mr).name  # filename in the response is actually the relative path
+            g_code_data = dict(
+                safe_filename=basename,
+                agent_signature='ts:{}'.format(file_metadata['modified'])
+                )
+
+            resp = self.server_conn.send_http_request('PATCH', '/api/v1/octo/g_code_files/{}/'.format(g_code_file['id']), timeout=60, data=g_code_data, raise_exception=True)
+
             _logger.info(
                 f'uploading "{safe_filename}" finished.')
+
+            # Print start call needs to happen after PATCH /api/v1/octo/g_code_files/{}/ is called so that the file can be properly matched to the server record at the moment of PrintStarted Event
+            resp_data = self.moonrakerconn.api_post('printer/print/start', filename=filepath_on_mr)
         except:
-            self.model.printer_state.set_obico_g_code_file(None)
-            _logger.error(f'Failed uploading "{safe_filename}" to moonraker')
+            self.model.printer_state.set_obico_g_code_file_id(None)
+            self.sentry.captureException()
 
 
     def find_current_print_ts(self, cur_status):
@@ -281,6 +291,22 @@ class App(object):
         else:
             _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
             return None
+
+
+    def find_obico_g_code_file_id(self, cur_status):
+        filename = cur_status.get('print_stats', {}).get('filename')
+        file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filename)
+
+        basename = pathlib.Path(filename).name if filename else None  # filename in the response is actually the relative path
+        g_code_data = dict(
+            filename=basename,
+            safe_filename=basename,
+            num_bytes=file_metadata['size'],
+            agent_signature='ts:{}'.format(file_metadata['modified'])
+            )
+        resp = self.server_conn.send_http_request('POST', '/api/v1/octo/g_code_files/', timeout=60, data=g_code_data, raise_exception=True)
+        return resp.json()['id']
+
 
     def post_print_event(self, print_event):
         ts = self.model.printer_state.current_print_ts
@@ -326,6 +352,7 @@ class App(object):
                 return
             if prev_state == PrinterState.STATE_OPERATIONAL:
                 printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
+                printer_state.set_obico_g_code_file_id(self.find_obico_g_code_file_id(printer_state.status))
                 self.post_print_event(PrinterState.EVENT_STARTED)
                 return
 
@@ -415,8 +442,11 @@ class App(object):
             self.janus.pass_to_janus(msg.get('janus'))
 
     def _process_download_message(self, g_code_file: Dict) -> None:
-        if self.model.printer_state.get_obico_g_code_file() or self.model.printer_state.is_printing():
+        if self.model.printer_state.get_obico_g_code_file_id() or self.model.printer_state.is_printing():
             return {'error': 'Currently downloading or printing!'}
+
+        # printer_state.obico_g_code_file_id is used as a latch to prevent double-clicking
+        self.model.printer_state.set_obico_g_code_file_id(g_code_file['id'])
 
         thread = threading.Thread(
             target=self._download_and_print,
