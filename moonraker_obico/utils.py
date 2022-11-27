@@ -107,21 +107,6 @@ class SentryWrapper:
             sentry_sdk.capture_message(*args, **kwargs)
 
 
-def pi_version():
-    try:
-        with open(
-            '/sys/firmware/devicetree/base/model', 'r'
-        ) as firmware_model:
-            model = re.search('Raspberry Pi(.*)',
-                              firmware_model.read()).group(1)
-            if model:
-                return "0" if re.search('Zero', model, re.IGNORECASE) else "3"
-            else:
-                return None
-    except Exception:
-        return None
-
-
 system_tags = None
 tags_mutex = threading.RLock()
 
