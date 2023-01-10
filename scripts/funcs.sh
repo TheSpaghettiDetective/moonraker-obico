@@ -1,5 +1,7 @@
 #!/bin/bash
 
+DEBUG="n"
+
 green=$(echo -en "\e[92m")
 yellow=$(echo -en "\e[93m")
 magenta=$(echo -en "\e[35m")
@@ -19,7 +21,13 @@ ensure_venv() {
 }
 
 report_status() {
-  echo -e "${magenta}###### $1\n${default}"
+  echo -e "${magenta}###### $*\n${default}"
+}
+
+debug() {
+  if [ $DEBUG = "y" ]; then
+    echo -e "DEBUG: ${magenta}###### $*${default}"
+  fi
 }
 
 banner() {

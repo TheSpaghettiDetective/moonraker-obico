@@ -23,6 +23,7 @@ Global options:
           -c   The path to the moonraker-obico.cfg file
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
           -q   Keep quiet
+          -d   Show debugging info
 EOF
 }
 
@@ -43,6 +44,7 @@ EOF
 
   export OBICO_ENV # Expose OBICO_ENV to link.py so that it can print out the debugging command.
 
+  debug Running... PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
   if ! PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"; then
     return 1
   fi
@@ -101,12 +103,13 @@ EOF
   fi
 }
 
-while getopts "hqc:n:" arg; do
+while getopts "hqc:n:d" arg; do
     case $arg in
         h) usage && exit 0;;
         c) OBICO_CFG_FILE=${OPTARG};;
         n) SUFFIX="-${OPTARG}";;
         q) KEEP_QUIET="y";;
+        d) DEBUG="y";;
         *) usage && exit 1;;
     esac
 done

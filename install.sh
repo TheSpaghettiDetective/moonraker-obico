@@ -34,6 +34,7 @@ Global options:
           -s   Recreate the system service even if one already existed
           -L   Skip the step to link to the Obico server.
           -u   Show uninstallation instructions
+          -d   Show debugging info
 
 Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
@@ -149,6 +150,7 @@ ensure_deps() {
 
   echo -e ""
   ensure_venv
+  debug Running... "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
   "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
   echo ""
 }
@@ -191,6 +193,8 @@ EOF
     echo ""
     OBICO_SERVER="${user_input}"
   fi
+
+  debug OBICO_SERVER: ${OBICO_SERVER}
 
   report_status "Creating config file ${OBICO_CFG_FILE} ..."
   cat <<EOF > "${OBICO_CFG_FILE}"
@@ -357,7 +361,7 @@ trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
-while getopts "hc:n:H:p:C:l:S:fLus" arg; do
+while getopts "hn:H:p:C:l:S:fLusd" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -369,6 +373,7 @@ while getopts "hc:n:H:p:C:l:S:fLus" arg; do
         f) OVERWRITE_CONFIG="y";;
         s) RECREATE_SERVICE="y";;
         L) SKIP_LINKING="y";;
+        d) DEBUG="y";;
         u) uninstall ;;
         *) usage && exit 1;;
     esac
@@ -402,11 +407,16 @@ else
     prompt_for_settings
   fi
 
+  debug MOONRAKER_CONFIG_FILE: "${MOONRAKER_CONFIG_FILE}"
+  debug MOONRAKER_CONF_DIR: "${MOONRAKER_CONF_DIR}"
+  debug MOONRAKER_LOG_DIR: "${MOONRAKER_LOG_DIR}"
+  debug MOONRAKER_PORT: "${MOONRAKER_PORT}"
 fi
 
 if [ -z "${SUFFIX}" -a "${MOONRAKER_PORT}" -ne "7125" ]; then
   SUFFIX="-${MOONRAKER_PORT}"
 fi
+debug SUFFIX: "${SUFFIX}"
 
 ensure_writtable "${MOONRAKER_CONF_DIR}"
 ensure_writtable "${MOONRAKER_CONFIG_FILE}"
@@ -436,5 +446,6 @@ trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
+  debug Running... "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n \"${SUFFIX:1}\"
   "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"
 fi
