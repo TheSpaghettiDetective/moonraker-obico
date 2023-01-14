@@ -11,7 +11,8 @@ import backoff
 import json
 import bson
 import websocket
-from collections import deque
+from random import randrange
+from collections import deque, OrderedDict
 
 from .utils import DEBUG
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -30,7 +31,6 @@ class MoonrakerConn:
 
     def __init__(self, app_config, sentry, on_event):
         self.id: str = 'moonrakerconn'
-        self._next_id: int = 0
         self.app_config: Config = app_config
         self.config: MoonrakerConfig = app_config.moonraker
         self.klippy_ready = threading.Event()  # Based on https://moonraker.readthedocs.io/en/latest/web_api/#websocket-setup
@@ -41,7 +41,8 @@ class MoonrakerConn:
         self.conn = None
         self.ws_message_queue_to_moonraker = queue.Queue(maxsize=16)
         self.moonraker_state_requested_ts = 0
-        self.status_update_request_ids = deque(maxlen=25)  # contains "last" 25 status_update_request_ids
+        self.request_callbacks = OrderedDict()
+        self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
 
     ## REST API part
 
@@ -190,10 +191,16 @@ class MoonrakerConn:
             data = json.loads(raw)
             _logger.debug(f'Received from Moonraker: {data}')
 
-            if data.get('id', -1) in self.status_update_request_ids and 'result' in data:
-                self.push_event(
-                    Event(sender=self.id, name='status_update', data=data)
-                )
+            callback = None
+
+            with self.request_callbacks_lock:
+                resp_id = data.get('id', -1)
+                if resp_id in self.request_callbacks:
+                    callback = self.request_callbacks[resp_id]
+                    del self.request_callbacks[resp_id]
+
+            if callback:
+                callback(data)
                 return
 
             self.push_event(
@@ -229,10 +236,6 @@ class MoonrakerConn:
                 _logger.warning(e)
                 self.sentry.captureException()
 
-    def next_id(self) -> int:
-        next_id = self._next_id = self._next_id + 1
-        return next_id
-
     def push_event(self, event):
         if self.shutdown:
             return
@@ -244,8 +247,8 @@ class MoonrakerConn:
         if not self.conn:
             self.conn.close()
 
-    def _jsonrpc_request(self, method, **params):
-        next_id = self.next_id()
+    def jsonrpc_request(self, method, params=None, callback=None):
+        next_id = randrange(100000)
         payload = {
             "jsonrpc": "2.0",
             "method": method,
@@ -255,12 +258,17 @@ class MoonrakerConn:
         if params:
             payload['params'] = params
 
+        if callback:
+            with self.request_callbacks_lock:
+                if len(self.request_callbacks) > 100:
+                    self.request_callbacks.popitem(last=False)
+                self.request_callbacks[next_id] = callback
+
         try:
             self.ws_message_queue_to_moonraker.put_nowait(payload)
         except queue.Full:
             _logger.warning("Moonraker message queue is full, msg dropped")
 
-        return next_id
 
     def request_subscribe(self, objects=None):
         objects = objects if objects else {
@@ -268,9 +276,14 @@ class MoonrakerConn:
             'webhooks': ('state', 'state_message'),
             'history': None,
         }
-        return self._jsonrpc_request('printer.objects.subscribe', objects=objects)
+        return self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=objects))
 
     def request_status_update(self, objects=None):
+        def status_update_callback(data):
+            self.push_event(
+                Event(sender=self.id, name='status_update', data=data)
+            )
+
         self.moonraker_state_requested_ts = time.time()
 
         if objects is None:
@@ -288,16 +301,16 @@ class MoonrakerConn:
             for heater in (self.app_config.all_mr_heaters()):
                 objects[heater] = None
 
-        self.status_update_request_ids.append(self._jsonrpc_request('printer.objects.query', objects=objects))
+        self.jsonrpc_request('printer.objects.query', params=dict(objects=objects), callback=status_update_callback)
 
     def request_pause(self):
-        return self._jsonrpc_request('printer.print.pause')
+        return self.jsonrpc_request('printer.print.pause')
 
     def request_cancel(self):
-        return self._jsonrpc_request('printer.print.cancel')
+        return self.jsonrpc_request('printer.print.cancel')
 
     def request_resume(self):
-        return self._jsonrpc_request('printer.print.resume')
+        return self.jsonrpc_request('printer.print.resume')
 
     def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
         # TODO check axes
@@ -316,18 +329,18 @@ class MoonrakerConn:
             commands.append("G90")
 
         script = "\n".join(commands)
-        return self._jsonrpc_request('printer.gcode.script', script=script)
+        return self.jsonrpc_request('printer.gcode.script', params=dict(script=script))
 
     def request_home(self, axes) -> Dict:
         # TODO check axes
         script = "G28 %s" % " ".join(
             map(lambda x: "%s0" % x.upper(), axes)
         )
-        return self._jsonrpc_request('printer.gcode.script', script=script)
+        return self.jsonrpc_request('printer.gcode.script', params=dict(script=script))
 
     def request_set_temperature(self, heater, target_temp) -> Dict:
         script = f'SET_HEATER_TEMPERATURE HEATER={heater} TARGET={target_temp}'
-        return self._jsonrpc_request('printer.gcode.script', script=script)
+        return self.jsonrpc_request('printer.gcode.script', params=dict(script=script))
 
 
 @dataclasses.dataclass
