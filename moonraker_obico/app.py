@@ -410,9 +410,13 @@ class App(object):
 
         if 'passthru' in msg:
             passthru = msg['passthru']
-            target = (passthru.get('target'), passthru.get('func'))
+            target = passthru.get('target')
+            func = passthru.get('func')
             args = passthru.get('args', ())
+            kwargs = passthru.get('kwargs', {})
             ack_ref = passthru.get('ref')
+            ret_value = None
+            error = None
 
             if ack_ref is not None:
                 # same msg may arrive through both ws and datachannel
@@ -423,20 +427,33 @@ class App(object):
                 # as deque manages that when maxlen is set
                 self.model.seen_refs.append(ack_ref)
 
-            if target == ('file_downloader', 'download'):
+            if target == 'file_downloader':
                 ret_value = self._process_download_message(g_code_file=args[0])
 
-            elif target == ('_printer', 'jog'):
-                ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
+            elif target == '_printer':
+                if func == 'jog':
+                    ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
+                elif func == 'home':
+                    ret_value = self._process_home_message(ack_ref, axes=args[0])
+                elif func == 'set_temperature':
+                    ret_value = self._process_set_temperature_message(ack_ref, heater=args[0], target_temp=args[1])
 
-            elif target == ('_printer', 'home'):
-                ret_value = self._process_home_message(ack_ref, axes=args[0])
+            elif target == 'moonraker_api':
+                verb = kwargs.pop('verb', 'get')
+                api_proxy = getattr(self.moonrakerconn, f'api_{verb.lower()}', None)
 
-            elif target == ('_printer', 'set_temperature'):
-                ret_value = self._process_set_temperature_message(ack_ref, heater=args[0], target_temp=args[1])
+                try:
+                    ret_value = api_proxy(func, **kwargs)
+                except Exception as e:
+                    error = 'Error in calling "{}" - "{}"'.format(func, verb)
 
             if ack_ref is not None:
-                self.server_conn.send_ws_msg_to_server({'passthru': {'ref': ack_ref, 'ret': ret_value}})
+                if error:
+                    resp = {'ref': ack_ref, 'error': error}
+                else:
+                    resp = {'ref': ack_ref, 'ret': ret_value}
+
+                self.server_conn.send_ws_msg_to_server({'passthru': resp})
 
         if msg.get('janus') and self.janus:
             self.janus.pass_to_janus(msg.get('janus'))
