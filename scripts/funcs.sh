@@ -10,8 +10,8 @@ cyan=$(echo -en "\e[96m")
 default=$(echo -en "\e[39m")
 
 ensure_venv() {
-  if [ -f "${HOME}/moonraker-env/bin/activate" ] ; then
-    OBICO_ENV="${HOME}/moonraker-env"
+  if [ -f "${HOME}/moonraker-obico-env/bin/activate" ] ; then
+    OBICO_ENV="${HOME}/moonraker-obico-env"
   else
     OBICO_ENV="${HOME}/moonraker-obico-env"
     report_status "Creating python virtual environment for moonraker-obico..."
