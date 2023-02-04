@@ -17,7 +17,6 @@ OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
 JSON_PARSE_PY="/tmp/json_parse.py"
 OVERWRITE_CONFIG="n"
-RECREATE_SERVICE="n"
 SKIP_LINKING="n"
 
 usage() {
@@ -31,7 +30,6 @@ Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended
 
 Global options:
           -f   Reset moonraker-obico config file, including removing the linked printer
-          -s   Recreate the system service even if one already existed
           -L   Skip the step to link to the Obico server.
           -u   Show uninstallation instructions
           -d   Show debugging info
@@ -225,21 +223,9 @@ path = ${OBICO_LOG_FILE}
 EOF
 }
 
-service_existed() {
-  if [ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]; then
-    if [ $RECREATE_SERVICE = "y" ]; then
-      report_status "Stopping ${OBICO_SERVICE_NAME}..."
-      sudo systemctl stop "${OBICO_SERVICE_NAME}"
-      return 1
-    else
-      return 0
-    fi
-  else
-    return 1
-  fi
-}
-
 recreate_service() {
+  sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
+
   report_status "Creating moonraker-obico systemctl service... You may need to enter password to run sudo."
   sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}.service" <<EOF
 #Systemd service file for moonraker-obico
@@ -261,8 +247,6 @@ EOF
 
   sudo systemctl enable "${OBICO_SERVICE_NAME}"
   sudo systemctl daemon-reload
-  echo ""
-  report_status "${OBICO_SERVICE_NAME} service created and enabled."
   report_status "Launching ${OBICO_SERVICE_NAME} service..."
   sudo systemctl start "${OBICO_SERVICE_NAME}"
 }
@@ -361,7 +345,7 @@ trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
-while getopts "hn:H:p:C:l:S:fLusd" arg; do
+while getopts "hn:H:p:C:l:S:fLud" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -371,7 +355,6 @@ while getopts "hn:H:p:C:l:S:fLusd" arg; do
         n) SUFFIX="-${OPTARG}";;
         S) OBICO_SERVER="${OPTARG}";;
         f) OVERWRITE_CONFIG="y";;
-        s) RECREATE_SERVICE="y";;
         L) SKIP_LINKING="y";;
         d) DEBUG="y";;
         u) uninstall ;;
@@ -428,14 +411,11 @@ OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
 OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico${SUFFIX}.log"
 
-if ! service_existed ; then
-  recreate_service
-fi
-
 if ! cfg_existed ; then
   create_config
 fi
 
+recreate_service
 recreate_update_file
 
 if "${OBICO_DIR}/scripts/migrated_from_tsd.sh" "${MOONRAKER_CONF_DIR}" "${OBICO_ENV}"; then

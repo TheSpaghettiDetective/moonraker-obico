@@ -30,7 +30,8 @@ This is a Moonraker plugin that enables the Klipper-based 3D printers to connect
     cd ~
     git clone https://github.com/TheSpaghettiDetective/moonraker-obico.git
     cd moonraker-obico
-    source ~/moonraker-env/bin/activate
+    virtualenv -p /usr/bin/python3 --system-site-packages ~/moonraker-obico-env
+    source ~/moonraker-obico-env/bin/activate
     pip3 install -r requirements.txt
 
     # fill in essential configuration
