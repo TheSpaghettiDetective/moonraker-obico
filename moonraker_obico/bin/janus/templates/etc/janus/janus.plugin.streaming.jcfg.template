@@ -133,24 +133,25 @@ general: {
 # example of how to create a simple H.264 mountpoint: you can feed it via
 # an x264enc+rtph264pay pipeline in gstreamer, an ffmpeg script or other.
 #
-h264-sample: {
+h264-video: {
 	type = "rtp"
-	#id = 10
-	description = "H.264 live stream coming from gstreamer"
+	id = __DEFAULT_CHANNEL_ID__
+	description = "h264-video"
+	enabled = __VIDEO_ENABLED__
 	audio = false
 	audioiface = "127.0.0.1"
-	video = {VIDEO_ENABLED}
-	videoport = 8004
-	videortcpport = 8005
+	video = __VIDEO_ENABLED__
+	videoport = 17734
+	videortcpport = 17735
 	videoiface = "127.0.0.1"
 	videopt = 96
 	videortpmap = "H264/90000"
 	videofmtp = "profile-level-id=42e01f;packetization-mode=1"
-	data = true
-	dataport = 8009
-	datatype = "binary"
-	dataiface = "127.0.0.1"
-	databuffermsg = false
+        data = true
+	dataport = 17739
+        datatype = "binary"
+        dataiface = "127.0.0.1"
+        databuffermsg = false
 }
 
 #
@@ -162,15 +163,19 @@ h264-sample: {
 # Notice that the 'rtp' type just indicates this is a live mountpoint:
 # datachannel messages will be sent as usual, and not use RTP at all.
 #
-#data-example: {
-	#type = "rtp"
-	#id = 15
-	#description = "Datachannel stream from an UDP source"
-	#audio = false
-	#video = false
-	#data = true
-	#dataport = 5008
-#}
+
+mjpeg-data: {
+	type = "rtp"
+	id = 2
+	description = "mjpeg-data"
+	audio = false
+	video = false
+	data = true
+	dataport = 17740
+        datatype = "binary"
+	dataiface = "127.0.0.1"
+	databuffermsg = false
+}
 
 #
 # This is a sample configuration for Opus/VP8 multicast streams. You

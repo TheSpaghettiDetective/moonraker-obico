@@ -6,6 +6,7 @@ from threading import Thread
 import backoff
 import json
 import socket
+import psutil
 
 from .utils import ExpoBackoff, pi_version, to_unicode
 from .ws import WebSocketClient
@@ -14,9 +15,13 @@ _logger = logging.getLogger('obico.janus')
 
 JANUS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-JANUS_WS_PORT = 8188
-JANUS_DATA_PORT = 8009  # check streaming plugin config
+JANUS_WS_PORT = 17058
+JANUS_PRINTER_DATA_PORT = 17739
 MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
+
+
+class JanusNotSupportedException(Exception):
+    pass
 
 
 class JanusConn:
@@ -37,34 +42,26 @@ class JanusConn:
             self.start_janus_ws()
             return
 
-        if not pi_version():
-            _logger.warning('No external Janus gateway. Not on a Pi. Skipping Janus connection.')
-            return
-
-        def ensure_janus_config():
-            janus_conf_tmp = os.path.join(JANUS_DIR, 'etc/janus/janus.jcfg.template')
-            janus_conf_path = os.path.join(JANUS_DIR, 'etc/janus/janus.jcfg')
-            with open(janus_conf_tmp, "rt") as fin:
-                with open(janus_conf_path, "wt") as fout:
-                    for line in fin:
-                        line = line.replace('{JANUS_HOME}', JANUS_DIR)
-                        line = line.replace('{TURN_CREDENTIAL}', self.config.server.auth_token)
-                        fout.write(line)
-
-            video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
-            streaming_conf_tmp = os.path.join(JANUS_DIR, 'etc/janus/janus.plugin.streaming.jcfg.template')
-            streaming_conf_path = os.path.join(JANUS_DIR, 'etc/janus/janus.plugin.streaming.jcfg')
-            with open(streaming_conf_tmp, "rt") as fin:
-                with open(streaming_conf_path, "wt") as fout:
-                    for line in fin:
-                        line = line.replace('{VIDEO_ENABLED}', str(video_enabled))
-                        fout.write(line)
-
         def run_janus_forever():
+
+            def setup_janus_config():
+                video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
+                auth_token = self.config.server.auth_token
+
+                cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
+                setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
+
+                setup_proc = psutil.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+                returncode = setup_proc.wait()
+                (stdoutdata, stderrdata) = setup_proc.communicate()
+                if returncode != 0:
+                    raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
+
 
             @backoff.on_exception(backoff.expo, Exception, max_tries=5)
             def run_janus():
-                janus_cmd = os.path.join(JANUS_DIR, 'run_janus.sh')
+                janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
                 _logger.debug('Popen: {}'.format(janus_cmd))
                 self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -77,7 +74,10 @@ class JanusConn:
                         raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
             try:
+                setup_janus_config()
                 run_janus()
+            except JanusNotSupportedException as e:
+                _logger.warning(e)
             except Exception as ex:
                 self.sentry.captureException()
                 self.server_conn.post_printer_event_to_server(
@@ -87,7 +87,6 @@ class JanusConn:
                     info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
                 )
 
-        ensure_janus_config()
         janus_proc_thread = Thread(target=run_janus_forever)
         janus_proc_thread.daemon = True
         janus_proc_thread.start()
