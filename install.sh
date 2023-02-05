@@ -347,7 +347,7 @@ trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
-while getopts "hn:H:p:C:l:S:fLud" arg; do
+while getopts "hn:H:p:C:l:S:fLusd" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -357,6 +357,7 @@ while getopts "hn:H:p:C:l:S:fLud" arg; do
         n) SUFFIX="-${OPTARG}";;
         S) OBICO_SERVER="${OPTARG}";;
         f) OVERWRITE_CONFIG="y";;
+        s) ;; # Backward compatibility for kiauh
         L) SKIP_LINKING="y";;
         d) DEBUG="y";;
         u) uninstall ;;
