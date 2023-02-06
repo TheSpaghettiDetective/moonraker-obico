@@ -98,6 +98,12 @@ discover_sys_settings() {
     return 1
   fi
 
+  # Could improve handling if more than one webcam is configured
+  # 2023-02-01 If a second webcam is added, the FPS is in quotes, compared to the first that does not, which is found here
+  if ! mr_fps=$(curl -s "http://${MOONRAKER_HOST}:${mr_port}/server/webcams/list" | grep -oP '"target_fps": \K\d+') ; then
+    mr_fps=25
+  fi
+
   toolchain_msg=""
   if echo $mr_database | grep -qi 'mainsail' ; then
     toolchain_msg="${toolchain_msg} Mainsail installed"
@@ -208,6 +214,7 @@ port = ${MOONRAKER_PORT}
 
 [webcam]
 disable_video_streaming = False
+fps = ${mr_fps}
 
 # CAUTION: Don't modify the settings below unless you know what you are doing
 #   In most cases webcam configuration will be automatically retrived from moonraker

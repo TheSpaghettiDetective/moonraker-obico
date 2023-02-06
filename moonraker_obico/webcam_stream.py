@@ -142,7 +142,7 @@ class WebcamStreamer:
 
 
         bitrate = bitrate_for_dim(img_w, img_h)
-        fps = 25
+        fps = webcam_config.fps
         if not self.app_model.linked_printer.get('is_pro'):
             fps = 5
             bitrate = int(bitrate/4)
