@@ -135,7 +135,7 @@ general: {
 #
 h264-video: {
 	type = "rtp"
-	id = __DEFAULT_CHANNEL_ID__
+	id = 1
 	description = "h264-video"
 	enabled = __VIDEO_ENABLED__
 	audio = false

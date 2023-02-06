@@ -5,15 +5,18 @@ set -e
 JANUS_ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 RUNTIME_JANUS_ETC_DIR="${JANUS_ROOT_DIR}/runtime/etc/janus"
 
-# . "${JANUS_ROOT_DIR}/../utils.sh"
+. "${JANUS_ROOT_DIR}/../utils.sh"
 
-# if is_raspberry_pi; then
-#   LIB_PATH="${JANUS_ROOT_DIR}/rpi_os/lib:${LD_LIBRARY_PATH}"
-#   JANUS_CMD="${JANUS_ROOT_DIR}/rpi_os/bin/janus"
-# else
+PRECOMPILED_DIR="${JANUS_ROOT_DIR}/precomplied/debian.$( debian_variant )"
+
+if [ -d "${PRECOMPILED_DIR}" ]; then
+  lib_janus_dir="${PRECOMPILED_DIR}/lib/janus"
+  LIB_PATH="${PRECOMPILED_DIR}/lib:${LD_LIBRARY_PATH}"
+  JANUS_CMD="${PRECOMPILED_DIR}/bin/janus"
+else
   LIB_PATH="${LD_LIBRARY_PATH}"
   JANUS_CMD="janus"
-# fi
+fi
 
 _term() {
   kill -TERM "$child" 2>/dev/null
