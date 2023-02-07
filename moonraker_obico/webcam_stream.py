@@ -16,8 +16,8 @@ from .webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.webcam_stream')
 
-GST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'gst')
-FFMPEG = 'ffmpeg'
+FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
+FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 
 PI_CAM_RESOLUTIONS = {
     'low': ((320, 240), (480, 270)),  # resolution for 4:3 and 16:9
@@ -58,23 +58,6 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
     watch_thread = Thread(target=watch_process_cpu, args=(watched_process, max, interval, server_conn))
     watch_thread.daemon = True
     watch_thread.start()
-
-
-def set_ffmpeg_if_needed():
-    # We need patched ffmpeg for some systems that is distributed with defected ffmpeg, such as h264_v4l2m2m in rpios bullseye (32-bit)
-
-    cat_proc = psutil.Popen(['cat', '/etc/debian_version'], stdout=subprocess.PIPE)
-    if cat_proc.wait(timeout=5) != 0:
-        return
-
-    (debian_version, _) = cat_proc.communicate()
-    try:
-        debian_version = int(debian_version.decode("utf-8").split('.')[0])
-        if debian_version >= 11:
-            global FFMPEG
-            FFMPEG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'rpi_os.11', '32bits', 'ffmpeg')
-    except:
-        pass
 
 
 class WebcamStreamer:
@@ -118,7 +101,7 @@ class WebcamStreamer:
             return get_image_info(jpg)
 
         def h264_encoder():
-            test_video = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'test-video.mp4')
+            test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
             FNULL = open(os.devnull, 'w')
             for encoder in ['h264_omx', 'h264_v4l2m2m']:
                 ffmpeg_cmd = '{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder)
@@ -128,7 +111,6 @@ class WebcamStreamer:
                     return encoder
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
-        set_ffmpeg_if_needed()
         encoder = h264_encoder()
 
         webcam_config = self.config.webcam
