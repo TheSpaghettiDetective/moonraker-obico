@@ -15,14 +15,4 @@ else
   FFMPEG_CMD="ffmpeg"
 fi
 
-#_term() {
-#  kill -TERM "$child" 2>/dev/null
-#}
-#
-#trap _term SIGTERM
-#
-# nice "${FFMPEG_CMD}" -d 7 -o --stun-server=stun.l.google.com:19302 --configs-folder="${RUNTIME_JANUS_ETC_DIR}" &
 exec nice "${FFMPEG_CMD}" "$@"
-
-#child=$!
-#wait "$child"
