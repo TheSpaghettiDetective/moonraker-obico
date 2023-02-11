@@ -91,7 +91,7 @@ class WebcamStreamer:
 
     def video_pipeline(self):
         if not pi_version():
-            _logger.warning('Not running on a Pi. Quiting video_pipeline.')
+            _logger.warning('Not running on a Pi. Quitting video_pipeline.')
             return
 
         try:
@@ -113,7 +113,7 @@ class WebcamStreamer:
         def get_webcam_resolution(webcam_config):
             jpg = capture_jpeg(webcam_config, force_stream_url=True)
             if not jpg:
-                raise Exception('Not a valid jpeg source. Quiting ffmpeg.')
+                raise Exception('Not a valid jpeg source. Quitting ffmpeg.')
 
             return get_image_info(jpg)
 

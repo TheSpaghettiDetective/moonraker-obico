@@ -68,7 +68,7 @@ class WebcamConfig:
 
     @property
     def fps(self):
-        return self.webcam_config_section.get('fps')
+        return self.webcam_config_section.get('fps') or self.moonraker_webcam_config.get('target_fps')
 
     @property
     def snapshot_ssl_validation(self):

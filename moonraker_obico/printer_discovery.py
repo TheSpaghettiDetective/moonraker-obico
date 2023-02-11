@@ -94,7 +94,7 @@ class PrinterDiscovery(object):
                 if steps_remaining % POLL_PERIOD == 0:
                     self._call()
             except (IOError, OSError) as ex:
-                # tyring to catch only network related errors here,
+                # trying to catch only network related errors here,
                 # all other errors must bubble up.
 
                 # http4xx can be an actionable bug, let it bubble up
@@ -180,7 +180,7 @@ class PrinterDiscovery(object):
             #result = verify_code(self.plugin, {'code': code})
 
 #            if result['succeeded'] is True:
-#                _logger.info('printer_discovery verified code succesfully')
+#                _logger.info('printer_discovery verified code successfully')
 #                self.plugin._plugin_manager.send_plugin_message(
 #                    self.plugin._identifier, {'printer_autolinked': True})
 #            else:
@@ -196,7 +196,7 @@ class PrinterDiscovery(object):
 
     def _collect_device_info(self):
         info = dict(**self.static_info)
-        info['printerprofile'] = 'Unkown'
+        info['printerprofile'] = 'Unknown'
         info['machine_type'] = 'Klipper'
         return info
 

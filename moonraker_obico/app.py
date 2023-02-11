@@ -233,7 +233,7 @@ class App(object):
 
             elif event.data.get('method', '') == 'notify_gcode_response':
                 msg = (event.data.get('params') or [''])[0]
-                if msg.startswith('!!'):  # It seems to an undocumented feature that some gcode errors that are critical for the users to know are recevied as notify_gcode_response with "!!"
+                if msg.startswith('!!'):  # It seems to an undocumented feature that some gcode errors that are critical for the users to know are received as notify_gcode_response with "!!"
                     self.server_conn.post_printer_event_to_server('Moonraker Error', msg, attach_snapshot=True)
 
         elif event.name == 'status_update':

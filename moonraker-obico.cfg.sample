@@ -10,7 +10,7 @@ port = 7125
 
 [webcam]
 disable_video_streaming = False
-fps = 25
+# fps = 25
 
 # flip_h = False
 # flip_v = False
