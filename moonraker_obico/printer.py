@@ -77,7 +77,7 @@ class PrinterState:
             'paused': PrinterState.STATE_PAUSED,
             'complete': PrinterState.STATE_OPERATIONAL,
             'cancelled': PrinterState.STATE_OPERATIONAL,
-            'error': PrinterState.STATE_OPERATIONAL, # state is "error" when printer quits a print due to an error, but opertional
+            'error': PrinterState.STATE_OPERATIONAL, # state is "error" when printer quits a print due to an error, but operational
         }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_OFFLINE)
 
     def to_dict(

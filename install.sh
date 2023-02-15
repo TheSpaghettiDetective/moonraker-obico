@@ -209,6 +209,7 @@ port = ${MOONRAKER_PORT}
 
 [webcam]
 disable_video_streaming = False
+# fps = 25
 
 # CAUTION: Don't modify the settings below unless you know what you are doing
 #   In most cases webcam configuration will be automatically retrived from moonraker

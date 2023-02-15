@@ -67,6 +67,10 @@ class WebcamConfig:
         return self.webcam_config_section.getboolean('disable_video_streaming', False)
 
     @property
+    def fps(self):
+        return self.webcam_config_section.get('fps') or self.moonraker_webcam_config.get('target_fps')
+
+    @property
     def snapshot_ssl_validation(self):
         return False
 

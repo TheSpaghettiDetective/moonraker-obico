@@ -115,6 +115,7 @@ class MoonrakerConn:
                 # TODO: Just pick the last webcam before we have a way to support multiple cameras
                 for cfg in result.get('value', {}).values():
                     return dict(
+                        target_fps = cfg.get('targetFps', 25),
                         snapshot_url = cfg.get('urlSnapshot', None),
                         stream_url = cfg.get('urlStream', None),
                         flip_h = cfg.get('flipX', False),
@@ -131,6 +132,7 @@ class MoonrakerConn:
                         continue
 
                     return dict(
+                        target_fps = cfg.get('target_fps', 25),  # TODO Verify the key name in fluidd for FPS
                         stream_url = cfg.get('url', None),
                         flip_h = cfg.get('flipX', False),
                         flip_v = cfg.get('flipY', False),
