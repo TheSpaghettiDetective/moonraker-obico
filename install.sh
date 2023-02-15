@@ -209,10 +209,12 @@ port = ${MOONRAKER_PORT}
 
 [webcam]
 disable_video_streaming = False
-# fps = 25
 
 # CAUTION: Don't modify the settings below unless you know what you are doing
 #   In most cases webcam configuration will be automatically retrived from moonraker
+#
+# Lower target_fps if ffmpeg is using too much CPU. Capped at 25 for Pro users (including self-hosted) and 5 for Free users
+# target_fps = 25
 #
 # snapshot_url = http://127.0.0.1:8080/?action=snapshot
 # stream_url = http://127.0.0.1:8080/?action=stream

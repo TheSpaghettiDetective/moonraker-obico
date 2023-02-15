@@ -124,9 +124,9 @@ class WebcamStreamer:
 
 
         bitrate = bitrate_for_dim(img_w, img_h)
-        fps = webcam_config.fps
+        fps = webcam_config.target_fps
         if not self.app_model.linked_printer.get('is_pro'):
-            fps = 5
+            fps = min(5, fps)
             bitrate = int(bitrate/4)
 
         self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
