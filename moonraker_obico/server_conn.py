@@ -13,6 +13,7 @@ from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
 from .webcam_capture import capture_jpeg
+from .lib import curlify
 
 
 _logger = logging.getLogger('obico.server_conn')
@@ -133,10 +134,10 @@ class ServerConn:
         _kwargs = dict(allow_redirects=True)
         _kwargs.update(kwargs)
 
-        _logger.debug(f'{method} {endpoint}')
         try:
             resp = requests.request(
                 method, endpoint, timeout=timeout, headers=headers, **_kwargs)
+            _logger.debug(curlify.to_curl(resp.request))
         except Exception:
             if raise_exception:
                 raise

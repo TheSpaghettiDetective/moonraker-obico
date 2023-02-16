@@ -133,7 +133,7 @@ class PrinterState:
                 return {}
 
             completion = self.status.get('virtual_sdcard', {}).get('progress')
-            print_time = print_stats.get('print_duration')
+            print_time = print_stats.get('total_duration')
             estimated_time = print_time / completion if print_time is not None and completion is not None and completion > 0.001 else None
             print_time_left = estimated_time - print_time if estimated_time is not None and print_time is not None else None
             return {
@@ -161,7 +161,6 @@ class PrinterState:
                         'obico_g_code_file_id': self.get_obico_g_code_file_id(),
                     },
                     'estimatedPrintTime': None,
-                    'filament': {'length': None, 'volume': None},
                     'user': None,
                 },
                 'progress': {
@@ -169,6 +168,7 @@ class PrinterState:
                     'filepos': virtual_sdcard.get('file_position', 0),
                     'printTime': print_time,
                     'printTimeLeft': print_time_left,
+                    'filamentUsed': print_stats.get('filament_used')
                 },
                 'temperatures': temps,
                 'file_metadata': {},
