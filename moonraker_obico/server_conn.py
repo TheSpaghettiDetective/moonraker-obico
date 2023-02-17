@@ -121,10 +121,7 @@ class ServerConn:
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
 
-    def send_http_request(
-        self, method, uri, timeout=10, raise_exception=True,
-        **kwargs
-    ):
+    def send_http_request(self, method, uri, timeout=10, raise_exception=True, skip_debug_logging=False, **kwargs):
         endpoint = self.config.server.canonical_endpoint_prefix() + uri
         headers = {
             'Authorization': f'Token {self.config.server.auth_token}'
@@ -137,7 +134,8 @@ class ServerConn:
         try:
             resp = requests.request(
                 method, endpoint, timeout=timeout, headers=headers, **_kwargs)
-            _logger.debug(curlify.to_curl(resp.request))
+            if not skip_debug_logging:
+                _logger.debug(curlify.to_curl(resp.request))
         except Exception:
             if raise_exception:
                 raise
