@@ -5,10 +5,10 @@
 # It is necessary for linking the library.
 
 # The name that we can dlopen(3).
-dlname='libjanus_websockets.so.1'
+dlname='libjanus_websockets.so.0'
 
 # Names of this library.
-library_names='libjanus_websockets.so.1.1.3 libjanus_websockets.so.1 libjanus_websockets.so'
+library_names='libjanus_websockets.so.0.0.0 libjanus_websockets.so.0 libjanus_websockets.so'
 
 # The name of the static archive.
 old_library=''
@@ -23,9 +23,9 @@ dependency_libs=' -lwebsockets -lglib-2.0 -ljansson'
 weak_library_names=''
 
 # Version information for libjanus_websockets.
-current=2
-age=1
-revision=3
+current=0
+age=0
+revision=0
 
 # Is this an already installed library?
 installed=yes
@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/opt/janus/lib/janus/transports'
+libdir='/home/pi/moonraker-obico/moonraker_obico/bin/janus/precomplied/debian.11.aarch64/lib/janus/transports'
