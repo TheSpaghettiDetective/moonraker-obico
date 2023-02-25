@@ -339,6 +339,7 @@ sudo rm "/etc/systemd/system/${OBICO_SERVICE_NAME}.service"
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 rm -rf ~/moonraker-obico
+rm -rf ~/moonraker-obico-env
 
 EOF
 

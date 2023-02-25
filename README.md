@@ -23,6 +23,7 @@ This is a Moonraker plugin that enables the Klipper-based 3D printers to connect
     sudo systemctl daemon-reload
     sudo systemctl reset-failed
     rm -rf ~/moonraker-obico
+    rm -rf ~/moonraker-obico-env
 
 
 # Set up a dev environment
