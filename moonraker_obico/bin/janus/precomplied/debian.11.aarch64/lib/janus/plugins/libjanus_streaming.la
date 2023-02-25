@@ -5,10 +5,10 @@
 # It is necessary for linking the library.
 
 # The name that we can dlopen(3).
-dlname='libjanus_streaming.so.1'
+dlname='libjanus_streaming.so.0'
 
 # Names of this library.
-library_names='libjanus_streaming.so.1.1.3 libjanus_streaming.so.1 libjanus_streaming.so'
+library_names='libjanus_streaming.so.0.0.0 libjanus_streaming.so.0 libjanus_streaming.so'
 
 # The name of the static archive.
 old_library=''
@@ -17,15 +17,15 @@ old_library=''
 inherited_linker_flags=' -pthread'
 
 # Libraries that this one depends upon.
-dependency_libs=' -lcurl -logg -lglib-2.0 -ljansson'
+dependency_libs=' -lcurl -lglib-2.0 -ljansson'
 
 # Names of additional weak libraries provided by this library
 weak_library_names=''
 
 # Version information for libjanus_streaming.
-current=2
-age=1
-revision=3
+current=0
+age=0
+revision=0
 
 # Is this an already installed library?
 installed=yes
@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/opt/janus/lib/janus/plugins'
+libdir='/home/pi/moonraker-obico/moonraker_obico/bin/janus/precomplied/debian.11.aarch64/lib/janus/plugins'
