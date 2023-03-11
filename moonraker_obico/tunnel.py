@@ -67,7 +67,6 @@ class LocalTunnel(object):
 
         ws = WebSocketClient(
             url,
-            token=None,
             on_ws_msg=on_ws_msg,
             on_ws_close=on_ws_close,
         )
@@ -82,6 +81,7 @@ class LocalTunnel(object):
             params=None, data=None, headers=None, timeout=30):
 
         url = urljoin(self.base_url, path)
+        headers['Accept-Encoding'] = 'identity'
 
         _logger.debug('Tunneling (v2) "{}"'.format(url))
         try:
