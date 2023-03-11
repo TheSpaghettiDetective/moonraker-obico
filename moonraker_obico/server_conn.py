@@ -49,7 +49,12 @@ class ServerConn:
             self.post_status_update_to_server(with_config=True) # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
         def on_message(ws, msg):
-            self.process_server_msg(json.loads(msg))
+            try:
+                decoded = json.loads(msg)
+            except ValueError:
+                decoded = bson.loads(msg)
+
+            self.process_server_msg(decoded)
 
         server_ws_backoff = ExpoBackoff(300)
         self.send_ws_msg_to_server({}) # Initial null message to trigger server connection
