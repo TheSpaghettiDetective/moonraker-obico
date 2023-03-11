@@ -26,6 +26,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
+from .tunnel import LocalTunnel
 
 
 _logger = logging.getLogger('obico.app')
@@ -119,11 +120,16 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.local_tunnel = LocalTunnel(
-            base_url=url,
-            on_http_response=self.server_conn.send_ws_msg_to_server,
-            on_ws_message=self.server_conn.send_ws_msg_to_server,
-            sentry=self.sentry)
+
+        if self.model.config.tunnel.url:
+            _logger.debug(f'tunneling is enabled, targets {self.model.config.tunnel.url}')
+            self.local_tunnel = LocalTunnel(
+                base_url=self.model.config.tunnel.url,
+                on_http_response=self.server_conn.send_ws_msg_to_server,
+                on_ws_message=self.server_conn.send_ws_msg_to_server,
+                sentry=self.sentry)
+        else:
+            _logger.debug(f"tunneling is disabled as it's not configured")
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
 

@@ -52,6 +52,11 @@ class ServerConfig:
 
 
 @dataclasses.dataclass
+class TunnelConfig:
+    url: Optional[str]
+
+
+@dataclasses.dataclass
 class WebcamConfig:
 
     def __init__(self, webcam_config_section):
@@ -154,6 +159,12 @@ class Config:
                 'server', 'feedrate_z',
                 fallback=ServerConfig.DEFAULT_FEEDRATE_Z,
             )
+        )
+
+        self.tunnel = TunnelConfig(
+            url=config.get(
+                'tunnel', 'url',
+                fallback=None),
         )
 
         self.webcam = WebcamConfig(webcam_config_section=config['webcam'])
