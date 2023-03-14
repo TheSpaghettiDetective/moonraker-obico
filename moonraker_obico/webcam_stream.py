@@ -108,7 +108,11 @@ class WebcamStreamer:
                 _logger.debug('Popen: {}'.format(ffmpeg_cmd))
                 ffmpeg_test_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
-                    return encoder
+                    if encoder == 'h264_omx':
+                        return '-flags:v +global_header -c:v {}'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
+                    else:
+                        return '-c:v {}'.format(encoder)
+
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
         encoder = h264_encoder()
@@ -129,7 +133,7 @@ class WebcamStreamer:
             fps = min(5, fps)
             bitrate = int(bitrate/4)
 
-        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} -flags:v +global_header -vcodec {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
+        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
 
     def start_ffmpeg(self, ffmpeg_args):
         ffmpeg_cmd = '{} -loglevel error {} -bsf dump_extra -an -f rtp rtp://{}:17734?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
