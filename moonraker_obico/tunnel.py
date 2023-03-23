@@ -20,8 +20,8 @@ class LocalTunnel(object):
         Removed py2 and tunnel-v1 related parts.
     """
 
-    def __init__(self, base_url, on_http_response, on_ws_message, sentry):
-        self.base_url = base_url
+    def __init__(self, tunnel_config, on_http_response, on_ws_message, sentry):
+        self.base_url = tunnel_config.dest_base_url
         self.on_http_response = on_http_response
         self.on_ws_message = on_ws_message
         self.sentry = sentry

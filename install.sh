@@ -226,6 +226,11 @@ disable_video_streaming = False
 [logging]
 path = ${OBICO_LOG_FILE}
 # level = INFO
+
+[tunnel]
+# CAUTION: Don't modify the settings below unless you know what you are doing
+# dest_base_url = http://127.0.0.1
+
 EOF
 }
 

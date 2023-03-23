@@ -121,15 +121,11 @@ class App(object):
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
 
-        if self.model.config.tunnel.url:
-            _logger.debug(f'tunneling is enabled, targets {self.model.config.tunnel.url}')
-            self.local_tunnel = LocalTunnel(
-                base_url=self.model.config.tunnel.url,
-                on_http_response=self.server_conn.send_ws_msg_to_server,
-                on_ws_message=self.server_conn.send_ws_msg_to_server,
-                sentry=self.sentry)
-        else:
-            _logger.debug(f"tunneling is disabled as it's not configured")
+        self.local_tunnel = LocalTunnel(
+            tunnel_config=self.model.config.tunnel,
+            on_http_response=self.server_conn.send_ws_msg_to_server,
+            on_ws_message=self.server_conn.send_ws_msg_to_server,
+            sentry=self.sentry)
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
 

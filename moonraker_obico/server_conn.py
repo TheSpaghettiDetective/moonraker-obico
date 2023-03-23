@@ -74,7 +74,6 @@ class ServerConn:
 
                 if as_binary:
                     raw = bson.dumps(data)
-                    _logger.debug("Sending binary ({} bytes) to server".format(len(raw)))
                 else:
                     _logger.debug("Sending to server: \n{}".format(data))
                     raw = json.dumps(data, default=str)

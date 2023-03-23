@@ -53,7 +53,7 @@ class ServerConfig:
 
 @dataclasses.dataclass
 class TunnelConfig:
-    url: Optional[str]
+    dest_base_url: Optional[str]
 
 
 @dataclasses.dataclass
@@ -162,9 +162,10 @@ class Config:
         )
 
         self.tunnel = TunnelConfig(
-            url=config.get(
-                'tunnel', 'url',
-                fallback=None),
+            dest_base_url=config.get(
+                'tunnel', 'dest_base_url',
+                fallback='http://127.0.0.1',
+            ),
         )
 
         self.webcam = WebcamConfig(webcam_config_section=config['webcam'])
