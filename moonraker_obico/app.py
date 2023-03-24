@@ -390,14 +390,14 @@ class App(object):
         self.server_conn.post_status_update_to_server()
 
     def process_server_msg(self, msg):
-        _logger.debug(f'Received from server: {msg}')
-
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
                 self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
+            _logger.debug(f'Received commands from server: {msg}')
+
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
                     # FIXME do we need this dance?
@@ -417,6 +417,8 @@ class App(object):
                 #    self.start_print(**command.get('args'))
 
         if 'passthru' in msg:
+            _logger.debug(f'Received passthru from server: {msg}')
+
             passthru = msg['passthru']
             target = passthru.get('target')
             func = passthru.get('func')
@@ -464,6 +466,7 @@ class App(object):
                 self.server_conn.send_ws_msg_to_server({'passthru': resp})
 
         if msg.get('janus') and self.janus:
+            _logger.debug(f'Received janus from server: {msg}')
             self.janus.pass_to_janus(msg.get('janus'))
 
         if msg.get('http.tunnelv2') and self.local_tunnel:

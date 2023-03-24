@@ -229,7 +229,9 @@ path = ${OBICO_LOG_FILE}
 
 [tunnel]
 # CAUTION: Don't modify the settings below unless you know what you are doing
-# dest_base_url = http://127.0.0.1
+# dest_host = 127.0.0.1
+# dest_port = 80
+# dest_is_ssl = False
 
 EOF
 }
