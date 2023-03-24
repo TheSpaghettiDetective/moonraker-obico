@@ -5,5 +5,5 @@ debian_release() {
 }
 
 debian_variant() {
-  echo $( debian_release ).$( uname -m )
+  echo $( debian_release ).$( getconf LONG_BIT )-bit
 }
