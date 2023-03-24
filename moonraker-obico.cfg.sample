@@ -25,5 +25,11 @@ disable_video_streaming = False
 # aspect_ratio_169 = False
 
 [logging]
-path = /home/pi/klipper_logs/moonraker-obico.log
+path = /home/pi/printer_data/config/moonraker-obico.log
 level = INFO
+
+[tunnel]
+# CAUTION: Don't modify the settings below unless you know what you are doing
+# dest_host = 127.0.0.1
+# dest_port = 80
+# dest_is_ssl = False

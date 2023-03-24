@@ -52,6 +52,13 @@ class ServerConfig:
 
 
 @dataclasses.dataclass
+class TunnelConfig:
+    dest_host: Optional[str]
+    dest_port: Optional[str]
+    dest_is_ssl: Optional[str]
+
+
+@dataclasses.dataclass
 class WebcamConfig:
 
     def __init__(self, webcam_config_section):
@@ -154,6 +161,21 @@ class Config:
                 'server', 'feedrate_z',
                 fallback=ServerConfig.DEFAULT_FEEDRATE_Z,
             )
+        )
+
+        self.tunnel = TunnelConfig(
+            dest_host=config.get(
+                'tunnel', 'dest_host',
+                fallback='127.0.0.1',
+            ),
+            dest_port=config.get(
+                'tunnel', 'dest_port',
+                fallback='80',
+            ),
+            dest_is_ssl=config.getboolean(
+                'tunnel', 'dest_is_ssl',
+                fallback=False,
+            ),
         )
 
         self.webcam = WebcamConfig(webcam_config_section=config['webcam'])

@@ -26,6 +26,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
+from .tunnel import LocalTunnel
 
 
 _logger = logging.getLogger('obico.app')
@@ -57,6 +58,7 @@ class App(object):
         self.webcam_streamer = None
         self.jpeg_poster = None
         self.janus = None
+        self.local_tunnel = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -118,6 +120,12 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+
+        self.local_tunnel = LocalTunnel(
+            tunnel_config=self.model.config.tunnel,
+            on_http_response=self.server_conn.send_ws_msg_to_server,
+            on_ws_message=self.server_conn.send_ws_msg_to_server,
+            sentry=self.sentry)
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
 
@@ -382,14 +390,14 @@ class App(object):
         self.server_conn.post_status_update_to_server()
 
     def process_server_msg(self, msg):
-        _logger.debug(f'Received from server: {msg}')
-
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
                 self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
+            _logger.debug(f'Received commands from server: {msg}')
+
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
                     # FIXME do we need this dance?
@@ -409,6 +417,8 @@ class App(object):
                 #    self.start_print(**command.get('args'))
 
         if 'passthru' in msg:
+            _logger.debug(f'Received passthru from server: {msg}')
+
             passthru = msg['passthru']
             target = passthru.get('target')
             func = passthru.get('func')
@@ -456,7 +466,21 @@ class App(object):
                 self.server_conn.send_ws_msg_to_server({'passthru': resp})
 
         if msg.get('janus') and self.janus:
+            _logger.debug(f'Received janus from server: {msg}')
             self.janus.pass_to_janus(msg.get('janus'))
+
+        if msg.get('http.tunnelv2') and self.local_tunnel:
+            kwargs = msg.get('http.tunnelv2')
+            tunnel_thread = threading.Thread(
+                target=self.local_tunnel.send_http_to_local_v2,
+                kwargs=kwargs)
+            tunnel_thread.is_daemon = True
+            tunnel_thread.start()
+
+        if msg.get('ws.tunnel') and self.local_tunnel:
+            kwargs = msg.get('ws.tunnel')
+            kwargs['type_'] = kwargs.pop('type')
+            self.local_tunnel.send_ws_to_local(**kwargs)
 
     def _process_download_message(self, g_code_file: Dict) -> None:
         if self.model.printer_state.get_obico_g_code_file_id() or self.model.printer_state.is_printing():
