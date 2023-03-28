@@ -108,42 +108,50 @@ class MoonrakerConn:
 
     def update_webcam_config_from_moonraker(self):
         def webcam_config_in_moonraker():
+            # TODO: Rotation is not handled correctly
+
+            # Check for the webcam API in the newer Moonraker versions
+            result = self.api_get('server.webcams.list', raise_for_status=False)
+            if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
+                _logger.debug(f'Found config in Moonraker webcams API: {result}')
+                return [ dict(
+                            target_fps = cfg.get('target_fps', 25),
+                            snapshot_url = cfg.get('snapshot_url', None),
+                            stream_url = cfg.get('stream_url', None),
+                            flip_h = cfg.get('flip_horizontal', False),
+                            flip_v = cfg.get('flip_vertical', False),
+                         ) for cfg in result.get('webcams', []) ]
+
+
             # Check for the standard namespace for webcams
             result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
             if result:
                 _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
-                # TODO: Just pick the last webcam before we have a way to support multiple cameras
-                for cfg in result.get('value', {}).values():
-                    return dict(
-                        target_fps = cfg.get('targetFps', 25),
-                        snapshot_url = cfg.get('urlSnapshot', None),
-                        stream_url = cfg.get('urlStream', None),
-                        flip_h = cfg.get('flipX', False),
-                        flip_v = cfg.get('flipY', False),
-                    )
+                return [ dict(
+                            target_fps = cfg.get('targetFps', 25),
+                            snapshot_url = cfg.get('urlSnapshot', None),
+                            stream_url = cfg.get('urlStream', None),
+                            flip_h = cfg.get('flipX', False),
+                            flip_v = cfg.get('flipY', False),
+                        ) for cfg in result.get('value', {}).values() ]
 
             # webcam configs not found in the standard location. Try fluidd's flavor
             result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
             if result:
                 _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
-                # TODO: Just pick the last webcam before we have a way to support multiple cameras
-                for cfg in result.get('value', {}).get('cameras', []):
-                    if not cfg.get('enabled', False):
-                        continue
-
-                    return dict(
-                        target_fps = cfg.get('target_fps', 25),  # TODO Verify the key name in fluidd for FPS
-                        stream_url = cfg.get('url', None),
-                        flip_h = cfg.get('flipX', False),
-                        flip_v = cfg.get('flipY', False),
-                    )
+                return [ dict(
+                            target_fps = cfg.get('target_fps', 25),  # TODO Verify the key name in fluidd for FPS
+                            stream_url = cfg.get('url', None),
+                            flip_h = cfg.get('flipX', False),
+                            flip_v = cfg.get('flipY', False),
+                        ) for cfg in result.get('value', {}).get('cameras', []) if not cfg.get('enabled', False) ]
 
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
 
         mr_webcam_config = webcam_config_in_moonraker()
-        if mr_webcam_config:
-            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config}')
-            self.app_config.webcam.moonraker_webcam_config = mr_webcam_config
+        if len(mr_webcam_config) > 0:
+            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
+            self.app_config.webcam.moonraker_webcam_config = mr_webcam_config[0]
         else:
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             pass
