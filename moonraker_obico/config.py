@@ -56,6 +56,7 @@ class TunnelConfig:
     dest_host: Optional[str]
     dest_port: Optional[str]
     dest_is_ssl: Optional[str]
+    url_blacklist: []
 
 
 @dataclasses.dataclass
@@ -176,6 +177,7 @@ class Config:
                 'tunnel', 'dest_is_ssl',
                 fallback=False,
             ),
+            url_blacklist=[],
         )
 
         self.webcam = WebcamConfig(webcam_config_section=config['webcam'])

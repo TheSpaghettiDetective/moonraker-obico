@@ -24,6 +24,7 @@ class LocalTunnel(object):
         self.base_url = ('https://' if tunnel_config.dest_is_ssl else 'http://') + \
                 tunnel_config.dest_host + \
                 '' if tunnel_config.dest_port == '80' else tunnel_config.dest_port
+        self.config = tunnel_config
         self.on_http_response = on_http_response
         self.on_ws_message = on_ws_message
         self.sentry = sentry
@@ -86,29 +87,39 @@ class LocalTunnel(object):
         headers['Accept-Encoding'] = 'identity'
 
         _logger.debug('Tunneling (v2) "{}"'.format(url))
-        try:
-            resp = getattr(requests, method)(
-                url,
-                params=params,
-                headers={k: v for k, v in headers.items()},
-                data=data,
-                timeout=timeout,
-                allow_redirects=False) # The redirect should happen in the browser, not the plugin. Otherwise it causes tricky problems.
 
-            cookies = resp.raw._original_response.msg.get_all('Set-Cookie')
-
-            compress = len(resp.content) >= COMPRESS_THRESHOLD
+        resp_data = None
+        if any([ (u in url) for u in self.config.url_blacklist]):
             resp_data = {
-                'status': resp.status_code,
-                'compressed': compress,
-                'content': (
-                    zlib.compress(resp.content)
-                    if compress
-                    else resp.content
-                ),
-                'cookies': cookies,
-                'headers': {k: v for k, v in resp.headers.items()},
+                'status': 404,
+                'content': 'Blacklisted',
+                'headers': {}
             }
+
+        try:
+            if not resp_data:
+                resp = getattr(requests, method)(
+                    url,
+                    params=params,
+                    headers={k: v for k, v in headers.items()},
+                    data=data,
+                    timeout=timeout,
+                    allow_redirects=False) # The redirect should happen in the browser, not the plugin. Otherwise it causes tricky problems.
+
+                cookies = resp.raw._original_response.msg.get_all('Set-Cookie')
+
+                compress = len(resp.content) >= COMPRESS_THRESHOLD
+                resp_data = {
+                    'status': resp.status_code,
+                    'compressed': compress,
+                    'content': (
+                        zlib.compress(resp.content)
+                        if compress
+                        else resp.content
+                    ),
+                    'cookies': cookies,
+                    'headers': {k: v for k, v in resp.headers.items()},
+                }
         except Exception as ex:
             resp_data = {
                 'status': 502,

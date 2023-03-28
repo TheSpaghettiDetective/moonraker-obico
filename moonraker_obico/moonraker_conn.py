@@ -13,6 +13,8 @@ import bson
 import websocket
 from random import randrange
 from collections import deque, OrderedDict
+from functools import reduce
+from operator import concat
 
 from .utils import DEBUG
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -152,6 +154,10 @@ class MoonrakerConn:
         if len(mr_webcam_config) > 0:
             _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
             self.app_config.webcam.moonraker_webcam_config = mr_webcam_config[0]
+
+            # Add all webcam urls to the blacklist so that they won't be tunnelled
+            url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
+            self.app_config.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
         else:
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             pass
