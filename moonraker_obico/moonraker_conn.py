@@ -149,6 +149,7 @@ class MoonrakerConn:
                         ) for cfg in result.get('value', {}).get('cameras', []) if not cfg.get('enabled', False) ]
 
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+            return []
 
         mr_webcam_config = webcam_config_in_moonraker()
         if len(mr_webcam_config) > 0:
