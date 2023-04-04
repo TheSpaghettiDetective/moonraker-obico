@@ -76,7 +76,11 @@ class WebcamConfig:
 
     @property
     def target_fps(self):
-        return min(float( self.webcam_config_section.get('target_fps') or self.moonraker_webcam_config.get('target_fps', '25') ), 25)
+        try:
+            fps = float( self.webcam_config_section.get('target_fps') or self.moonraker_webcam_config.get('target_fps') )
+        except:
+            fps = 25
+        return min(fps, 25)
 
     @property
     def snapshot_ssl_validation(self):
