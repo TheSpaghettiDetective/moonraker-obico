@@ -103,6 +103,20 @@ class MoonrakerConn:
         else:
             return []
 
+    def find_all_thermal_presets(self):
+        presets = []
+        data = self.api_get('server/database/item', raise_for_status=False, namespace='mainsail', key='presets') or {}
+        for preset in data.get('value', {}).get('presets', {}).values():
+            try:
+                preset_name = preset['name']
+                extruder_target = float(preset['values']['extruder']['value'])
+                bed_target = float(preset['values']['heater_bed']['value'])
+                presets.append(dict(name=preset_name, bed=bed_target, extruder=extruder_target))
+            except Exception as e:
+                self.sentry.captureException()
+
+        return presets
+
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_most_recent_job(self):
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
