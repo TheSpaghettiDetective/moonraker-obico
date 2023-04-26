@@ -111,7 +111,7 @@ class MoonrakerConn:
                 preset_name = preset['name']
                 extruder_target = float(preset['values']['extruder']['value'])
                 bed_target = float(preset['values']['heater_bed']['value'])
-                presets.append(dict(name=preset_name, bed=bed_target, extruder=extruder_target))
+                presets.append(dict(name=preset_name, heater_bed=bed_target, extruder=extruder_target))
             except Exception as e:
                 self.sentry.captureException()
 
