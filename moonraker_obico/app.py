@@ -128,6 +128,7 @@ class App(object):
             sentry=self.sentry)
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
+        self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
 
         if not self.model.config.webcam.disable_video_streaming:
             _logger.info('Starting webcam streamer')

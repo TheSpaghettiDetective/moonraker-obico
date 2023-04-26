@@ -28,6 +28,7 @@ class PrinterState:
         self.status = {}
         self.current_print_ts = None
         self.obico_g_code_file_id = None
+        self.thermal_presets = []
 
     def has_active_job(self) -> bool:
         return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
@@ -101,6 +102,7 @@ class PrinterState:
                         rotate90=config.webcam.rotate_90,
                         streamRatio="16:9" if config.webcam.aspect_ratio_169 else "4:3",
                     ),
+                    temperature=dict(dict(profiles=self.thermal_presets)),
                     agent=dict(
                         name="moonraker_obico",
                         version=VERSION,
