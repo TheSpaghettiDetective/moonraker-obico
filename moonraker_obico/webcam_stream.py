@@ -119,6 +119,8 @@ class WebcamStreamer:
 
         webcam_config = self.config.webcam
 
+        # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
+        time.sleep(10)
         (_, img_w, img_h) = get_webcam_resolution(webcam_config)
 
         stream_url = webcam_config.stream_url
