@@ -456,6 +456,7 @@ class App(object):
                 try:
                     ret_value = api_proxy(func, **kwargs)
                 except Exception as e:
+                    self.sentry.captureException()
                     error = 'Error in calling "{}" - "{}"'.format(func, verb)
 
             if ack_ref is not None:
