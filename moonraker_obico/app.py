@@ -454,10 +454,14 @@ class App(object):
                 api_proxy = getattr(self.moonrakerconn, f'api_{verb.lower()}', None)
 
                 try:
-                    ret_value = api_proxy(func, **kwargs)
-                except Exception as e:
+                    # Wrap requests.exceptions.RequestException in Exception, since it's one of the configured errors_to_ignore
+                    try:
+                        ret_value = api_proxy(func, **kwargs)
+                    except requests.exceptions.RequestException as exc:
+                        raise Exception('Error in calling "{}" - "{}" - "{}"'.format(func, verb, kwargs)) from exc
+                except Exception as ex:
+                    error = 'Error in calling "{}" - "{}" - "{}"'.format(func, verb, kwargs)
                     self.sentry.captureException()
-                    error = 'Error in calling "{}" - "{}"'.format(func, verb)
 
             if ack_ref is not None:
                 if error:
