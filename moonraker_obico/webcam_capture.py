@@ -38,7 +38,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
         start_time = time.monotonic()
         for chunk in r.iter_content(chunk_size=1024):
             response_content += chunk
-            if len(response_content) > 10000000:
+            if len(response_content) > 5000000:
                 r.close()
                 raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
 
