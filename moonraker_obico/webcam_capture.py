@@ -27,9 +27,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
     if snapshot_url and not force_stream_url:
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
 
-        _logger.debug(f'GET {snapshot_url}')
-        r = requests.get(snapshot_url, stream=True, timeout=(5,10),
-                         verify=snapshot_validate_ssl)
+        r = requests.get(snapshot_url, stream=True, timeout=5, verify=snapshot_validate_ssl)
         if not r.ok:
             _logger.warn('Error taking from jpeg source: {}'.format(snapshot_url))
             return
