@@ -28,13 +28,22 @@ def capture_jpeg(webcam_config, force_stream_url=False):
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
 
         _logger.debug(f'GET {snapshot_url}')
-        r = requests.get(snapshot_url, stream=True, timeout=5,
+        r = requests.get(snapshot_url, stream=True, timeout=(5,10),
                          verify=snapshot_validate_ssl)
         if not r.ok:
             _logger.warn('Error taking from jpeg source: {}'.format(snapshot_url))
             return
 
-        return r.content
+        response_content = b''
+        start_time = time.monotonic()
+        for chunk in r.iter_content(chunk_size=1024):
+            response_content += chunk
+            if len(response_content) > 10000000:
+                r.close()
+                raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
+
+        r.close()
+        return response_content
 
     else:
         stream_url = webcam_config.stream_url
