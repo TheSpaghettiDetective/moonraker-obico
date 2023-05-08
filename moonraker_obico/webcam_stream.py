@@ -94,11 +94,7 @@ class WebcamStreamer:
 
         @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
         def get_webcam_resolution(webcam_config):
-            jpg = capture_jpeg(webcam_config, force_stream_url=True)
-            if not jpg:
-                raise Exception('Not a valid jpeg source. Quitting ffmpeg.')
-
-            return get_image_info(jpg)
+            return get_image_info(capture_jpeg(webcam_config, force_stream_url=True))
 
         def h264_encoder():
             test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
@@ -118,17 +114,19 @@ class WebcamStreamer:
         encoder = h264_encoder()
 
         webcam_config = self.config.webcam
-
-        # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
-        time.sleep(15)
-        (_, img_w, img_h) = get_webcam_resolution(webcam_config)
-        _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
-
         stream_url = webcam_config.stream_url
 
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
+        # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
+        time.sleep(15)
+        (img_w, img_h) = (640, 480)
+        try:
+            (_, img_w, img_h) = get_webcam_resolution(webcam_config)
+            _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
+        except Exception as e:
+            _logger.warn(f'Failed to detect webcam resolution. Using default.')
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.target_fps
