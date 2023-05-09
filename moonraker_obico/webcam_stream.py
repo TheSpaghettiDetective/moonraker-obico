@@ -9,6 +9,8 @@ from collections import deque
 from threading import Thread
 import psutil
 import backoff
+from urllib.error import URLError, HTTPError
+import requests
 
 from .utils import get_image_info, pi_version, to_unicode
 from .janus import JANUS_SERVER
@@ -115,7 +117,6 @@ class WebcamStreamer:
 
         webcam_config = self.config.webcam
         stream_url = webcam_config.stream_url
-
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
@@ -125,8 +126,11 @@ class WebcamStreamer:
         try:
             (_, img_w, img_h) = get_webcam_resolution(webcam_config)
             _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
-        except Exception as e:
-            _logger.warn(f'Failed to detect webcam resolution. Using default.')
+        except (URLError, HTTPError, requests.exceptions.RequestException):
+            _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
+        except Exception:
+            self.sentry.captureException()
+            _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.target_fps

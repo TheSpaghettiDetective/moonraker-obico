@@ -8,6 +8,7 @@ import platform
 import logging
 import tempfile
 from io import BytesIO
+from urllib.error import URLError, HTTPError
 import struct
 import threading
 import socket
@@ -64,7 +65,7 @@ class SentryWrapper:
         def before_send(event, hint):
             if 'exc_info' in hint:
                 exc_type, exc_value, tb = hint['exc_info']
-                errors_to_ignore = (requests.exceptions.RequestException,)
+                errors_to_ignore = (URLError, HTTPError, requests.exceptions.RequestException,)
                 if isinstance(exc_value, errors_to_ignore):
                     return None
             return event

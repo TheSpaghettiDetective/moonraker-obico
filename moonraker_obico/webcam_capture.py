@@ -45,7 +45,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
     else:
         stream_url = webcam_config.stream_url
         if not stream_url:
-            raise Exception('Webcam is not configured!')
+            raise Exception('Invalid Webcam snapshot URL "{}" or stream URL: "{}"'.format(webcam_config.snapshot_url, webcam_config.stream_url))
 
         with closing(urlopen(stream_url)) as res:
             chunker = MjpegStreamChunker()
@@ -65,7 +65,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
                     if mjpeg_headers_index > 0:
                         return mjpg[mjpeg_headers_index+4:]
                     else:
-                        raise Exception('wrong mjpeg data format')
+                        raise Exception('Wrong mjpeg data format')
 
 
 class MjpegStreamChunker:
@@ -106,12 +106,12 @@ class JpegPoster:
     def post_pic_to_server(self, viewing_boost=False):
         try:
             files = {'pic': capture_jpeg(self.config.webcam)}
-            data = {'viewing_boost': 'true'} if viewing_boost else {}
 
+            data = {'viewing_boost': 'true'} if viewing_boost else {}
             resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('Jpeg posted to server - viewing_boost: {0} - {1}'.format(viewing_boost, resp))
         except (URLError, HTTPError, requests.exceptions.RequestException):
-            _logger.warn('Error capturing snapshot and sending it to the server')
+            _logger.warn('Failed to capture jpeg - ' + str(e))
             return
 
     def pic_post_loop(self):
