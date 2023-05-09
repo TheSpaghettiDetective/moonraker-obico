@@ -25,7 +25,6 @@ def capture_jpeg(webcam_config, force_stream_url=False):
     MAX_JPEG_SIZE = 5000000
 
     snapshot_url = webcam_config.snapshot_url
-
     if snapshot_url and not force_stream_url:
         snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
 
@@ -46,7 +45,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
     else:
         stream_url = webcam_config.stream_url
         if not stream_url:
-            return
+            raise Exception('Webcam is not configured!')
 
         with closing(urlopen(stream_url)) as res:
             chunker = MjpegStreamChunker()
