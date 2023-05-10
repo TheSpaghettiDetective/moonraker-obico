@@ -3,9 +3,11 @@ from typing import Optional
 import re
 from configparser import ConfigParser
 from urllib.parse import urlparse
+import logging
 
 from .utils import SentryWrapper
 
+_logger = logging.getLogger('obico.config')
 
 @dataclasses.dataclass
 class MoonrakerConfig:
@@ -72,7 +74,11 @@ class WebcamConfig:
 
     @property
     def disable_video_streaming(self):
-        return self.webcam_config_section.getboolean('disable_video_streaming', False)
+        try:
+            return self.webcam_config_section.getboolean('disable_video_streaming', False)
+        except:
+            _logger.warn(f'Invalid disable_video_streaming value. Using default.')
+            return False
 
     @property
     def target_fps(self):
@@ -92,19 +98,39 @@ class WebcamConfig:
 
     @property
     def flip_h(self):
-        return self.webcam_config_section.getboolean('flip_h') if 'flip_h' in self.webcam_config_section else self.moonraker_webcam_config.get('flip_h')
+        if 'flip_h' in self.webcam_config_section:
+            try:
+                return self.webcam_config_section.getboolean('flip_h')
+            except:
+                _logger.warn(f'Invalid flip_h value. Using default.')
+
+        return self.moonraker_webcam_config.get('flip_h')
 
     @property
     def flip_v(self):
-        return self.webcam_config_section.getboolean('flip_v') if 'flip_v' in self.webcam_config_section else self.moonraker_webcam_config.get('flip_v')
+        if 'flip_v' in self.webcam_config_section:
+            try:
+                return self.webcam_config_section.getboolean('flip_v')
+            except:
+                _logger.warn(f'Invalid flip_v value. Using default.')
+
+        return self.moonraker_webcam_config.get('flip_v')
 
     @property
     def rotate_90(self):
-        return self.webcam_config_section.getboolean('rotate_90', False)
+        try:
+            return self.webcam_config_section.getboolean('rotate_90', False)
+        except:
+            _logger.warn(f'Invalid rotate_90 value. Using default.')
+            return False
 
     @property
     def aspect_ratio_169(self):
-        return self.webcam_config_section.getboolean('aspect_ratio_169', False)
+        try:
+            return self.webcam_config_section.getboolean('aspect_ratio_169', False)
+        except:
+            _logger.warn(f'Invalid aspect_ratio_169 value. Using default.')
+            return False
 
     @classmethod
     def webcam_full_url(cls, url):
@@ -168,6 +194,12 @@ class Config:
             )
         )
 
+        dest_is_ssl = False
+        try:
+            dest_is_ssl = config.getboolean('tunnel', 'dest_is_ssl', fallback=False,)
+        except:
+            _logger.warn(f'Invalid dest_is_ssl value. Using default.')
+
         self.tunnel = TunnelConfig(
             dest_host=config.get(
                 'tunnel', 'dest_host',
@@ -177,10 +209,7 @@ class Config:
                 'tunnel', 'dest_port',
                 fallback='80',
             ),
-            dest_is_ssl=config.getboolean(
-                'tunnel', 'dest_is_ssl',
-                fallback=False,
-            ),
+            dest_is_ssl=dest_is_ssl,
             url_blacklist=[],
         )
 

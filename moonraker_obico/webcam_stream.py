@@ -9,6 +9,8 @@ from collections import deque
 from threading import Thread
 import psutil
 import backoff
+from urllib.error import URLError, HTTPError
+import requests
 
 from .utils import get_image_info, pi_version, to_unicode
 from .janus import JANUS_SERVER
@@ -94,11 +96,7 @@ class WebcamStreamer:
 
         @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
         def get_webcam_resolution(webcam_config):
-            jpg = capture_jpeg(webcam_config, force_stream_url=True)
-            if not jpg:
-                raise Exception('Not a valid jpeg source. Quitting ffmpeg.')
-
-            return get_image_info(jpg)
+            return get_image_info(capture_jpeg(webcam_config, force_stream_url=True))
 
         def h264_encoder():
             test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
@@ -118,14 +116,21 @@ class WebcamStreamer:
         encoder = h264_encoder()
 
         webcam_config = self.config.webcam
-
-        (_, img_w, img_h) = get_webcam_resolution(webcam_config)
-
         stream_url = webcam_config.stream_url
-
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
+        # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
+        time.sleep(15)
+        (img_w, img_h) = (640, 480)
+        try:
+            (_, img_w, img_h) = get_webcam_resolution(webcam_config)
+            _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
+        except (URLError, HTTPError, requests.exceptions.RequestException):
+            _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
+        except Exception:
+            self.sentry.captureException()
+            _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.target_fps
