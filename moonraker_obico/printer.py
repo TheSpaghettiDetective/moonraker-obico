@@ -174,4 +174,6 @@ class PrinterState:
                 },
                 'temperatures': temps,
                 'file_metadata': {},
+                'current_layer_height': print_stats.get('current_layer'),
+                'total_layers': print_stats.get('total_layer')
             }
