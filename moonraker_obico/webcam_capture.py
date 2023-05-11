@@ -110,7 +110,7 @@ class JpegPoster:
             data = {'viewing_boost': 'true'} if viewing_boost else {}
             resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('Jpeg posted to server - viewing_boost: {0} - {1}'.format(viewing_boost, resp))
-        except (URLError, HTTPError, requests.exceptions.RequestException):
+        except (URLError, HTTPError, requests.exceptions.RequestException) as e:
             _logger.warn('Failed to capture jpeg - ' + str(e))
             return
 
