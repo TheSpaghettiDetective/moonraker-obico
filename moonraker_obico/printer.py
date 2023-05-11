@@ -173,7 +173,10 @@ class PrinterState:
                     'filamentUsed': print_stats.get('filament_used')
                 },
                 'temperatures': temps,
-                'file_metadata': {},
-                'current_layer_height': print_stats.get('current_layer'),
-                'total_layers': print_stats.get('total_layer')
+                'file_metadata': {
+                    'obico': {
+                        'totalLayerCount': print_stats.get('total_layer')
+                    }
+                },
+                'currentLayerHeight': print_stats.get('current_layer'),
             }
