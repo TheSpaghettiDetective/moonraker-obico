@@ -107,7 +107,7 @@ class WebcamStreamer:
                 ffmpeg_test_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
                     if encoder == 'h264_omx':
-                        return '-flags:v +global_header -c:v {}'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
+                        return '-flags:v +global_header -c:v {} -bsf dump_extra'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
                     else:
                         return '-c:v {}'.format(encoder)
 
