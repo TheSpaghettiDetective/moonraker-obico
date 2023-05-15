@@ -303,7 +303,7 @@ class MoonrakerConn:
 
     def request_subscribe(self, objects=None):
         objects = objects if objects else {
-            'print_stats': ('state', 'message', 'filename'),
+            'print_stats': ('state', 'message', 'filename', 'info'),
             'webhooks': ('state', 'state_message'),
             'history': None,
         }
