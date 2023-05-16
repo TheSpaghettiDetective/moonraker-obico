@@ -116,6 +116,8 @@ class PrinterState:
             print_stats = self.status.get('print_stats') or dict()
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
             has_error = self.status.get('print_stats', {}).get('state', '') == 'error'
+            fan = self.status.get('fan') or dict()
+            gcode_move = self.status.get('gcode_move') or dict()
 
             temps = {}
             for heater in self.app_config.all_mr_heaters():
@@ -179,4 +181,7 @@ class PrinterState:
                     }
                 },
                 'currentLayerHeight': print_stats.get('current_layer'),
+                'currentFeedRate': gcode_move.get('speed_factor'),
+                'currentFlowRate': gcode_move.get('extrude_factor'),
+                'currentFanSpeed': fan.get('speed')
             }
