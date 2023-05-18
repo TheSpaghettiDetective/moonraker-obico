@@ -329,6 +329,7 @@ class MoonrakerConn:
                 "toolhead": None,
                 "extruder": None,
                 "gcode_move": None,
+                "fan": None,
             }
 
             for heater in (self.app_config.all_mr_heaters()):
