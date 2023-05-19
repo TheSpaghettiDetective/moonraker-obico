@@ -7,9 +7,12 @@ from .config import Config
 from .version import VERSION
 from .utils import  sanitize_filename
 
+MAX_GCODE_DOWNLOAD_SECONDS = 10 * 60
+
 class PrinterState:
     STATE_OFFLINE = 'Offline'
     STATE_OPERATIONAL = 'Operational'
+    STATE_DOWNLOADING_GCODE = 'Downloading G-Code'
     STATE_PRINTING = 'Printing'
     STATE_PAUSED = 'Paused'
 
@@ -28,6 +31,7 @@ class PrinterState:
         self.status = {}
         self.current_print_ts = None
         self.obico_g_code_file_id = None
+        self.gcode_downloading_started = None
         self.thermal_presets = []
 
     def has_active_job(self) -> bool:
@@ -57,6 +61,10 @@ class PrinterState:
     def set_obico_g_code_file_id(self, obico_g_code_file_id):
         with self._mutex:
             self.obico_g_code_file_id = obico_g_code_file_id
+
+    def set_gcode_downloading_started(self, timestamp):
+        with self._mutex:
+            self.gcode_downloading_started = timestamp
 
     def get_obico_g_code_file_id(self):
         with self._mutex:
@@ -113,6 +121,15 @@ class PrinterState:
     def to_status(self) -> Dict:
         with self._mutex:
             state = self.get_state_from_status(self.status)
+
+            if self.gcode_downloading_started is not None:
+                if state != PrinterState.STATE_OPERATIONAL: # It is in an unexpected state. Something has gone wrong
+                    self.gcode_downloading_started = None
+                elif time.time() - self.gcode_downloading_started > MAX_GCODE_DOWNLOAD_SECONDS: # For the edge case that the download thread died without an exception
+                    self.gcode_downloading_started = None
+                else:
+                    state = PrinterState.STATE_DOWNLOADING_GCODE
+
             print_stats = self.status.get('print_stats') or dict()
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
             has_error = self.status.get('print_stats', {}).get('state', '') == 'error'

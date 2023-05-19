@@ -255,6 +255,8 @@ class App(object):
         _logger.info(
             f'downloading from {g_code_file["url"]}')
 
+        self.model.printer_state.set_gcode_downloading_started(time.time())
+
         safe_filename = sanitize_filename(g_code_file['safe_filename'])
         r = requests.get(
             g_code_file['url'],
@@ -262,6 +264,8 @@ class App(object):
             timeout=60 * 30
         )
         r.raise_for_status()
+
+        self.model.printer_state.set_gcode_downloading_started(None)
 
         try:
             _logger.info(f'uploading "{safe_filename}" to moonraker')
