@@ -17,7 +17,7 @@ import pathlib
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags, sanitize_filename
+from .utils import get_tags
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -27,6 +27,7 @@ from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
 from .tunnel import LocalTunnel
+from .file_downloader import FileDownloader
 
 
 _logger = logging.getLogger('obico.app')
@@ -59,6 +60,7 @@ class App(object):
         self.jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
+        self.file_downloader = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -120,6 +122,7 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -248,53 +251,6 @@ class App(object):
         elif event.name == 'status_update':
             # full state update from moonraker
             self._received_klippy_update(event.data['result'])
-
-
-    def _download_and_print(self, g_code_file):
-
-        _logger.info(
-            f'downloading from {g_code_file["url"]}')
-
-        self.model.printer_state.set_gcode_downloading_started(time.time())
-
-        safe_filename = sanitize_filename(g_code_file['safe_filename'])
-        r = requests.get(
-            g_code_file['url'],
-            allow_redirects=True,
-            timeout=60 * 30
-        )
-        r.raise_for_status()
-
-        self.model.printer_state.set_gcode_downloading_started(None)
-
-        try:
-            _logger.info(f'uploading "{safe_filename}" to moonraker')
-            resp_data = self.moonrakerconn.api_post(
-                'server/files/upload',
-                multipart_filename=safe_filename,
-                multipart_fileobj=r.content,
-                path=self.model.config.server.upload_dir,
-            )
-            _logger.debug(f'upload response: {resp_data}')
-
-            filepath_on_mr = resp_data['item']['path']
-            file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath_on_mr)
-            basename = pathlib.Path(filepath_on_mr).name  # filename in the response is actually the relative path
-            g_code_data = dict(
-                safe_filename=basename,
-                agent_signature='ts:{}'.format(file_metadata['modified'])
-                )
-
-            resp = self.server_conn.send_http_request('PATCH', '/api/v1/octo/g_code_files/{}/'.format(g_code_file['id']), timeout=60, data=g_code_data, raise_exception=True)
-
-            _logger.info(
-                f'uploading "{safe_filename}" finished.')
-
-            # Print start call needs to happen after PATCH /api/v1/octo/g_code_files/{}/ is called so that the file can be properly matched to the server record at the moment of PrintStarted Event
-            resp_data = self.moonrakerconn.api_post('printer/print/start', filename=filepath_on_mr)
-        except:
-            self.model.printer_state.set_obico_g_code_file_id(None)
-            self.sentry.captureException()
 
 
     def find_current_print_ts(self, cur_status):
@@ -443,7 +399,7 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == 'file_downloader':
-                ret_value = self._process_download_message(g_code_file=args[0])
+                ret_value = self.file_downloader.download(g_code_file=args[0])
 
             elif target == '_printer':
                 if func == 'jog':
@@ -491,22 +447,6 @@ class App(object):
             kwargs = msg.get('ws.tunnel')
             kwargs['type_'] = kwargs.pop('type')
             self.local_tunnel.send_ws_to_local(**kwargs)
-
-    def _process_download_message(self, g_code_file: Dict) -> None:
-        if self.model.printer_state.get_obico_g_code_file_id() or self.model.printer_state.is_printing():
-            return {'error': 'Currently downloading or printing!'}
-
-        # printer_state.obico_g_code_file_id is used as a latch to prevent double-clicking
-        self.model.printer_state.set_obico_g_code_file_id(g_code_file['id'])
-
-        thread = threading.Thread(
-            target=self._download_and_print,
-            args=(g_code_file, )
-        )
-        thread.daemon = True
-        thread.start()
-
-        return {'target_path': g_code_file['filename']}
 
     def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
         if not self.moonrakerconn:
