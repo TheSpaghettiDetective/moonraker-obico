@@ -79,10 +79,9 @@ class FileDownloader:
 
 class Printer:
 
-    def __init__(self, model, moonrakerconn, sentry):
+    def __init__(self, model, moonrakerconn):
         self.model = model
         self.moonrakerconn = moonrakerconn
-        self.sentry = sentry
 
     def jog(self, axes_dict) -> None:
         if not self.moonrakerconn:
@@ -118,4 +117,37 @@ class Printer:
                     }
         mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
         self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
+
+
+class MoonrakerApi:
+
+    def __init__(self, model, moonrakerconn, sentry):
+        self.model = model
+        self.moonrakerconn = moonrakerconn
+        self.sentry = sentry
+
+    def __getattr__(self, func):
+        proxy = self.MoonrakerApiProxy(func, self.model, self.moonrakerconn, self.sentry)
+        return proxy.call_api
+
+    class MoonrakerApiProxy:
+
+        def __init__(self, func, model, moonrakerconn, sentry):
+            self.func = func
+            self.model = model
+            self.moonrakerconn = moonrakerconn
+            self.sentry = sentry
+
+        def call_api(self, verb='get', **kwargs):
+            api_func = getattr(self.moonrakerconn, f'api_{verb.lower()}', None)
+
+            try:
+                # Wrap requests.exceptions.RequestException in Exception, since it's one of the configured errors_to_ignore
+                try:
+                    ret_value = api_func(self.func, **kwargs)
+                except requests.exceptions.RequestException as exc:
+                    raise Exception('Error in calling "{}" - "{}" - "{}"'.format(self.func, verb, kwargs)) from exc
+            except Exception as ex:
+                error = 'Error in calling "{}" - "{}" - "{}"'.format(self.func, verb, kwargs)
+                self.sentry.captureException()
 

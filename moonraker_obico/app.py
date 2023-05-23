@@ -27,7 +27,7 @@ from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .passthru_targets import FileDownloader, Printer
+from .passthru_targets import FileDownloader, Printer, MoonrakerApi
 
 
 _logger = logging.getLogger('obico.app')
@@ -62,6 +62,7 @@ class App(object):
         self.local_tunnel = None
         self.target_file_downloader = None
         self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
+        self.target_moonraker_api = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -124,7 +125,8 @@ class App(object):
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
-        self.target__printer = Printer(self.model, self.moonrakerconn, self.sentry)
+        self.target__printer = Printer(self.model, self.moonrakerconn)
+        self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -383,14 +385,14 @@ class App(object):
             _logger.debug(f'Received passthru from server: {msg}')
 
             passthru = msg['passthru']
-            target = passthru.get('target')
-            func = passthru.get('func')
-            args = passthru.get('args', ())
-            kwargs = passthru.get('kwargs', {})
-            ack_ref = passthru.get('ref')
-            ret_value = None
-            error = None
+            target = getattr(self, 'target_' + passthru.get('target'))
+            func = getattr(target, passthru['func'], None)
 
+            if not func:
+                self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
+                return
+
+            ack_ref = passthru.get('ref')
             if ack_ref is not None:
                 # same msg may arrive through both ws and datachannel
                 if ack_ref in self.model.seen_refs:
@@ -400,31 +402,12 @@ class App(object):
                 # as deque manages that when maxlen is set
                 self.model.seen_refs.append(ack_ref)
 
-            if target == 'file_downloader':
-                ret_value = self.target_file_downloader.download(g_code_file=args[0])
-
-            elif target == '_printer':
-                target = getattr(self, 'target_' + passthru.get('target'))
-                func = getattr(target, passthru['func'], None)
-                if not func:
-                    self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
-                    return
-
+            error = None
+            try:
                 ret_value = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
-
-            elif target == 'moonraker_api':
-                verb = kwargs.pop('verb', 'get')
-                api_proxy = getattr(self.moonrakerconn, f'api_{verb.lower()}', None)
-
-                try:
-                    # Wrap requests.exceptions.RequestException in Exception, since it's one of the configured errors_to_ignore
-                    try:
-                        ret_value = api_proxy(func, **kwargs)
-                    except requests.exceptions.RequestException as exc:
-                        raise Exception('Error in calling "{}" - "{}" - "{}"'.format(func, verb, kwargs)) from exc
-                except Exception as ex:
-                    error = 'Error in calling "{}" - "{}" - "{}"'.format(func, verb, kwargs)
-                    self.sentry.captureException()
+            except Exception as e:
+                error = 'Error in calling "{}" in target "{}" - {}'.format(passthru['func'], passthru['target'], e)
+                self.sentry.captureException()
 
             if ack_ref is not None:
                 if error:
