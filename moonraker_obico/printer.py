@@ -118,6 +118,7 @@ class PrinterState:
             has_error = self.status.get('print_stats', {}).get('state', '') == 'error'
             fan = self.status.get('fan') or dict()
             gcode_move = self.status.get('gcode_move') or dict()
+            print_info = print_stats.get('info') or dict()
 
             temps = {}
             for heater in self.app_config.all_mr_heaters():
@@ -177,10 +178,10 @@ class PrinterState:
                 'temperatures': temps,
                 'file_metadata': {
                     'obico': {
-                        'totalLayerCount': print_stats.get('total_layer')
+                        'totalLayerCount': print_info.get('total_layer')
                     }
                 },
-                'currentLayerHeight': print_stats.get('current_layer'),
+                'currentLayerHeight': print_info.get('current_layer'),
                 'currentFeedRate': gcode_move.get('speed_factor'),
                 'currentFlowRate': gcode_move.get('extrude_factor'),
                 'currentFanSpeed': fan.get('speed')
