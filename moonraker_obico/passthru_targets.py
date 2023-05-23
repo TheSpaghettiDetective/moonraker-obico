@@ -103,24 +103,19 @@ class Printer:
             axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
         )
 
-    def home(self, ack_ref: str, axes) -> None:
+    def home(self, axes) -> None:
         if not self.moonrakerconn:
             return {
                         'error': 'Printer is not connected!',
                     }
 
-        _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
         self.moonrakerconn.request_home(axes=axes)
 
-    def set_temperature(self, ack_ref: str, heater, target_temp) -> None:
+    def set_temperature(self, heater, target_temp) -> None:
         if not self.moonrakerconn:
             return {
                         'error': 'Printer is not connected!',
                     }
         mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
-        if not mr_heater:
-            _logger.error(f'Can not find corresponding heater for {heater} in Moonraker.')
-        else:
-            _logger.info(f'set_temperature request for {mr_heater} -> {target_temp} with ack_ref {ack_ref}')
         self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
 
