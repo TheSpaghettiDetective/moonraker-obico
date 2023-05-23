@@ -17,7 +17,7 @@ import pathlib
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags, sanitize_filename
+from .utils import get_tags
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -27,6 +27,7 @@ from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
 from .tunnel import LocalTunnel
+from .passthru_targets import FileDownloader, Printer
 
 
 _logger = logging.getLogger('obico.app')
@@ -59,6 +60,8 @@ class App(object):
         self.jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
+        self.target_file_downloader = None
+        self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -120,6 +123,8 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
+        self.target__printer = Printer(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -248,49 +253,6 @@ class App(object):
         elif event.name == 'status_update':
             # full state update from moonraker
             self._received_klippy_update(event.data['result'])
-
-
-    def _download_and_print(self, g_code_file):
-
-        _logger.info(
-            f'downloading from {g_code_file["url"]}')
-
-        safe_filename = sanitize_filename(g_code_file['safe_filename'])
-        r = requests.get(
-            g_code_file['url'],
-            allow_redirects=True,
-            timeout=60 * 30
-        )
-        r.raise_for_status()
-
-        try:
-            _logger.info(f'uploading "{safe_filename}" to moonraker')
-            resp_data = self.moonrakerconn.api_post(
-                'server/files/upload',
-                multipart_filename=safe_filename,
-                multipart_fileobj=r.content,
-                path=self.model.config.server.upload_dir,
-            )
-            _logger.debug(f'upload response: {resp_data}')
-
-            filepath_on_mr = resp_data['item']['path']
-            file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath_on_mr)
-            basename = pathlib.Path(filepath_on_mr).name  # filename in the response is actually the relative path
-            g_code_data = dict(
-                safe_filename=basename,
-                agent_signature='ts:{}'.format(file_metadata['modified'])
-                )
-
-            resp = self.server_conn.send_http_request('PATCH', '/api/v1/octo/g_code_files/{}/'.format(g_code_file['id']), timeout=60, data=g_code_data, raise_exception=True)
-
-            _logger.info(
-                f'uploading "{safe_filename}" finished.')
-
-            # Print start call needs to happen after PATCH /api/v1/octo/g_code_files/{}/ is called so that the file can be properly matched to the server record at the moment of PrintStarted Event
-            resp_data = self.moonrakerconn.api_post('printer/print/start', filename=filepath_on_mr)
-        except:
-            self.model.printer_state.set_obico_g_code_file_id(None)
-            self.sentry.captureException()
 
 
     def find_current_print_ts(self, cur_status):
@@ -439,15 +401,16 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == 'file_downloader':
-                ret_value = self._process_download_message(g_code_file=args[0])
+                ret_value = self.target_file_downloader.download(g_code_file=args[0])
 
             elif target == '_printer':
-                if func == 'jog':
-                    ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
-                elif func == 'home':
-                    ret_value = self._process_home_message(ack_ref, axes=args[0])
-                elif func == 'set_temperature':
-                    ret_value = self._process_set_temperature_message(ack_ref, heater=args[0], target_temp=args[1])
+                target = getattr(self, 'target_' + passthru.get('target'))
+                func = getattr(target, passthru['func'], None)
+                if not func:
+                    self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
+                    return
+
+                ret_value = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
 
             elif target == 'moonraker_api':
                 verb = kwargs.pop('verb', 'get')
@@ -487,64 +450,6 @@ class App(object):
             kwargs = msg.get('ws.tunnel')
             kwargs['type_'] = kwargs.pop('type')
             self.local_tunnel.send_ws_to_local(**kwargs)
-
-    def _process_download_message(self, g_code_file: Dict) -> None:
-        if self.model.printer_state.get_obico_g_code_file_id() or self.model.printer_state.is_printing():
-            return {'error': 'Currently downloading or printing!'}
-
-        # printer_state.obico_g_code_file_id is used as a latch to prevent double-clicking
-        self.model.printer_state.set_obico_g_code_file_id(g_code_file['id'])
-
-        thread = threading.Thread(
-            target=self._download_and_print,
-            args=(g_code_file, )
-        )
-        thread.daemon = True
-        thread.start()
-
-        return {'target_path': g_code_file['filename']}
-
-    def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-
-        gcode_move = self.model.printer_state.status['gcode_move']
-        is_relative = not gcode_move['absolute_coordinates']
-        has_z = 'z' in {axis.lower() for axis in axes_dict.keys()}
-        feedrate = (
-            self.model.config.server.feedrate_z
-            if has_z
-            else self.model.config.server.feedrate_xy
-        )
-
-        _logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
-        self.moonrakerconn.request_jog(
-            axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
-        )
-
-    def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-
-        _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
-        self.moonrakerconn.request_home(axes=axes)
-
-    def _process_set_temperature_message(self, ack_ref: str, heater, target_temp) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-        mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
-        if not mr_heater:
-            _logger.error(f'Can not find corresponding heater for {heater} in Moonraker.')
-        else:
-            _logger.info(f'set_temperature request for {mr_heater} -> {target_temp} with ack_ref {ack_ref}')
-        self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
