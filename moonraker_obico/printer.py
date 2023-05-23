@@ -7,7 +7,7 @@ from .config import Config
 from .version import VERSION
 from .utils import  sanitize_filename
 
-MAX_GCODE_DOWNLOAD_SECONDS = 10 * 60
+MAX_GCODE_DOWNLOAD_SECONDS = 30 * 60
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -124,9 +124,9 @@ class PrinterState:
 
             if self.gcode_downloading_started is not None:
                 if state != PrinterState.STATE_OPERATIONAL: # It is in an unexpected state. Something has gone wrong
-                    self.gcode_downloading_started = None
+                    self.set_gcode_downloading_started(None)
                 elif time.time() - self.gcode_downloading_started > MAX_GCODE_DOWNLOAD_SECONDS: # For the edge case that the download thread died without an exception
-                    self.gcode_downloading_started = None
+                    self.set_gcode_downloading_started(None)
                 else:
                     state = PrinterState.STATE_DOWNLOADING_GCODE
 
@@ -162,7 +162,7 @@ class PrinterState:
                 'state': {
                     'text': state,
                     'flags': {
-                        'operational': state not in [PrinterState.STATE_OFFLINE,],
+                        'operational': state not in [PrinterState.STATE_OFFLINE, PrinterState.STATE_DOWNLOADING_GCODE],
                         'paused': state == PrinterState.STATE_PAUSED,
                         'printing': state == PrinterState.STATE_PRINTING,
                         'cancelling': False,
