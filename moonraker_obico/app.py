@@ -404,7 +404,7 @@ class App(object):
 
             error = None
             try:
-                ret_value = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
+                ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
             except Exception as e:
                 error = 'Error in calling "{}" in target "{}" - {}'.format(passthru['func'], passthru['target'], e)
                 self.sentry.captureException()

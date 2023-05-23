@@ -21,7 +21,7 @@ class FileDownloader:
 
     def download(self, g_code_file) -> None:
         if self.model.printer_state.is_printing():
-            return {'error': 'Printer busy!'}
+            return None, 'Printer busy!'
 
         thread = threading.Thread(
             target=self._download_and_print,
@@ -30,7 +30,7 @@ class FileDownloader:
         thread.daemon = True
         thread.start()
 
-        return {'target_path': g_code_file['filename']}
+        return {'target_path': g_code_file['filename']}, None
 
 
     def _download_and_print(self, g_code_file):
@@ -85,9 +85,7 @@ class Printer:
 
     def jog(self, axes_dict) -> None:
         if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
+            return None, 'Printer is not connected!'
 
         gcode_move = self.model.printer_state.status['gcode_move']
         is_relative = not gcode_move['absolute_coordinates']
@@ -101,22 +99,22 @@ class Printer:
         self.moonrakerconn.request_jog(
             axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
         )
+        return None, None
 
     def home(self, axes) -> None:
         if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
+            return None, 'Printer is not connected!'
 
         self.moonrakerconn.request_home(axes=axes)
+        return None, None
 
     def set_temperature(self, heater, target_temp) -> None:
         if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
+            return None, 'Printer is not connected!'
+
         mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
         self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
+        return None, None
 
 
 class MoonrakerApi:
@@ -139,15 +137,24 @@ class MoonrakerApi:
             self.sentry = sentry
 
         def call_api(self, verb='get', **kwargs):
+            if not self.moonrakerconn:
+                return None, 'Printer is not connected!'
+
             api_func = getattr(self.moonrakerconn, f'api_{verb.lower()}', None)
 
+            ret_value = None
+            error = None
             try:
                 # Wrap requests.exceptions.RequestException in Exception, since it's one of the configured errors_to_ignore
                 try:
                     ret_value = api_func(self.func, **kwargs)
                 except requests.exceptions.RequestException as exc:
-                    raise Exception('Error in calling "{}" - "{}" - "{}"'.format(self.func, verb, kwargs)) from exc
+                    if (self.func == "printer/gcode/script"):
+                        raise Exception(' "{}" - "{}"'.format(self.func, kwargs.get('script', '')[:5])) from exc # Take first 5 characters of the scrips to see if Sentry grouping will behave more friendly
+                    raise Exception(' "{}" - "{}" - "{}"'.format(self.func, verb, kwargs)) from exc
             except Exception as ex:
                 error = 'Error in calling "{}" - "{}" - "{}"'.format(self.func, verb, kwargs)
                 self.sentry.captureException()
+
+            return ret_value, error
 
