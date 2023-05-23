@@ -27,7 +27,7 @@ from .server_conn import ServerConn
 from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .file_downloader import FileDownloader
+from .passthru_targets import FileDownloader, Printer
 
 
 _logger = logging.getLogger('obico.app')
@@ -60,7 +60,8 @@ class App(object):
         self.jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
-        self.file_downloader = None
+        self.target_file_downloader = None
+        self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
         self.q: queue.Queue = queue.Queue(maxsize=1000)
 
     def push_event(self, event):
@@ -122,7 +123,8 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
+        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
+        self.target__printer = Printer(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -399,15 +401,16 @@ class App(object):
                 self.model.seen_refs.append(ack_ref)
 
             if target == 'file_downloader':
-                ret_value = self.file_downloader.download(g_code_file=args[0])
+                ret_value = self.target_file_downloader.download(g_code_file=args[0])
 
             elif target == '_printer':
-                if func == 'jog':
-                    ret_value = self._process_jog_message(ack_ref, axes_dict=args[0])
-                elif func == 'home':
-                    ret_value = self._process_home_message(ack_ref, axes=args[0])
-                elif func == 'set_temperature':
-                    ret_value = self._process_set_temperature_message(ack_ref, heater=args[0], target_temp=args[1])
+                target = getattr(self, 'target_' + passthru.get('target'))
+                func = getattr(target, passthru['func'], None)
+                if not func:
+                    self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
+                    return
+
+                ret_value = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
 
             elif target == 'moonraker_api':
                 verb = kwargs.pop('verb', 'get')
@@ -447,48 +450,6 @@ class App(object):
             kwargs = msg.get('ws.tunnel')
             kwargs['type_'] = kwargs.pop('type')
             self.local_tunnel.send_ws_to_local(**kwargs)
-
-    def _process_jog_message(self, ack_ref: str, axes_dict) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-
-        gcode_move = self.model.printer_state.status['gcode_move']
-        is_relative = not gcode_move['absolute_coordinates']
-        has_z = 'z' in {axis.lower() for axis in axes_dict.keys()}
-        feedrate = (
-            self.model.config.server.feedrate_z
-            if has_z
-            else self.model.config.server.feedrate_xy
-        )
-
-        _logger.info(f'jog request ({axes_dict}) with ack_ref {ack_ref}')
-        self.moonrakerconn.request_jog(
-            axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
-        )
-
-    def _process_home_message(self, ack_ref: str, axes: List[str]) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-
-        _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
-        self.moonrakerconn.request_home(axes=axes)
-
-    def _process_set_temperature_message(self, ack_ref: str, heater, target_temp) -> None:
-        if not self.moonrakerconn:
-            return {
-                        'error': 'Printer is not connected!',
-                    }
-        mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
-        if not mr_heater:
-            _logger.error(f'Can not find corresponding heater for {heater} in Moonraker.')
-        else:
-            _logger.info(f'set_temperature request for {mr_heater} -> {target_temp} with ack_ref {ack_ref}')
-        self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

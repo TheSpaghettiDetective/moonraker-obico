@@ -75,3 +75,52 @@ class FileDownloader:
           self.sentry.captureException()
         finally:
           self.model.printer_state.set_gcode_downloading_started(None)
+
+
+class Printer:
+
+    def __init__(self, model, moonrakerconn, sentry):
+        self.model = model
+        self.moonrakerconn = moonrakerconn
+        self.sentry = sentry
+
+    def jog(self, axes_dict) -> None:
+        if not self.moonrakerconn:
+            return {
+                        'error': 'Printer is not connected!',
+                    }
+
+        gcode_move = self.model.printer_state.status['gcode_move']
+        is_relative = not gcode_move['absolute_coordinates']
+        has_z = 'z' in {axis.lower() for axis in axes_dict.keys()}
+        feedrate = (
+            self.model.config.server.feedrate_z
+            if has_z
+            else self.model.config.server.feedrate_xy
+        )
+
+        self.moonrakerconn.request_jog(
+            axes_dict=axes_dict, is_relative=is_relative, feedrate=feedrate
+        )
+
+    def home(self, ack_ref: str, axes) -> None:
+        if not self.moonrakerconn:
+            return {
+                        'error': 'Printer is not connected!',
+                    }
+
+        _logger.info(f'homing request for {axes} with ack_ref {ack_ref}')
+        self.moonrakerconn.request_home(axes=axes)
+
+    def set_temperature(self, ack_ref: str, heater, target_temp) -> None:
+        if not self.moonrakerconn:
+            return {
+                        'error': 'Printer is not connected!',
+                    }
+        mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
+        if not mr_heater:
+            _logger.error(f'Can not find corresponding heater for {heater} in Moonraker.')
+        else:
+            _logger.info(f'set_temperature request for {mr_heater} -> {target_temp} with ack_ref {ack_ref}')
+        self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
+
