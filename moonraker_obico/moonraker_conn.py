@@ -136,8 +136,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('stream_url', None),
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
-                         ) for cfg in result.get('webcams', []) ]
-
+                         ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
 
             # Check for the standard namespace for webcams
             result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
@@ -149,7 +148,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('urlStream', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
-                        ) for cfg in result.get('value', {}).values() ]
+                        ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() ]
 
             # webcam configs not found in the standard location. Try fluidd's flavor
             result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
