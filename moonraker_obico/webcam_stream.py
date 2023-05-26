@@ -113,6 +113,18 @@ class WebcamStreamer:
 
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
+        # camera-stream is introduced in Crowsnest V4
+        try:
+            camera_streamer_mp4_url = 'http://127.0.0.1:8080/video.mp4'
+            _logger.info('Trying to start ffmpeg using camera-streamer H.264 source')
+            self.start_ffmpeg('-re -i {} -c:v copy'.format(camera_streamer_mp4_url))
+            return
+        except Exception:
+            _logger.info('No camera-stream H.264 source found. Continue to legacy streaming')
+            pass
+
+        # The streaming mechansim for pre-1.0 OctoPi versions
+
         encoder = h264_encoder()
 
         webcam_config = self.config.webcam
