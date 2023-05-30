@@ -24,7 +24,6 @@ from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
 from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
-from .webcam_stream import WebcamStreamer
 from .janus import JanusConn
 from .tunnel import LocalTunnel
 from .passthru_targets import FileDownloader, Printer, MoonrakerApi
@@ -56,7 +55,6 @@ class App(object):
         self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
-        self.webcam_streamer = None
         self.jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
@@ -122,7 +120,7 @@ class App(object):
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
-        self.janus = JanusConn(self.model.config, self.server_conn, self.sentry)
+        self.janus = JanusConn(self.model, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
         self.target__printer = Printer(self.model, self.moonrakerconn)
@@ -136,13 +134,6 @@ class App(object):
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
-
-        if not self.model.config.webcam.disable_video_streaming:
-            _logger.info('Starting webcam streamer')
-            self.webcam_streamer = WebcamStreamer(self.model, self.server_conn, self.sentry)
-            stream_thread = threading.Thread(target=self.webcam_streamer.video_pipeline)
-            stream_thread.daemon = True
-            stream_thread.start()
 
         thread = threading.Thread(target=self.server_conn.start)
         thread.daemon = True

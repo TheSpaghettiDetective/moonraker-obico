@@ -13,11 +13,11 @@ from urllib.error import URLError, HTTPError
 import requests
 
 from .utils import get_image_info, pi_version, to_unicode
-from .janus import JANUS_SERVER
 from .webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.webcam_stream')
 
+JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
 FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 

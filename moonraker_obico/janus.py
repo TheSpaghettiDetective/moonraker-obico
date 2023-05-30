@@ -8,8 +8,9 @@ import json
 import socket
 import psutil
 
-from .utils import ExpoBackoff, pi_version, to_unicode
+from .utils import ExpoBackoff, pi_version, to_unicode, is_port_open
 from .ws import WebSocketClient
+from .webcam_stream import WebcamStreamer
 
 _logger = logging.getLogger('obico.janus')
 
@@ -18,6 +19,7 @@ JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
 JANUS_WS_PORT = 17058
 JANUS_PRINTER_DATA_PORT = 17739
 MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
+CAMERA_STREAMER_RTSP_PORT = 8554
 
 
 class JanusNotSupportedException(Exception):
@@ -26,14 +28,16 @@ class JanusNotSupportedException(Exception):
 
 class JanusConn:
 
-    def __init__(self, config, server_conn, sentry):
-        self.config = config
+    def __init__(self, app_model, server_conn, sentry):
+        self.config = app_model.config
+        self.app_model = app_model
         self.server_conn = server_conn
         self.sentry = sentry
         self.janus_ws_backoff = ExpoBackoff(120, max_attempts=20)
         self.janus_ws = None
         self.janus_proc = None
         self.shutting_down = False
+        self.camera_streamer_rtsp_open = False
 
     def start(self):
 
@@ -44,12 +48,14 @@ class JanusConn:
 
         def run_janus_forever():
 
-            def setup_janus_config():
+            def setup_janus_config(camera_streamer_rtsp_open):
                 video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
                 auth_token = self.config.server.auth_token
 
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
                 setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
+                if camera_streamer_rtsp_open:
+                    setup_cmd += ' -r'
 
                 _logger.debug('Popen: {}'.format(setup_cmd))
                 setup_proc = psutil.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -58,7 +64,6 @@ class JanusConn:
                 (stdoutdata, stderrdata) = setup_proc.communicate()
                 if returncode != 0:
                     raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
-
 
             @backoff.on_exception(backoff.expo, Exception, max_tries=5)
             def run_janus():
@@ -75,7 +80,7 @@ class JanusConn:
                         raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
             try:
-                setup_janus_config()
+                setup_janus_config(self.camera_streamer_rtsp_open)
                 run_janus()
             except JanusNotSupportedException as e:
                 _logger.warning(e)
@@ -87,6 +92,15 @@ class JanusConn:
                     event_class='WARNING',
                     info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
                 )
+
+        self.camera_streamer_rtsp_open = is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
+
+        if not self.config.webcam.disable_video_streaming and not self.camera_streamer_rtsp_open:
+            _logger.info('Starting webcam streamer')
+            webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
+            stream_thread = Thread(target=webcam_streamer.video_pipeline)
+            stream_thread.daemon = True
+            stream_thread.start()
 
         janus_proc_thread = Thread(target=run_janus_forever)
         janus_proc_thread.daemon = True

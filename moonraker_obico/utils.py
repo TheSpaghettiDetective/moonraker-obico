@@ -222,11 +222,15 @@ def get_image_info(data):
     return content_type, width, height
 
 
+def is_port_open(host, port):
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        return sock.connect_ex((host, port)) == 0
+
+
 @backoff.on_exception(backoff.expo, Exception, max_tries=3, jitter=None)
 @backoff.on_predicate(backoff.expo, max_tries=3, jitter=None)
 def wait_for_port(host, port):
-    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        return sock.connect_ex((host, port)) == 0
+    return is_port_open(host, port)
 
 
 def wait_for_port_to_close(host, port):

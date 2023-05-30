@@ -5,6 +5,7 @@ set -e
 JANUS_ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 RUNTIME_JANUS_ETC_DIR="${JANUS_ROOT_DIR}/runtime/etc/janus"
 TPL_JANUS_ETC_DIR="${JANUS_ROOT_DIR}/templates/etc/janus"
+USE_RTSP="n"
 
 . "${JANUS_ROOT_DIR}/../utils.sh"
 
@@ -88,6 +89,9 @@ gen_janus_plugin_streaming_jcfg() {
 
   streaming_jcfg_path="${RUNTIME_JANUS_ETC_DIR}/janus.plugin.streaming.jcfg"
   tpl_streaming_jcfg_path="${TPL_JANUS_ETC_DIR}/janus.plugin.streaming.jcfg.template"
+  if [ $USE_RTSP == "y" ]; then
+      tpl_streaming_jcfg_path="${TPL_JANUS_ETC_DIR}/janus.plugin.streaming.jcfg.rtsp.template"
+  fi
   sed "s/__VIDEO_ENABLED__/${VIDEO_ENABLED}/g" "${tpl_streaming_jcfg_path}" > "${streaming_jcfg_path}"
 }
 
@@ -97,10 +101,11 @@ gen_janus_transport_websocket_jcfg() {
   cp "${tpl_path}" "${target_path}"
 }
 
-while getopts "A:V:" arg; do
+while getopts "A:V:r" arg; do
   case $arg in
     A) AUTH_TOKEN=${OPTARG};;
     V) VIDEO_ENABLED=${OPTARG};;
+    r) USE_RTSP="y";;
   esac
 done
 
