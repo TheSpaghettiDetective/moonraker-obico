@@ -12,7 +12,7 @@ import backoff
 from urllib.error import URLError, HTTPError
 import requests
 
-from .utils import get_image_info, pi_version, to_unicode
+from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
 from .webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.webcam_stream')
@@ -117,7 +117,7 @@ class WebcamStreamer:
         try:
             camera_streamer_mp4_url = 'http://127.0.0.1:8080/video.mp4'
             _logger.info('Trying to start ffmpeg using camera-streamer H.264 source')
-            self.start_ffmpeg('-re -i {} -c:v copy'.format(camera_streamer_mp4_url))
+            self.start_ffmpeg('-re -i {} -c:v copy'.format(camera_streamer_mp4_url), retry_after_quit=True) # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
             return
         except Exception as e:
             _logger.info(f'No camera-stream H.264 source found. Continue to legacy streaming: {e}')
@@ -152,7 +152,7 @@ class WebcamStreamer:
 
         self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
 
-    def start_ffmpeg(self, ffmpeg_args):
+    def start_ffmpeg(self, ffmpeg_args, retry_after_quit=False):
         ffmpeg_cmd = '{} -loglevel error {} -an -f rtp rtp://{}:17734?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
@@ -165,14 +165,16 @@ class WebcamStreamer:
             (stdoutdata, stderrdata) = self.ffmpeg_proc.communicate()
             msg = 'STDOUT:\n{}\nSTDERR:\n{}\n'.format(stdoutdata, stderrdata)
             _logger.error(msg)
-            raise Exception('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
+            raise Exception('ffmpeg failed! Exit code: {}'.format(returncode))
         except psutil.TimeoutExpired:
            pass
 
         cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
-        def monitor_ffmpeg_process():
+
+        def monitor_ffmpeg_process(retry_after_quit=False):
             # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
             ring_buffer = deque(maxlen=50)
+            ffmpeg_backoff = ExpoBackoff(10)
             while True:
                 err = to_unicode(self.ffmpeg_proc.stderr.readline(), errors='replace')
                 if not err:  # EOF when process ends?
@@ -181,13 +183,20 @@ class WebcamStreamer:
 
                     returncode = self.ffmpeg_proc.wait()
                     msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
-                    _logger.error(msg)
-                    self.sentry.captureMessage('ffmpeg quit! This should not happen. Exit code: {}'.format(returncode))
-                    return
+                    _logger.debug(msg)
+                    self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
+
+                    if retry_after_quit:
+                        ffmpeg_backoff.more('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
+                        ring_buffer = deque(maxlen=50)
+                        _logger.debug('Popen: {}'.format(ffmpeg_cmd))
+                        self.ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
+                    else:
+                        return
                 else:
                     ring_buffer.append(err)
 
-        ffmpeg_thread = Thread(target=monitor_ffmpeg_process)
+        ffmpeg_thread = Thread(target=monitor_ffmpeg_process, kwargs=dict(retry_after_quit=retry_after_quit))
         ffmpeg_thread.daemon = True
         ffmpeg_thread.start()
 
