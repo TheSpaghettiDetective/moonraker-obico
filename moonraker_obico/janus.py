@@ -51,6 +51,7 @@ class JanusConn:
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
                 setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
 
+                _logger.debug('Popen: {}'.format(setup_cmd))
                 setup_proc = psutil.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
                 returncode = setup_proc.wait()

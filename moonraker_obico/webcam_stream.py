@@ -119,8 +119,8 @@ class WebcamStreamer:
             _logger.info('Trying to start ffmpeg using camera-streamer H.264 source')
             self.start_ffmpeg('-re -i {} -c:v copy'.format(camera_streamer_mp4_url))
             return
-        except Exception:
-            _logger.info('No camera-stream H.264 source found. Continue to legacy streaming')
+        except Exception as e:
+            _logger.info(f'No camera-stream H.264 source found. Continue to legacy streaming: {e}')
             pass
 
         # The streaming mechansim for pre-1.0 OctoPi versions
