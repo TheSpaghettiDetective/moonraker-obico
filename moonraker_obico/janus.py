@@ -48,13 +48,13 @@ class JanusConn:
 
         def run_janus_forever():
 
-            def setup_janus_config(camera_streamer_rtsp_open):
+            def setup_janus_config():
                 video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
                 auth_token = self.config.server.auth_token
 
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
                 setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
-                if camera_streamer_rtsp_open:
+                if self.camera_streamer_rtsp_open:
                     setup_cmd += ' -r'
 
                 _logger.debug('Popen: {}'.format(setup_cmd))
@@ -80,7 +80,7 @@ class JanusConn:
                         raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
             try:
-                setup_janus_config(self.camera_streamer_rtsp_open)
+                setup_janus_config()
                 run_janus()
             except JanusNotSupportedException as e:
                 _logger.warning(e)
@@ -94,6 +94,7 @@ class JanusConn:
                 )
 
         self.camera_streamer_rtsp_open = is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
+        _logger.debug(f'RTSP port open? {self.camera_streamer_rtsp_open}')
 
         if not self.config.webcam.disable_video_streaming and not self.camera_streamer_rtsp_open:
             _logger.info('Starting webcam streamer')
