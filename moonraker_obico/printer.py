@@ -7,12 +7,10 @@ from .config import Config
 from .version import VERSION
 from .utils import  sanitize_filename
 
-MAX_GCODE_DOWNLOAD_SECONDS = 30 * 60
-
 class PrinterState:
     STATE_OFFLINE = 'Offline'
     STATE_OPERATIONAL = 'Operational'
-    STATE_DOWNLOADING_GCODE = 'Downloading G-Code'
+    STATE_GCODE_DOWNLOADING = 'G-Code Downloading'
     STATE_PRINTING = 'Printing'
     STATE_PAUSED = 'Paused'
 
@@ -31,7 +29,7 @@ class PrinterState:
         self.status = {}
         self.current_print_ts = None
         self.obico_g_code_file_id = None
-        self.gcode_downloading_started = None
+        self.transient_state = None
         self.thermal_presets = []
 
     def has_active_job(self) -> bool:
@@ -62,9 +60,9 @@ class PrinterState:
         with self._mutex:
             self.obico_g_code_file_id = obico_g_code_file_id
 
-    def set_gcode_downloading_started(self, timestamp):
+    def set_transient_state(self, transient_state):
         with self._mutex:
-            self.gcode_downloading_started = timestamp
+            self.transient_state = transient_state
 
     def get_obico_g_code_file_id(self):
         with self._mutex:
@@ -122,13 +120,8 @@ class PrinterState:
         with self._mutex:
             state = self.get_state_from_status(self.status)
 
-            if self.gcode_downloading_started is not None:
-                if state != PrinterState.STATE_OPERATIONAL: # It is in an unexpected state. Something has gone wrong
-                    self.set_gcode_downloading_started(None)
-                elif time.time() - self.gcode_downloading_started > MAX_GCODE_DOWNLOAD_SECONDS: # For the edge case that the download thread died without an exception
-                    self.set_gcode_downloading_started(None)
-                else:
-                    state = PrinterState.STATE_DOWNLOADING_GCODE
+            if self.transient_state is not None:
+                state = self.transient_state
 
             print_stats = self.status.get('print_stats') or dict()
             virtual_sdcard = self.status.get('virtual_sdcard') or dict()
@@ -163,7 +156,7 @@ class PrinterState:
                 'state': {
                     'text': state,
                     'flags': {
-                        'operational': state not in [PrinterState.STATE_OFFLINE, PrinterState.STATE_DOWNLOADING_GCODE],
+                        'operational': state not in [PrinterState.STATE_OFFLINE, PrinterState.STATE_GCODE_DOWNLOADING],
                         'paused': state == PrinterState.STATE_PAUSED,
                         'printing': state == PrinterState.STATE_PRINTING,
                         'cancelling': False,
