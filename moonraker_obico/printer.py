@@ -12,7 +12,10 @@ class PrinterState:
     STATE_OPERATIONAL = 'Operational'
     STATE_GCODE_DOWNLOADING = 'G-Code Downloading'
     STATE_PRINTING = 'Printing'
+    STATE_PAUSING = 'Pausing'
     STATE_PAUSED = 'Paused'
+    STATE_RESUMING = 'Resuming'
+    STATE_CANCELLING = 'Cancelling'
 
     EVENT_STARTED = 'PrintStarted'
     EVENT_RESUMED = 'PrintResumed'

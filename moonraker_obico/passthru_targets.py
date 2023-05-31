@@ -75,9 +75,26 @@ class FileDownloader:
 
 class Printer:
 
-    def __init__(self, model, moonrakerconn):
+    def __init__(self, model, moonrakerconn, server_conn):
         self.model = model
         self.moonrakerconn = moonrakerconn
+        self.server_conn = server_conn
+
+    def call_printer_api_with_state_transition(self, printer_action, transient_state, timeout=5*60):
+
+        def _call_printer_api():
+            resp_data = self.moonrakerconn.api_post(f'printer/print/{printer_action}', timeout=timeout)
+
+        call_func_with_state_transition(self.server_conn, self.model.printer_state, transient_state, _call_printer_api, timeout=timeout)
+
+    def resume(self):
+        self.call_printer_api_with_state_transition('resume', self.model.printer_state.STATE_RESUMING)
+
+    def cancel(self):
+        self.call_printer_api_with_state_transition('cancel', self.model.printer_state.STATE_CANCELLING)
+
+    def pause(self):
+        self.call_printer_api_with_state_transition('pause', self.model.printer_state.STATE_PAUSING)
 
     def jog(self, axes_dict) -> None:
         if not self.moonrakerconn:
