@@ -151,9 +151,9 @@ class MoonrakerApi:
                 except requests.exceptions.RequestException as exc:
                     if (self.func == "printer/gcode/script"):
                         raise Exception(' "{}" - "{}"'.format(self.func, kwargs.get('script', '')[:5])) from exc # Take first 5 characters of the scrips to see if Sentry grouping will behave more friendly
-                    raise Exception(' "{}" - "{}" - "{}"'.format(self.func, verb)) from exc
+                    raise Exception(' "{}" - "{}" '.format(self.func, verb)) from exc
             except Exception as ex:
-                error = 'Error in calling "{}" - "{}" - "{}"'.format(self.func, verb)
+                error = 'Error in calling "{}" - "{}"'.format(self.func, verb)
                 self.sentry.captureException()
 
             return ret_value, error
