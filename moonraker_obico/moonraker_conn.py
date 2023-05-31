@@ -65,7 +65,7 @@ class MoonrakerConn:
 
         return resp.json().get('result')
 
-    def api_post(self, mr_method, multipart_filename=None, multipart_fileobj=None, **post_params):
+    def api_post(self, mr_method, timeout=None, multipart_filename=None, multipart_fileobj=None, **post_params):
         url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
         _logger.debug(f'POST {url}')
 
@@ -76,6 +76,7 @@ class MoonrakerConn:
             headers=headers,
             data=post_params,
             files=files,
+            timeout=timeout,
         )
         resp.raise_for_status()
         return resp.json()
@@ -348,15 +349,6 @@ class MoonrakerConn:
                 objects[heater] = None
 
         self.jsonrpc_request('printer.objects.query', params=dict(objects=objects), callback=status_update_callback)
-
-    def request_pause(self):
-        return self.jsonrpc_request('printer.print.pause')
-
-    def request_cancel(self):
-        return self.jsonrpc_request('printer.print.cancel')
-
-    def request_resume(self):
-        return self.jsonrpc_request('printer.print.resume')
 
     def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
         # TODO check axes

@@ -123,7 +123,7 @@ class App(object):
         self.janus = JanusConn(self.model, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
-        self.target__printer = Printer(self.model, self.moonrakerconn)
+        self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
@@ -356,21 +356,11 @@ class App(object):
 
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
-                    # FIXME do we need this dance?
-                    # self.commander.prepare_to_pause(
-                    #    self._printer,
-                    #    self._printer_profile_manager.get_current_or_default(),
-                    #    **command.get('args'))
-                    self.moonrakerconn.request_pause()
-
+                    self.target__printer.pause()
                 if command['cmd'] == 'cancel':
-                    self.moonrakerconn.request_cancel()
-
+                    self.target__printer.cancel()
                 if command['cmd'] == 'resume':
-                    self.moonrakerconn.request_resume()
-
-                # if command['cmd'] == 'print':
-                #    self.start_print(**command.get('args'))
+                    self.target__printer.resume()
 
         if 'passthru' in msg:
             _logger.debug(f'Received passthru from server: {msg}')
