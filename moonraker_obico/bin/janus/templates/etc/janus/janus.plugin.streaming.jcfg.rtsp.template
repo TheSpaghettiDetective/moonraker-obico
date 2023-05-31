@@ -142,6 +142,9 @@ h264-video: {
 	audioiface = "127.0.0.1"
 	video = __VIDEO_ENABLED__
     url = "rtsp://127.0.0.1:8554/stream.h264"
+	videopt = 96
+	videortpmap = "H264/90000"
+	videofmtp = "profile-level-id=42e01f;packetization-mode=1"
     data = true
 	dataport = 17739
         datatype = "binary"
