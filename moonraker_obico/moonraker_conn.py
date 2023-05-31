@@ -130,13 +130,26 @@ class MoonrakerConn:
             result = self.api_get('server.webcams.list', raise_for_status=False)
             if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
                 _logger.debug(f'Found config in Moonraker webcams API: {result}')
-                return [ dict(
+                webcam_configs = [ dict(
                             target_fps = cfg.get('target_fps', 25),
                             snapshot_url = cfg.get('snapshot_url', None),
                             stream_url = cfg.get('stream_url', None),
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
                          ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
+
+                if len(webcam_configs) > 0:
+                    return  webcam_configs
+
+                # In case of WebRTC webcam
+                webcam_configs = [ dict(
+                            target_fps = cfg.get('target_fps', 25),
+                            snapshot_url = cfg.get('snapshot_url', None),
+                            stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
+                            flip_h = cfg.get('flip_horizontal', False),
+                            flip_v = cfg.get('flip_vertical', False),
+                         ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() ]
+                return  webcam_configs
 
             # Check for the standard namespace for webcams
             result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
