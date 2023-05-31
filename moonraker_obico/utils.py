@@ -223,6 +223,7 @@ def get_image_info(data):
 
 
 def is_port_open(host, port):
+    _logger.debug(f'Testing TCP port {port} on {host}')
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         return sock.connect_ex((host, port)) == 0
 
