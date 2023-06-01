@@ -266,7 +266,8 @@ class App(object):
             filename=basename,
             safe_filename=basename,
             num_bytes=file_metadata['size'],
-            agent_signature='ts:{}'.format(file_metadata['modified'])
+            agent_signature='ts:{}'.format(file_metadata['modified']),
+            url=filename
             )
         resp = self.server_conn.send_http_request('POST', '/api/v1/octo/g_code_files/', timeout=60, data=g_code_data, raise_exception=True)
         return resp.json()['id']
