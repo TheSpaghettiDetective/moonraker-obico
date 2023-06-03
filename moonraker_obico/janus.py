@@ -37,7 +37,8 @@ class JanusConn:
         self.janus_ws = None
         self.janus_proc = None
         self.shutting_down = False
-        self.camera_streamer_rtsp_open = False
+        self.webcam_streamer = None
+        self.use_camera_streamer_rtsp = False
 
     def start(self):
 
@@ -54,7 +55,7 @@ class JanusConn:
 
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
                 setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
-                if self.camera_streamer_rtsp_open:
+                if self.use_camera_streamer_rtsp:
                     setup_cmd += ' -r'
 
                 _logger.debug('Popen: {}'.format(setup_cmd))
@@ -93,13 +94,13 @@ class JanusConn:
                     info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
                 )
 
-        self.camera_streamer_rtsp_open = is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
-        _logger.debug(f'RTSP port open? {self.camera_streamer_rtsp_open}')
+        self.use_camera_streamer_rtsp = self.app_model.linked_printer.get('is_pro') and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
+        _logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
 
-        if not self.config.webcam.disable_video_streaming and not self.camera_streamer_rtsp_open:
+        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
+        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
             _logger.info('Starting webcam streamer')
-            webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
-            stream_thread = Thread(target=webcam_streamer.video_pipeline)
+            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
             stream_thread.daemon = True
             stream_thread.start()
 
@@ -153,6 +154,9 @@ class JanusConn:
                 pass
 
         self.janus_proc = None
+
+        if self.webcam_streamer:
+            self.webcam_streamer.restore()
 
     def process_janus_msg(self, raw_msg):
         try:
