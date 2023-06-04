@@ -57,7 +57,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
                 if data == b'':
                     raise Exception('End of stream before a valid jpeg is found')
                 if data_bytes > MAX_JPEG_SIZE:
-                    raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
+                    raise Exception('Reached the size cap before a valid jpeg is found.')
 
                 mjpg = chunker.findMjpegChunk(data)
                 if mjpg:
