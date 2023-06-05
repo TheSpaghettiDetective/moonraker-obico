@@ -26,7 +26,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .passthru_targets import FileDownloader, Printer, MoonrakerApi
+from .passthru_targets import FileDownloader, Printer, MoonrakerApi, FileOperations
 
 
 _logger = logging.getLogger('obico.app')
@@ -62,6 +62,7 @@ class App(object):
         self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
         self.target_moonraker_api = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
+        self.target_file_operations = None
 
     def push_event(self, event):
         if self.shutdown:
@@ -125,6 +126,7 @@ class App(object):
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
+        self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,

@@ -171,3 +171,36 @@ class MoonrakerApi:
 
             return ret_value, error
 
+class FileOperations:
+    def __init__(self, model, moonrakerconn, sentry ):
+        self.model = model
+        self.moonrakerconn = moonrakerconn
+        self.sentry = sentry
+
+
+    def check_filepath_and_agent_signature(self, filepath, server_signature):
+        file_metadata = None
+
+        try:
+            file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath)
+            filepath_signature = 'ts:{}'.format(file_metadata['modified'])
+            return filepath_signature == server_signature # check if signatures match -> Boolean
+        except Exception as e:
+            return False # file has been deleted, moved, or renamed
+
+    def start_printer_local_print(self, file_to_print):
+        if not self.moonrakerconn:
+            return None, 'Printer is not connected!'
+        
+        ret_value = None
+        error = None
+        filepath = file_to_print['url']
+        file_is_not_modified = self.check_filepath_and_agent_signature(filepath, file_to_print['agent_signature'])
+
+        if file_is_not_modified:
+            ret_value = 'Success'
+            self.moonrakerconn.api_post('printer/print/start', raise_for_status=True, filename=filepath)
+            return ret_value, error
+        else:
+            error = 'File has been modified! Did you move, delete, or overwrite this file?'
+            return ret_value, error
