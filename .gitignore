@@ -8,3 +8,4 @@ dist
 *.egg*
 .DS_Store
 moonraker-obico.cfg
+venv
