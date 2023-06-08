@@ -220,7 +220,7 @@ disable_video_streaming = False
 # stream_url = http://127.0.0.1:8080/?action=stream
 # flip_h = False
 # flip_v = False
-# rotate_90 = False
+# rotation = 0
 # aspect_ratio_169 = False
 
 [logging]

@@ -137,6 +137,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('stream_url', None),
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
+                            rotation = cfg.get('rotation', 0),
                          ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
 
                 if len(webcam_configs) > 0:
@@ -149,6 +150,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
+                            rotation = cfg.get('rotation', 0),
                          ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() ]
                 return  webcam_configs
 
@@ -162,6 +164,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('urlStream', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
+                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
                         ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() ]
 
             # webcam configs not found in the standard location. Try fluidd's flavor
@@ -173,6 +176,7 @@ class MoonrakerConn:
                             stream_url = cfg.get('url', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
+                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
                         ) for cfg in result.get('value', {}).get('cameras', []) if not cfg.get('enabled', False) ]
 
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable

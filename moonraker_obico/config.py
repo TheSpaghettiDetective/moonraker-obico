@@ -117,12 +117,17 @@ class WebcamConfig:
         return self.moonraker_webcam_config.get('flip_v')
 
     @property
-    def rotate_90(self):
+    def rotation(self):
+        invalid_value_message = f'Invalid rotation value. Valid values: [0, 90, 180, 270]. Using default.'
         try:
-            return self.webcam_config_section.getboolean('rotate_90', False)
+            rotation = self.webcam_config_section.getint('rotation', 0)
+            if not rotation in [0, 90, 180, 270]:
+                _logger.warn(invalid_value_message)
+                return 0
+            return rotation
         except:
-            _logger.warn(f'Invalid rotate_90 value. Using default.')
-            return False
+            _logger.warn(invalid_value_message)
+            return 0
 
     @property
     def aspect_ratio_169(self):

@@ -108,7 +108,7 @@ class PrinterState:
                     webcam=dict(
                         flipV=config.webcam.flip_v,
                         flipH=config.webcam.flip_h,
-                        rotate90=config.webcam.rotate_90,
+                        rotation=config.webcam.rotation,
                         streamRatio="16:9" if config.webcam.aspect_ratio_169 else "4:3",
                     ),
                     temperature=dict(dict(profiles=self.thermal_presets)),
