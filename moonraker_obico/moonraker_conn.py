@@ -319,14 +319,21 @@ class MoonrakerConn:
 
 
     def request_subscribe(self, objects=None):
-        objects = objects if objects else {
-            'print_stats': ('state', 'message', 'filename', 'info'),
-            'webhooks': ('state', 'state_message'),
-            'gcode_move': ('speed_factor', 'extrude_factor'),
-            'fan': ('speed'),
-            'history': None,
-        }
-        return self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=objects))
+        def subscribe_callback(data):
+            subscribe_objects = objects if objects else {
+                'print_stats': ('state', 'message', 'filename', 'info'),
+                'webhooks': ('state', 'state_message'),
+                'gcode_move': ('speed_factor', 'extrude_factor'),
+                'history': None,
+            }
+
+            fan_exists = bool(data.get('result', {}).get('status', {}).get('fan', {}))
+            if fan_exists:
+                subscribe_objects['fan'] = ('speed')
+
+            return self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribe_objects))
+
+        self.jsonrpc_request('printer.objects.query', params=dict(objects={"fan": None}), callback=subscribe_callback)
 
     def request_status_update(self, objects=None):
         def status_update_callback(data):
