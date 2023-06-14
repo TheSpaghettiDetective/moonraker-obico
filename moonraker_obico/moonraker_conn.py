@@ -321,9 +321,9 @@ class MoonrakerConn:
     def request_subscribe(self, objects=None):
         def subscribe_callback(data):
             subscribe_objects = objects if objects else {
-                'print_stats': ('state', 'message', 'filename', 'info'),
+                'print_stats': ('state', 'message', 'filename', 'info', 'print_duration'),
                 'webhooks': ('state', 'state_message'),
-                'gcode_move': ('speed_factor', 'extrude_factor'),
+                'gcode_move': ('speed_factor', 'extrude_factor', 'gcode_position'),
                 'history': None,
             }
 

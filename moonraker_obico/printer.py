@@ -1,3 +1,4 @@
+import math
 from typing import Optional, Dict, Any
 import threading
 import time
@@ -91,12 +92,12 @@ class PrinterState:
         }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_OFFLINE)
 
     def to_dict(
-        self, print_event: Optional[str] = None, with_config: Optional[bool] = False,
+        self, print_event: Optional[str] = None, with_config: Optional[bool] = False, moonrakerconn = None
     ) -> Dict:
         with self._mutex:
             data = {
                 'current_print_ts': self.current_print_ts,
-                'status': self.to_status(),
+                'status': self.to_status(moonrakerconn),
             } if self.current_print_ts is not None else {}      # Print status is un-deterministic when current_print_ts is None
 
             if print_event:
@@ -119,7 +120,7 @@ class PrinterState:
                 )
             return data
 
-    def to_status(self) -> Dict:
+    def to_status(self, moonrakerconn) -> Dict:
         with self._mutex:
             state = self.get_state_from_status(self.status)
 
@@ -146,6 +147,20 @@ class PrinterState:
             filepath = print_stats.get('filename')
             filename = pathlib.Path(filepath).name if filepath else None
             file_display_name = sanitize_filename(filename) if filename else None
+
+            total_layers = None
+            current_layer = None
+            current_z = gcode_move.get('gcode_position', [])[2] if len(gcode_move.get('gcode_position', [])) > 2 else None
+            max_z = None
+            if moonrakerconn and filepath and current_z:
+                file_metadata = moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath)
+                max_z = file_metadata.get('object_height') if file_metadata.get('object_height') else None
+                total_layers = get_total_layers(print_info, file_metadata)
+                current_layer = get_current_layer(print_info, file_metadata, print_stats, gcode_move, total_layers)
+                if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
+                if not current_layer or not total_layers: # edge case handling - if either is not available we show nothing
+                    current_layer = None
+                    total_layers = None
 
             if state == PrinterState.STATE_OFFLINE:
                 return {}
@@ -190,12 +205,45 @@ class PrinterState:
                 },
                 'temperatures': temps,
                 'file_metadata': {
+                    'analysis': {
+                        'printingArea': {
+                            'maxZ': max_z
+                        }
+                    },
                     'obico': {
-                        'totalLayerCount': print_info.get('total_layer')
+                        'totalLayerCount': total_layers
                     }
                 },
-                'currentLayerHeight': print_info.get('current_layer'),
+                'currentLayerHeight': current_layer,
                 'currentFeedRate': gcode_move.get('speed_factor'),
                 'currentFlowRate': gcode_move.get('extrude_factor'),
-                'currentFanSpeed': fan.get('speed')
+                'currentFanSpeed': fan.get('speed'),
+                'currentZ': current_z
             }
+
+def get_current_layer(print_info, file_metadata, print_stats, gcode_move, total_layers):
+    if print_info.get('current_layer') is not None: 
+        return print_info.get('current_layer')
+
+    if print_stats.get('print_duration') > 0 and file_metadata.get('first_layer_height') is not None and file_metadata.get('layer_height') is not None:
+        gcode_position_z = gcode_move.get('gcode_position', [])[2] if len(gcode_move.get('gcode_position', [])) > 2 else None
+        if gcode_position_z is None: return None
+
+        current_layer = math.ceil((gcode_position_z - file_metadata.get('first_layer_height')) / file_metadata.get('layer_height') + 1)
+        if current_layer > total_layers: return total_layers
+        if current_layer > 0: return current_layer
+
+    return None
+
+def get_total_layers(print_info, file_metadata):
+    if print_info.get('total_layer') is not None: 
+        return print_info.get('total_layer')
+    
+    if file_metadata.get('layer_count') is not None: 
+        return file_metadata.get('layer_count')
+
+    if file_metadata.get('first_layer_height') is not None and file_metadata.get('layer_height') is not None and file_metadata.get('object_height') is not None:
+        max = math.ceil((file_metadata.get('object_height') - file_metadata.get('first_layer_height') / file_metadata.get('layer_height') + 1))
+        return max if max > 0 else 0
+
+    return None

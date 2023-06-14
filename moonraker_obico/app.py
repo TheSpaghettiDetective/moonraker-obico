@@ -88,7 +88,7 @@ class App(object):
 
             if config.server.auth_token:
                 _logger.info('Fetching linked printer...')
-                linked_printer = ServerConn(config, None, None, None).get_linked_printer()
+                linked_printer = ServerConn(config, None, None, None, None).get_linked_printer()
 
 
                 _logger.info(f'starting moonraker-obico (v{VERSION})')
@@ -119,8 +119,8 @@ class App(object):
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
-        self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
+        self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, self.moonrakerconn)
         self.janus = JanusConn(self.model, self.server_conn, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
