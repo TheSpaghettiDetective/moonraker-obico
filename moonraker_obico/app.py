@@ -398,7 +398,7 @@ class App(object):
 
             if ack_ref is not None:
                 if error:
-                    resp = {'ref': ack_ref, 'error': error}
+                    resp = {'ref': ack_ref, 'ret': {'error': error}}
                 else:
                     resp = {'ref': ack_ref, 'ret': ret_value}
 
