@@ -393,7 +393,7 @@ class App(object):
             try:
                 ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
             except Exception as e:
-                error = 'Error in calling "{}" in target "{}" - {}'.format(passthru['func'], passthru['target'], e)
+                error = str(e)
                 self.sentry.captureException()
 
             if ack_ref is not None:
