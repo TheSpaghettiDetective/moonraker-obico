@@ -56,8 +56,12 @@ class ExpoBackoff:
 
 class SentryWrapper:
 
-    def __init__(self, enabled: bool) -> None:
-        self._enabled = enabled
+    def __init__(self, config) -> None:
+        self._enabled = (
+            config.sentry_opt == 'in' and
+            config.server.canonical_endpoint_prefix().endswith('app.obico.io')
+        )
+
         if not self._enabled:
             return
 
@@ -88,6 +92,8 @@ class SentryWrapper:
 
             release='moonraker-obico@'+VERSION,
         )
+
+        self.init_context(auth_token=config.server.auth_token)
 
     def enabled(self) -> bool:
         return self._enabled

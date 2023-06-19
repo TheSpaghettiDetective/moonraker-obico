@@ -17,7 +17,7 @@ import pathlib
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags
+from .utils import get_tags, SentryWrapper
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -103,7 +103,7 @@ class App(object):
                     printer_state=PrinterState(config),
                     seen_refs=collections.deque(maxlen=100),
                 )
-                self.sentry = self.model.config.get_sentry()
+                self.sentry = SentryWrapper(config=config)
                 break
 
             _logger.warning('auth_token not configured. Retry after 2s')
