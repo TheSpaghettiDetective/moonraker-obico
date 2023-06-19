@@ -318,22 +318,21 @@ class MoonrakerConn:
             _logger.warning("Moonraker message queue is full, msg dropped")
 
 
-    def request_subscribe(self, objects=None):
-        def subscribe_callback(data):
-            subscribe_objects = objects if objects else {
-                'print_stats': ('state', 'message', 'filename', 'info', 'print_duration'),
-                'webhooks': ('state', 'state_message'),
-                'gcode_move': ('speed_factor', 'extrude_factor', 'gcode_position'),
-                'history': None,
-            }
+    def request_subscribe(self):
+        subscribe_objects = {
+            'print_stats': ('state', 'message', 'filename', 'info', 'print_duration'),
+            'webhooks': ('state', 'state_message'),
+            'gcode_move': ('speed_factor', 'extrude_factor', 'gcode_position'),
+            'history': None,
+            'fan': ('speed'),
+        }
+        available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', {})
+        subscribe_objects = {
+            key: value for key, value in subscribe_objects.items() if key in available_printer_objects
+        }
 
-            fan_exists = 'fan' in data.get('result', {}).get('objects', {})
-            if fan_exists:
-                subscribe_objects['fan'] = ('speed')
-
-            return self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribe_objects))
-
-        self.jsonrpc_request('printer.objects.list', callback=subscribe_callback)
+        _logger.debug(f'Subscribing to objects {subscribe_objects}')
+        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribe_objects))
 
     def request_status_update(self, objects=None):
         def status_update_callback(data):
