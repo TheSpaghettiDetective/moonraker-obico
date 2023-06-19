@@ -17,7 +17,7 @@ import pathlib
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags, SentryWrapper
+from .utils import SentryWrapper
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -89,25 +89,24 @@ class App(object):
             setup_logging(config.logging)
 
             if config.server.auth_token:
-                _logger.info('Fetching linked printer...')
-                linked_printer = ServerConn(config, None, None, None, None).get_linked_printer()
-
-
-                _logger.info(f'starting moonraker-obico (v{VERSION})')
-                _logger.info('Linked printer: {}'.format(linked_printer))
-
-                self.model = App.Model(
-                    config=config,
-                    remote_status={'viewing': False, 'should_watch': False},
-                    linked_printer=linked_printer,
-                    printer_state=PrinterState(config),
-                    seen_refs=collections.deque(maxlen=100),
-                )
-                self.sentry = SentryWrapper(config=config)
                 break
 
             _logger.warning('auth_token not configured. Retry after 2s')
             time.sleep(2)
+
+        _logger.info(f'starting moonraker-obico (v{VERSION})')
+        _logger.info('Fetching linked printer...')
+        linked_printer = ServerConn(config, None, None, None, None).get_linked_printer()
+        _logger.info('Linked printer: {}'.format(linked_printer))
+
+        self.model = App.Model(
+            config=config,
+            remote_status={'viewing': False, 'should_watch': False},
+            linked_printer=linked_printer,
+            printer_state=PrinterState(config),
+            seen_refs=collections.deque(maxlen=100),
+        )
+        self.sentry = SentryWrapper(config=config)
 
     def start(self, args):
         # TODO: This doesn't work as ffmpeg seems to mess with signals as well
@@ -117,7 +116,6 @@ class App(object):
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.wait_for_auth_token(args)
-        get_tags()
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
