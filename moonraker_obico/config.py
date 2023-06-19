@@ -283,7 +283,7 @@ class Config:
     def get_sentry(self) -> SentryWrapper:
         enabled = (
             self.sentry_opt == 'in' and
-            self.server.canonical_endpoint_prefix().endswith('obico.io')
+            self.server.canonical_endpoint_prefix().endswith('app.obico.io')
         )
         sentry = SentryWrapper(enabled=enabled)
         sentry.init_context(auth_token=self.server.auth_token)
