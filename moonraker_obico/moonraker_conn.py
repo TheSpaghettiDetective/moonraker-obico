@@ -326,7 +326,7 @@ class MoonrakerConn:
             'history': None,
             'fan': ('speed'),
         }
-        available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', {})
+        available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
         subscribe_objects = {
             key: value for key, value in subscribe_objects.items() if key in available_printer_objects
         }
