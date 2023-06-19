@@ -327,13 +327,13 @@ class MoonrakerConn:
                 'history': None,
             }
 
-            fan_exists = bool(data.get('result', {}).get('status', {}).get('fan', {}))
+            fan_exists = 'fan' in data.get('result', {}).get('objects', {})
             if fan_exists:
                 subscribe_objects['fan'] = ('speed')
 
             return self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribe_objects))
 
-        self.jsonrpc_request('printer.objects.query', params=dict(objects={"fan": None}), callback=subscribe_callback)
+        self.jsonrpc_request('printer.objects.list', callback=subscribe_callback)
 
     def request_status_update(self, objects=None):
         def status_update_callback(data):
