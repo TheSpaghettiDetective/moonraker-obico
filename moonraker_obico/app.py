@@ -247,20 +247,31 @@ class App(object):
             # full state update from moonraker
             self._received_klippy_update(event.data['result'])
 
+    def set_current_print(self, printer_state):
 
-    def find_current_print_ts(self, cur_status):
-        cur_job = self.moonrakerconn.find_most_recent_job()
-        if cur_job:
-            return int(cur_job.get('start_time', '0'))
-        else:
-            _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
-            return None
+        def find_current_print_ts():
+            cur_job = self.moonrakerconn.find_most_recent_job()
+            if cur_job:
+                return int(cur_job.get('start_time', '0'))
+            else:
+                _logger.error(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
+                return None
 
+        printer_state.set_current_print_ts(find_current_print_ts())
 
-    def find_obico_g_code_file_id(self, cur_status):
-        filename = cur_status.get('print_stats', {}).get('filename')
+        filename = printer_state.status.get('print_stats', {}).get('filename')
         file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filename)
+        printer_state.current_file_metadata = file_metadata
 
+        # So that Obico server can associate the current print with a gcodefile record in the DB
+        printer_state.set_obico_g_code_file_id(self.find_obico_g_code_file_id(printer_state.status, file_metadata))
+
+    def unset_current_print(self, printer_state):
+        printer_state.set_current_print_ts(-1)
+        printer_state.current_file_metadata = None
+
+    def find_obico_g_code_file_id(self, cur_status, file_metadata):
+        filename = cur_status.get('print_stats', {}).get('filename')
         basename = pathlib.Path(filename).name if filename else None  # filename in the response is actually the relative path
         g_code_data = dict(
             filename=basename,
@@ -307,17 +318,16 @@ class App(object):
             # This should cover all the edge cases when there is an active job, but current_print_ts is not set,
             # e.g., moonraker-obico is restarted in the middle of a print
             if printer_state.has_active_job():
-                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
+                self.set_current_print(printer_state)
             else:
-                printer_state.set_current_print_ts(-1)
+                self.unset_current_print(printer_state)
 
         if cur_state == PrinterState.STATE_PRINTING:
             if prev_state == PrinterState.STATE_PAUSED:
                 self.post_print_event(PrinterState.EVENT_RESUMED)
                 return
             if prev_state == PrinterState.STATE_OPERATIONAL:
-                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
-                printer_state.set_obico_g_code_file_id(self.find_obico_g_code_file_id(printer_state.status))
+                self.set_current_print(printer_state)
                 self.post_print_event(PrinterState.EVENT_STARTED)
                 return
 
@@ -341,7 +351,7 @@ class App(object):
                     _logger.error(
                         f'unexpected state "{_state}", please report.')
 
-                printer_state.set_current_print_ts(-1)
+                self.unset_current_print(printer_state)
                 return
 
         self.server_conn.post_status_update_to_server()

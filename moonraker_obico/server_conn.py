@@ -95,7 +95,7 @@ class ServerConn:
             _logger.warning("Server message queue is full, msg dropped")
 
     def post_status_update_to_server(self, print_event: Optional[str] = None, with_config: Optional[bool] = False):
-        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_config=with_config, moonrakerconn=self.moonrakerconn))
+        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_config=with_config))
         self.status_posted_to_server_ts = time.time()
 
 
