@@ -20,7 +20,7 @@ _logger = logging.getLogger('obico.server_conn')
 
 class ServerConn:
 
-    def __init__(self, config: Config, printer_state: PrinterState, process_server_msg, sentry, status_operations):
+    def __init__(self, config: Config, printer_state: PrinterState, process_server_msg, sentry, moonrakerconn):
         self.should_reconnect = True
         self.config: Config = config
         self.printer_state: PrinterState() = printer_state
@@ -31,7 +31,7 @@ class ServerConn:
         self.ss = None
         self.message_queue_to_server = queue.Queue(maxsize=50)
         self.printer_events_posted = deque(maxlen=20)
-        self.status_operations = status_operations
+        self.moonrakerconn = moonrakerconn
 
 
     ## WebSocket part of the server connection
@@ -95,7 +95,7 @@ class ServerConn:
             _logger.warning("Server message queue is full, msg dropped")
 
     def post_status_update_to_server(self, print_event: Optional[str] = None, with_config: Optional[bool] = False):
-        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_config=with_config, status_operations=self.status_operations))
+        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_config=with_config, moonrakerconn=self.moonrakerconn))
         self.status_posted_to_server_ts = time.time()
 
 
