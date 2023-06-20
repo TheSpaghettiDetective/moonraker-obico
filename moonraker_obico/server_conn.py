@@ -20,7 +20,7 @@ _logger = logging.getLogger('obico.server_conn')
 
 class ServerConn:
 
-    def __init__(self, config: Config, printer_state: PrinterState, process_server_msg, sentry, moonrakerconn):
+    def __init__(self, config: Config, printer_state: PrinterState, process_server_msg, sentry):
         self.should_reconnect = True
         self.config: Config = config
         self.printer_state: PrinterState() = printer_state
@@ -31,7 +31,6 @@ class ServerConn:
         self.ss = None
         self.message_queue_to_server = queue.Queue(maxsize=50)
         self.printer_events_posted = deque(maxlen=20)
-        self.moonrakerconn = moonrakerconn
 
 
     ## WebSocket part of the server connection
