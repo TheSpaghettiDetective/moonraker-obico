@@ -221,15 +221,14 @@ class PrinterState:
                 'currentZ': current_z
             }
 
-def get_current_layer(print_info, file_metadata, print_stats, gcode_move, total_layers):
+def get_current_layer(print_info, file_metadata, print_stats, current_z, total_layers):
     if print_info.get('current_layer') is not None:
         return print_info.get('current_layer')
 
     if print_stats.get('print_duration') > 0 and file_metadata.get('first_layer_height') is not None and file_metadata.get('layer_height') is not None:
-        gcode_position_z = gcode_move.get('gcode_position', [])[2] if len(gcode_move.get('gcode_position', [])) > 2 else None
-        if gcode_position_z is None: return None
+        if current_z is None: return None
 
-        current_layer = math.ceil((gcode_position_z - file_metadata.get('first_layer_height')) / file_metadata.get('layer_height') + 1)
+        current_layer = math.ceil((current_z - file_metadata.get('first_layer_height')) / file_metadata.get('layer_height') + 1)
         if current_layer > total_layers: return total_layers
         if current_layer > 0: return current_layer
 
