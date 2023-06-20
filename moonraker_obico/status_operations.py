@@ -71,11 +71,6 @@ class StatusOperations:
             if print_stats and print_stats.get('print_duration') and print_stats.get('filament_used') and print_stats.get('filename') and file_metadata.get('filament_total') and print_stats.get('print_duration', 0) > 0 and file_metadata.get('filament_total', 0) > 0 and file_metadata.get('filament_total', 0) > print_stats.get('filament_used', 0):
                 return round(print_stats.get('print_duration') / (print_stats.get('filament_used') / file_metadata.get('filament_total')) - print_stats.get('print_duration'))
             return 0
-
-    def get_slicer_print_time_left(self, print_stats, file_metadata):
-        if print_stats and print_stats.get('print_duration') and print_stats.get('filename') and file_metadata.get('estimated_time') and print_stats.get('print_duration') > 0 and file_metadata.get('estimated_time') > 0:
-            return round(file_metadata.get('estimated_time') - print_stats.get('print_duration'))
-        return 0
     
     def create_calculation_dict(self, print_stats, virtual_sdcard, print_info, gcode_move):
         max_z = None
@@ -83,7 +78,6 @@ class StatusOperations:
         total_layers = None
         current_layer = None
         print_time_left = None
-        slicer_print_time_left = None
         filepath = print_stats.get('filename')
         current_z = gcode_move.get('gcode_position', [])[2] if len(gcode_move.get('gcode_position', [])) > 2 else None
 
@@ -93,7 +87,6 @@ class StatusOperations:
             total_layers = self.get_total_layers(print_info, file_metadata)
             current_layer = self.get_current_layer(print_info, file_metadata, print_stats, gcode_move, total_layers)
             print_time_left = self.get_estimated_time_avg(file_metadata, print_stats, virtual_sdcard)
-            slicer_print_time_left = self.get_slicer_print_time_left(print_stats, file_metadata)
             if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
             if not current_layer or not total_layers: # edge case handling - if either is not available we show nothing
                 current_layer = None
@@ -105,5 +98,4 @@ class StatusOperations:
             'total_layers': total_layers,
             'current_layer': current_layer,
             'print_time_left': print_time_left,
-            'slicer_print_time_left': slicer_print_time_left
         }

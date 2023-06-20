@@ -186,8 +186,7 @@ class PrinterState:
                     'filepos': virtual_sdcard.get('file_position', 0),
                     'printTime': print_time,
                     'printTimeLeft': calculation_dict.get('print_time_left'),
-                    'filamentUsed': print_stats.get('filament_used'),
-                    'slicerPrintTimeLeft': calculation_dict.get('slicer_print_time_left')
+                    'filamentUsed': print_stats.get('filament_used')
                 },
                 'temperatures': temps,
                 'file_metadata': {
