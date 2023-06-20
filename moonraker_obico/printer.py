@@ -149,19 +149,6 @@ class PrinterState:
             filename = pathlib.Path(filepath).name if filepath else None
             file_display_name = sanitize_filename(filename) if filename else None
 
-            total_layers = None
-            current_layer = None
-            current_z = gcode_move.get('gcode_position', [])[2] if len(gcode_move.get('gcode_position', [])) > 2 else None
-            max_z = None
-            if self.current_file_metadata and filepath and current_z:
-                max_z = self.current_file_metadata.get('object_height') if self.current_file_metadata.get('object_height') else None
-                total_layers = get_total_layers(print_info, self.current_file_metadata)
-                current_layer = get_current_layer(print_info, self.current_file_metadata, print_stats, gcode_move, total_layers)
-                if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
-                if not current_layer or not total_layers: # edge case handling - if either is not available we show nothing
-                    current_layer = None
-                    total_layers = None
-
             if state == PrinterState.STATE_OFFLINE:
                 return {}
 
@@ -169,6 +156,7 @@ class PrinterState:
             print_time = print_stats.get('total_duration')
             estimated_time = print_time / completion if print_time is not None and completion is not None and completion > 0.001 else None
             print_time_left = estimated_time - print_time if estimated_time is not None and print_time is not None else None
+            current_z, max_z, total_layers, current_layer = self.get_z_info()
             return {
                 '_ts': time.time(),
                 'state': {
@@ -221,28 +209,46 @@ class PrinterState:
                 'currentZ': current_z
             }
 
-def get_current_layer(print_info, file_metadata, print_stats, current_z, total_layers):
-    if print_info.get('current_layer') is not None:
-        return print_info.get('current_layer')
+    def get_z_info(self):
+        '''
+        return: (current_z, max_z, current_layer, total_layers). Any of them can be None
+        '''
+        print_stats = self.status.get('print_stats') or dict()
+        print_info = print_stats.get('info') or dict()
+        file_metadata = self.current_file_metadata
 
-    if print_stats.get('print_duration') > 0 and file_metadata.get('first_layer_height') is not None and file_metadata.get('layer_height') is not None:
-        if current_z is None: return None
+        current_z = None
+        max_z = None
+        total_layers = print_info.get('total_layer')
+        current_layer = print_info.get('current_layer')
 
-        current_layer = math.ceil((current_z - file_metadata.get('first_layer_height')) / file_metadata.get('layer_height') + 1)
-        if current_layer > total_layers: return total_layers
-        if current_layer > 0: return current_layer
+        gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
+        current_z = gcode_position[2] if len(gcode_position) > 2 else None
 
-    return None
+        # Credit: https://github.com/mainsail-crew/mainsail/blob/develop/src/store/printer/getters.ts#L122
 
-def get_total_layers(print_info, file_metadata):
-    if print_info.get('total_layer') is not None:
-        return print_info.get('total_layer')
+        if file_metadata:
+            max_z = file_metadata.get('object_height')
 
-    if file_metadata.get('layer_count') is not None:
-        return file_metadata.get('layer_count')
+            if total_layers is None:
+                total_layers = file_metadata.get('layer_count')
 
-    if file_metadata.get('first_layer_height') is not None and file_metadata.get('layer_height') is not None and file_metadata.get('object_height') is not None:
-        max = math.ceil((file_metadata.get('object_height') - file_metadata.get('first_layer_height') / file_metadata.get('layer_height') + 1))
-        return max if max > 0 else 0
+            first_layer_height = file_metadata.get('first_layer_height')
+            layer_height = file_metadata.get('layer_height')
+            layer_heights_in_metadata = layer_height is not None and first_layer_height is not None
 
-    return None
+            if total_layers is None and layer_heights_in_metadata:
+                total_layers = math.ceil((file_metadata.get('object_height') - first_layer_height / file_metadata.get('layer_height') + 1))
+                total_layers = max(total_layers, 0) # Apparently the previous calculation can result in negative number in some cases...
+
+            if current_layer is None and layer_heights_in_metadata and current_z is not None:
+                current_layer = math.ceil((current_z - first_layer_height) / layer_height + 1)
+                current_layer = min(total_layers, current_layer) # Apparently the previous calculation can result in current_layer > total_layers in some cases...
+                current_layer = max(current_layer, 0) # Apparently the previous calculation can result in negative number in some cases...
+
+        if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
+        if current_layer is None or total_layers is None: # edge case handling - if either is not available we show nothing
+            current_layer = None
+            total_layers = None
+
+        return (current_z, max_z, total_layers, current_layer)
