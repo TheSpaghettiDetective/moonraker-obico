@@ -320,9 +320,9 @@ class MoonrakerConn:
 
     def request_subscribe(self):
         subscribe_objects = {
-            'print_stats': ('state', 'message', 'filename', 'info', 'print_duration'),
+            'print_stats': ('state', 'message', 'filename', 'info'),
             'webhooks': ('state', 'state_message'),
-            'gcode_move': ('speed_factor', 'extrude_factor', 'gcode_position'),
+            'gcode_move': ('speed_factor', 'extrude_factor'),
             'history': None,
             'fan': ('speed'),
         }
