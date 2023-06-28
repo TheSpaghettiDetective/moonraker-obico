@@ -242,6 +242,10 @@ class App(object):
                 msg = (event.data.get('params') or [''])[0]
                 if msg.startswith('!!'):  # It seems to an undocumented feature that some gcode errors that are critical for the users to know are received as notify_gcode_response with "!!"
                     self.server_conn.post_printer_event_to_server('Moonraker Error', msg, attach_snapshot=True)
+                    self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': msg,'_ts': time.time()}}})
+                else:
+                    readable_msg = msg.replace('/', '').lstrip()
+                    self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': readable_msg,'_ts': time.time()}}})
 
         elif event.name == 'status_update':
             # full state update from moonraker
