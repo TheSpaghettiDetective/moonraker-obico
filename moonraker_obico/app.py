@@ -244,7 +244,7 @@ class App(object):
                     self.server_conn.post_printer_event_to_server('Moonraker Error', msg, attach_snapshot=True)
                     self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': msg,'_ts': time.time()}}})
                 else:
-                    readable_msg = msg.replace('/', '').lstrip()
+                    readable_msg = msg.replace('// ', '')
                     self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': readable_msg,'_ts': time.time()}}})
 
         elif event.name == 'status_update':
