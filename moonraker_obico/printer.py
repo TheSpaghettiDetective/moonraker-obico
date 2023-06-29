@@ -238,7 +238,7 @@ class PrinterState:
             layer_heights_in_metadata = layer_height is not None and first_layer_height is not None
 
             if total_layers is None and layer_heights_in_metadata:
-                total_layers = math.ceil((file_metadata.get('object_height') - first_layer_height / file_metadata.get('layer_height') + 1))
+                total_layers = math.ceil(((max_z - first_layer_height) / layer_height + 1))
                 total_layers = max(total_layers, 0) # Apparently the previous calculation can result in negative number in some cases...
 
             if current_layer is None and layer_heights_in_metadata and current_z is not None:
