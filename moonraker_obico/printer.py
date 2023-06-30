@@ -216,6 +216,8 @@ class PrinterState:
         print_stats = self.status.get('print_stats') or dict()
         print_info = print_stats.get('info') or dict()
         file_metadata = self.current_file_metadata
+        is_not_printing = self.is_printing() is False or self.transient_state is not None
+        has_print_duration = print_stats.get('print_duration', 0) > 0
 
         current_z = None
         max_z = None
@@ -247,7 +249,7 @@ class PrinterState:
                 current_layer = max(current_layer, 0) # Apparently the previous calculation can result in negative number in some cases...
 
         if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
-        if current_layer is None or total_layers is None: # edge case handling - if either is not available we show nothing
+        if current_layer is None or total_layers is None or is_not_printing or not has_print_duration: # edge case handling - if either are not available we show nothing / show nothing if paused state, transient, etc / show nothing if no print duration (prevents tracking z height during preheat & start bytes)
             current_layer = None
             total_layers = None
 
