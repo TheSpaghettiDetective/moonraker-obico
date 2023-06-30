@@ -133,7 +133,6 @@ class PrinterState:
             has_error = self.status.get('print_stats', {}).get('state', '') == 'error'
             fan = self.status.get('fan') or dict()
             gcode_move = self.status.get('gcode_move') or dict()
-            print_info = print_stats.get('info') or dict()
 
             temps = {}
             for heater in self.app_config.all_mr_heaters():
@@ -152,10 +151,7 @@ class PrinterState:
             if state == PrinterState.STATE_OFFLINE:
                 return {}
 
-            completion = self.status.get('virtual_sdcard', {}).get('progress')
-            print_time = print_stats.get('total_duration')
-            estimated_time = print_time / completion if print_time is not None and completion is not None and completion > 0.001 else None
-            print_time_left = estimated_time - print_time if estimated_time is not None and print_time is not None else None
+            completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
             return {
                 '_ts': time.time(),
@@ -254,3 +250,18 @@ class PrinterState:
             total_layers = None
 
         return (current_z, max_z, total_layers, current_layer)
+    
+    def get_time_info(self):
+        print_stats = self.status.get('print_stats') or dict()
+        completion = self.status.get('virtual_sdcard', {}).get('progress')
+        print_time = print_stats.get('total_duration')
+        actual_print_duration = print_stats.get('print_duration')
+        estimated_time = actual_print_duration / completion if actual_print_duration is not None and completion is not None and completion > 0.001 else None
+        print_time_left = estimated_time - actual_print_duration if estimated_time is not None and actual_print_duration is not None else None
+
+        file_metadata = self.current_file_metadata
+        if file_metadata and file_metadata.get('estimated_time'):
+            slicer_time_left = file_metadata.get('estimated_time') - actual_print_duration if actual_print_duration is not None else 1
+            print_time_left = slicer_time_left if slicer_time_left > 0 else 1
+
+        return (completion, print_time, print_time_left)
