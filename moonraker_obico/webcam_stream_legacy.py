@@ -14,7 +14,6 @@ import requests
 
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
 from .webcam_capture import capture_jpeg
-from .janus import JanusConn
 
 _logger = logging.getLogger('obico.webcam_stream')
 
@@ -65,40 +64,35 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
 
 class WebcamStreamer:
 
-    def __init__(self, server_conn, moonrakerconn, sentry):
+    def __init__(self, app_model, server_conn, sentry):
+        self.config = app_model.config
+        self.app_model = app_model
         self.server_conn = server_conn
-        self.moonrakerconn = moonrakerconn
         self.sentry = sentry
 
-        self.janus = None
-
-    def start(self, webcam_name, app_config, is_pro=False,  **kwargs):
-
-        webcam_config = (self.moonrakerconn.api_get('server/webcams/item', raise_for_status=False, name=webcam_name) or {}).get('webcam')
-        if not isinstance(webcam_config, dict) or not webcam_config.get('enabled'):
-            raise Exception(f'{webcam_name} is not configured or is disabled')
-
-        if self.janus:
-            self.janus.shutdown()
-
-        if 'mjpeg' in webcam_config.get('service').lower():
-            self.janus = JanusConn(app_config, self.server_conn, is_pro, self.sentry)
-            janus_thread = Thread(target=self.janus.start)
-            janus_thread.daemon = True
-            janus_thread.start()
-
-            if not pi_version():
-                _logger.warning('Not running on a Pi. Quitting video_pipeline.')
-                return
-
-            try:
-                self.ffmpeg_from_mjpeg(webcam_config, is_pro)
-
-            except Exception:
-                self.sentry.captureException()
+        self.ffmpeg_proc = None
+        self.shutting_down = False
 
 
-    def ffmpeg_from_mjpeg(self, webcam_config, is_pro):
+    def video_pipeline(self):
+        if not pi_version():
+            _logger.warning('Not running on a Pi. Quitting video_pipeline.')
+            return
+
+        try:
+            self.ffmpeg_from_mjpeg()
+
+        except Exception:
+            self.sentry.captureException()
+            self.server_conn.post_printer_event_to_server(
+                'moonraker-obico: Webcam Streaming Failed',
+                'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
+                event_class='WARNING',
+                info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
+            )
+
+
+    def ffmpeg_from_mjpeg(self):
 
         @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
         def get_webcam_resolution(webcam_config):
@@ -119,7 +113,7 @@ class WebcamStreamer:
 
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
-        if is_pro:
+        if self.app_model.linked_printer.get('is_pro'):
             # camera-stream is introduced in Crowsnest V4
             try:
                 camera_streamer_mp4_url = 'http://127.0.0.1:8080/video.mp4'
@@ -135,6 +129,7 @@ class WebcamStreamer:
 
         encoder = h264_encoder()
 
+        webcam_config = self.config.webcam
         stream_url = webcam_config.stream_url
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
@@ -153,7 +148,7 @@ class WebcamStreamer:
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.target_fps
-        if not is_pro:
+        if not self.app_model.linked_printer.get('is_pro'):
             fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
             bitrate = int(bitrate/2)
 

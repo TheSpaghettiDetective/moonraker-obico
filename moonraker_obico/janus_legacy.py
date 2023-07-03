@@ -8,9 +8,9 @@ import json
 import socket
 import psutil
 
-from .utils import pi_version, to_unicode, is_port_open
+from .utils import ExpoBackoff, pi_version, to_unicode, is_port_open
 from .ws import WebSocketClient
-#from .webcam_stream import WebcamStreamer
+from .webcam_stream import WebcamStreamer
 
 _logger = logging.getLogger('obico.janus')
 
@@ -28,15 +28,16 @@ class JanusNotSupportedException(Exception):
 
 class JanusConn:
 
-    def __init__(self, app_config, server_conn, is_pro, sentry):
-        self.app_config = app_config
+    def __init__(self, app_model, server_conn, sentry):
+        self.config = app_model.config
+        self.app_model = app_model
         self.server_conn = server_conn
-        self.is_pro = is_pro
         self.sentry = sentry
+        self.janus_ws_backoff = ExpoBackoff(120, max_attempts=20)
         self.janus_ws = None
         self.janus_proc = None
         self.shutting_down = False
-        #self.webcam_streamer = None
+        self.webcam_streamer = None
         self.use_camera_streamer_rtsp = False
 
     def start(self):
@@ -49,8 +50,8 @@ class JanusConn:
         def run_janus_forever():
 
             def setup_janus_config():
-                video_enabled = 'true'
-                auth_token = self.app_config.server.auth_token
+                video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
+                auth_token = self.config.server.auth_token
 
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
                 setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
@@ -65,20 +66,19 @@ class JanusConn:
                 if returncode != 0:
                     raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
 
+            @backoff.on_exception(backoff.expo, Exception, max_tries=5)
             def run_janus():
                 janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
                 _logger.debug('Popen: {}'.format(janus_cmd))
-                self.janus_proc = psutil.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                self.janus_proc.nice(10)
+                self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-                while True:
+                while not self.shutting_down:
                     line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
                     if line:
                         _logger.debug('JANUS: ' + line.rstrip())
-                    else:  # line == None means the process quits
+                    elif not self.shutting_down:  # line == None means the process quits
                         self.janus_proc.wait()
-                        if not self.shutting_down:
-                            raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
+                        raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
             try:
                 setup_janus_config()
@@ -87,16 +87,22 @@ class JanusConn:
                 _logger.warning(e)
             except Exception as ex:
                 self.sentry.captureException()
+                self.server_conn.post_printer_event_to_server(
+                    'moonraker-obico: Webcam Streaming Failed',
+                    'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
+                    event_class='WARNING',
+                    info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
+                )
 
-        #self.use_camera_streamer_rtsp = self.is_pro and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
-        #_logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
+        self.use_camera_streamer_rtsp = self.app_model.linked_printer.get('is_pro') and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
+        _logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
 
-#        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
-#        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
-#            _logger.info('Starting webcam streamer')
-#            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
-#            stream_thread.daemon = True
-#            stream_thread.start()
+        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
+        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
+            _logger.info('Starting webcam streamer')
+            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
+            stream_thread.daemon = True
+            stream_thread.start()
 
         janus_proc_thread = Thread(target=run_janus_forever)
         janus_proc_thread.daemon = True
@@ -117,11 +123,18 @@ class JanusConn:
     def start_janus_ws(self):
 
         def on_close(ws, **kwargs):
-            _logger.warn('Janus WS connection closed!')
+            self.janus_ws_backoff.more(Exception('Janus WS connection closed!'))
+            if not self.shutting_down:
+                _logger.warning('Reconnecting to Janus WS.')
+                self.start_janus_ws()
+
+        def on_message(ws, msg):
+            if self.process_janus_msg(msg):
+                self.janus_ws_backoff.reset()
 
         self.janus_ws = WebSocketClient(
             'ws://{}:{}/'.format(JANUS_SERVER, JANUS_WS_PORT),
-            on_ws_msg=self.process_janus_msg,
+            on_ws_msg=on_message,
             on_ws_close=on_close,
             subprotocols=['janus-protocol'],
             waitsecs=5)
@@ -142,9 +155,9 @@ class JanusConn:
 
         self.janus_proc = None
 
-#        if self.webcam_streamer:
-#            self.webcam_streamer.restore()
-#
+        if self.webcam_streamer:
+            self.webcam_streamer.restore()
+
     def process_janus_msg(self, raw_msg):
         try:
             msg = json.loads(raw_msg)

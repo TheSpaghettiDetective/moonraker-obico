@@ -19,6 +19,7 @@ import requests  # type: ignore
 from .version import VERSION
 from .utils import get_tags
 from .webcam_capture import JpegPoster
+from .webcam_stream import WebcamStreamer
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
@@ -56,12 +57,12 @@ class App(object):
         self.server_conn = None
         self.moonrakerconn = None
         self.jpeg_poster = None
-        self.janus = None
+        self.webcam_streamer = None
         self.local_tunnel = None
         self.target_file_downloader = None
         self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
         self.target_moonraker_api = None
-        self.q: queue.Queue = queue.Queue(maxsize=1000)
+        self.q = queue.Queue(maxsize=1000)
         self.target_file_operations = None
 
     def push_event(self, event):
@@ -121,7 +122,8 @@ class App(object):
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
-        self.janus = JanusConn(self.model, self.server_conn, self.sentry)
+        self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.sentry)
+        self.webcam_streamer.start('mjpeg', self.model.config, is_pro=True)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
@@ -153,11 +155,6 @@ class App(object):
         thread.daemon = True
         thread.start()
 
-        # Janus may take a while to start, or fail to start. Put it in thread to make sure it does not block
-        janus_thread = threading.Thread(target=self.janus.start)
-        janus_thread.daemon = True
-        janus_thread.start()
-
         try:
             thread.join()
         except Exception:
@@ -174,8 +171,6 @@ class App(object):
             self.server_conn.close()
         if self.moonrakerconn:
             self.moonrakerconn.close()
-        if self.janus:
-            self.janus.shutdown()
 
     # TODO: This doesn't work as ffmpeg seems to mess with signals as well
     def interrupted(self, signum, frame):
