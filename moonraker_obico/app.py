@@ -17,7 +17,7 @@ import pathlib
 import requests  # type: ignore
 
 from .version import VERSION
-from .utils import get_tags
+from .utils import SentryWrapper
 from .webcam_capture import JpegPoster
 from .webcam_stream import WebcamStreamer
 from .logger import setup_logging
@@ -88,25 +88,24 @@ class App(object):
             setup_logging(config.logging)
 
             if config.server.auth_token:
-                _logger.info('Fetching linked printer...')
-                linked_printer = ServerConn(config, None, None, None).get_linked_printer()
-
-
-                _logger.info(f'starting moonraker-obico (v{VERSION})')
-                _logger.info('Linked printer: {}'.format(linked_printer))
-
-                self.model = App.Model(
-                    config=config,
-                    remote_status={'viewing': False, 'should_watch': False},
-                    linked_printer=linked_printer,
-                    printer_state=PrinterState(config),
-                    seen_refs=collections.deque(maxlen=100),
-                )
-                self.sentry = self.model.config.get_sentry()
                 break
 
             _logger.warning('auth_token not configured. Retry after 2s')
             time.sleep(2)
+
+        _logger.info(f'starting moonraker-obico (v{VERSION})')
+        _logger.info('Fetching linked printer...')
+        linked_printer = ServerConn(config, None, None, None).get_linked_printer()
+        _logger.info('Linked printer: {}'.format(linked_printer))
+
+        self.model = App.Model(
+            config=config,
+            remote_status={'viewing': False, 'should_watch': False},
+            linked_printer=linked_printer,
+            printer_state=PrinterState(config),
+            seen_refs=collections.deque(maxlen=100),
+        )
+        self.sentry = SentryWrapper(config=config)
 
     def start(self, args):
         # TODO: This doesn't work as ffmpeg seems to mess with signals as well
@@ -116,12 +115,11 @@ class App(object):
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         self.wait_for_auth_token(args)
-        get_tags()
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
-        self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry, )
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
+        self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.sentry)
         self.webcam_streamer.start('mjpeg', self.model.config, is_pro=True)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
@@ -239,25 +237,40 @@ class App(object):
                 msg = (event.data.get('params') or [''])[0]
                 if msg.startswith('!!'):  # It seems to an undocumented feature that some gcode errors that are critical for the users to know are received as notify_gcode_response with "!!"
                     self.server_conn.post_printer_event_to_server('Moonraker Error', msg, attach_snapshot=True)
+                    self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': msg,'_ts': time.time()}}})
+                else:
+                    readable_msg = msg.replace('// ', '')
+                    self.server_conn.send_ws_msg_to_server({'passthru': {'terminal_feed': {'msg': readable_msg,'_ts': time.time()}}})
 
         elif event.name == 'status_update':
             # full state update from moonraker
             self._received_klippy_update(event.data['result'])
 
+    def set_current_print(self, printer_state):
 
-    def find_current_print_ts(self, cur_status):
-        cur_job = self.moonrakerconn.find_most_recent_job()
-        if cur_job:
-            return int(cur_job.get('start_time', '0'))
-        else:
-            _logger.error(f'Active job indicate in print_stats: {cur_status}, but not in job history: {cur_job}')
-            return None
+        def find_current_print_ts():
+            cur_job = self.moonrakerconn.find_most_recent_job()
+            if cur_job:
+                return int(cur_job.get('start_time', '0'))
+            else:
+                _logger.error(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
+                return None
 
+        printer_state.set_current_print_ts(find_current_print_ts())
 
-    def find_obico_g_code_file_id(self, cur_status):
-        filename = cur_status.get('print_stats', {}).get('filename')
+        filename = printer_state.status.get('print_stats', {}).get('filename')
         file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filename)
+        printer_state.current_file_metadata = file_metadata
 
+        # So that Obico server can associate the current print with a gcodefile record in the DB
+        printer_state.set_obico_g_code_file_id(self.find_obico_g_code_file_id(printer_state.status, file_metadata))
+
+    def unset_current_print(self, printer_state):
+        printer_state.set_current_print_ts(-1)
+        printer_state.current_file_metadata = None
+
+    def find_obico_g_code_file_id(self, cur_status, file_metadata):
+        filename = cur_status.get('print_stats', {}).get('filename')
         basename = pathlib.Path(filename).name if filename else None  # filename in the response is actually the relative path
         g_code_data = dict(
             filename=basename,
@@ -304,17 +317,16 @@ class App(object):
             # This should cover all the edge cases when there is an active job, but current_print_ts is not set,
             # e.g., moonraker-obico is restarted in the middle of a print
             if printer_state.has_active_job():
-                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
+                self.set_current_print(printer_state)
             else:
-                printer_state.set_current_print_ts(-1)
+                self.unset_current_print(printer_state)
 
         if cur_state == PrinterState.STATE_PRINTING:
             if prev_state == PrinterState.STATE_PAUSED:
                 self.post_print_event(PrinterState.EVENT_RESUMED)
                 return
             if prev_state == PrinterState.STATE_OPERATIONAL:
-                printer_state.set_current_print_ts(self.find_current_print_ts(printer_state.status))
-                printer_state.set_obico_g_code_file_id(self.find_obico_g_code_file_id(printer_state.status))
+                self.set_current_print(printer_state)
                 self.post_print_event(PrinterState.EVENT_STARTED)
                 return
 
@@ -338,7 +350,7 @@ class App(object):
                     _logger.error(
                         f'unexpected state "{_state}", please report.')
 
-                printer_state.set_current_print_ts(-1)
+                self.unset_current_print(printer_state)
                 return
 
         self.server_conn.post_status_update_to_server()
@@ -385,7 +397,7 @@ class App(object):
             try:
                 ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
             except Exception as e:
-                error = 'Error in calling "{}" in target "{}" - {}'.format(passthru['func'], passthru['target'], e)
+                error = str(e)
                 self.sentry.captureException()
 
             if ack_ref is not None:

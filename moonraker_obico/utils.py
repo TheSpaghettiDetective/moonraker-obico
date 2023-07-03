@@ -56,8 +56,12 @@ class ExpoBackoff:
 
 class SentryWrapper:
 
-    def __init__(self, enabled: bool) -> None:
-        self._enabled = enabled
+    def __init__(self, config) -> None:
+        self._enabled = (
+            config.sentry_opt == 'in' and
+            config.server.canonical_endpoint_prefix().endswith('app.obico.io')
+        )
+
         if not self._enabled:
             return
 
@@ -89,13 +93,15 @@ class SentryWrapper:
             release='moonraker-obico@'+VERSION,
         )
 
+        self.init_context(auth_token=config.server.auth_token)
+
     def enabled(self) -> bool:
         return self._enabled
 
     def init_context(self, auth_token: str) -> None:
         if self.enabled():
             sentry_sdk.set_user({'id': auth_token})
-            for (k, v) in get_tags().items():
+            for (k, v) in self.get_tags().items():
                 sentry_sdk.set_tag(k, v)
 
     def captureException(self, *args, **kwargs) -> None:
@@ -107,55 +113,42 @@ class SentryWrapper:
         if self.enabled():
             sentry_sdk.capture_message(*args, **kwargs)
 
+    def get_tags(self):
+        (os, _, ver, _, arch, _) = platform.uname()
+        tags = dict(os=os, os_ver=ver, arch=arch)
+        try:
+            v4l2 = run('v4l2-ctl --list-devices', stdout=Capture())
+            v4l2_out = ''.join(re.compile(r"^([^\t]+)", re.MULTILINE).findall(v4l2.stdout.text)).replace('\n', '')
+            if v4l2_out:
+                tags['v4l2'] = v4l2_out
+        except:
+            pass
 
-system_tags = None
-tags_mutex = threading.RLock()
+        try:
+            usb = run("lsusb | cut -d ' ' -f 7- | grep -vE ' hub| Hub' | grep -v 'Standard Microsystems Corp'", stdout=Capture())
+            usb_out = ''.join(usb.stdout.text).replace('\n', '')
+            if usb_out:
+                tags['usb'] = usb_out
+        except:
+            pass
 
+        try:
+            distro = run("cat /etc/os-release | grep PRETTY_NAME | sed s/PRETTY_NAME=//", stdout=Capture())
+            distro_out = ''.join(distro.stdout.text).replace('"', '').replace('\n', '')
+            if distro_out:
+                tags['distro'] = distro_out
+        except:
+            pass
 
-def get_tags():
-    global system_tags, tags_mutex
+        try:
+            long_bit = run("getconf LONG_BIT", stdout=Capture())
+            long_bit_out = ''.join(long_bit.stdout.text).replace('\n', '')
+            if long_bit_out:
+                tags['long_bit'] = long_bit_out
+        except:
+            pass
 
-    with tags_mutex:
-        if system_tags:
-            return system_tags
-
-    (os, _, ver, _, arch, _) = platform.uname()
-    tags = dict(os=os, os_ver=ver, arch=arch)
-    try:
-        v4l2 = run('v4l2-ctl --list-devices', stdout=Capture())
-        v4l2_out = ''.join(re.compile(r"^([^\t]+)", re.MULTILINE).findall(v4l2.stdout.text)).replace('\n', '')
-        if v4l2_out:
-            tags['v4l2'] = v4l2_out
-    except:
-        pass
-
-    try:
-        usb = run("lsusb | cut -d ' ' -f 7- | grep -vE ' hub| Hub' | grep -v 'Standard Microsystems Corp'", stdout=Capture())
-        usb_out = ''.join(usb.stdout.text).replace('\n', '')
-        if usb_out:
-            tags['usb'] = usb_out
-    except:
-        pass
-
-    try:
-        distro = run("cat /etc/os-release | grep PRETTY_NAME | sed s/PRETTY_NAME=//", stdout=Capture())
-        distro_out = ''.join(distro.stdout.text).replace('"', '').replace('\n', '')
-        if distro_out:
-            tags['distro'] = distro_out
-    except:
-        pass
-
-    try:
-        long_bit = run("getconf LONG_BIT", stdout=Capture())
-        long_bit_out = ''.join(long_bit.stdout.text).replace('\n', '')
-        if long_bit_out:
-            tags['long_bit'] = long_bit_out
-    except:
-        pass
-
-    with tags_mutex:
-        system_tags = tags
-        return system_tags
+        return tags
 
 
 def get_image_info(data):

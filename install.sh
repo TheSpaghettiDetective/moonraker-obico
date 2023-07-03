@@ -192,7 +192,7 @@ For self-hosted server, specify "http://server_ip:port". For instance, http://19
 EOF
     read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
     echo ""
-    OBICO_SERVER="${user_input}"
+    OBICO_SERVER="${user_input%/}"
   fi
 
   debug OBICO_SERVER: ${OBICO_SERVER}

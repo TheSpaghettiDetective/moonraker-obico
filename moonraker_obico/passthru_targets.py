@@ -164,6 +164,8 @@ class MoonrakerApi:
                 except requests.exceptions.RequestException as exc:
                     if (self.func == "printer/gcode/script"):
                         raise Exception(' "{}" - "{}"'.format(self.func, kwargs.get('script', '')[:5])) from exc # Take first 5 characters of the scrips to see if Sentry grouping will behave more friendly
+                    elif self.func == "machine/device_power/devices" and verb == "get" and hasattr(exc, 'response') and exc.response is not None and exc.response.status_code == 404:
+                            return {'devices': []}, None # User has no power devices configured. This handling is much easier than checking configfile for [power xxx] before making request
                     raise Exception(' "{}" - "{}" '.format(self.func, verb)) from exc
             except Exception as ex:
                 error = 'Error in calling "{}" - "{}"'.format(self.func, verb)
