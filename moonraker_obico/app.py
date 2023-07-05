@@ -6,7 +6,6 @@ import dataclasses
 import time
 import logging
 import threading
-import collections
 import queue
 import json
 import re
@@ -27,9 +26,9 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .passthru_targets import FileDownloader, Printer, MoonrakerApi, FileOperations
 from .printer_discovery import PrinterDiscovery
 import subprocess
+from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
 
 
 _logger = logging.getLogger('obico.app')
@@ -47,7 +46,6 @@ class App(object):
         remote_status: Dict
         linked_printer: Dict
         printer_state: PrinterState
-        seen_refs: collections.deque
 
         def is_configured(self):
             return True  # FIXME
@@ -58,14 +56,12 @@ class App(object):
         self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
-        self.target_jpeg_poster = None
+        self.jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
-        self.target_file_downloader = None
-        self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
-        self.target_moonraker_api = None
+        self.printer = None
+        self.passthru_executor = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
-        self.target_file_operations = None
         self.nozzlecam = None
 
     def push_event(self, event):
@@ -124,19 +120,28 @@ class App(object):
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
             printer_state=PrinterState(config, self),
-            seen_refs=collections.deque(maxlen=100),
         )
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
 
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
+
+        # TODO: To be removed in webcam NG
         self.janus = JanusConn(self.model, self.server_conn, self.sentry)
-        self.target_jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
-        self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
-        self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
-        self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+
+        self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
+        self.passthru_executor = PassthruExecutor(dict(
+                _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
+                jpeg_poster = self.jpeg_poster,
+                # webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer.get('is_pro'), self.sentry),
+                file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
+                moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
+                file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry),
+            ),
+            self.server_conn,
+            self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -161,7 +166,7 @@ class App(object):
         self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
         run_in_thread(self.nozzlecam.start)
 
-        run_in_thread(self.target_jpeg_poster.pic_post_loop)
+        run_in_thread(self.jpeg_poster.pic_post_loop)
         even_loop_thread = run_in_thread(self.event_loop)
 
         # Janus may take a while to start, or fail to start. Put it in thread to make sure it does not block
@@ -377,51 +382,23 @@ class App(object):
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
-                self.target_jpeg_poster.need_viewing_boost.set()
+                self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
             _logger.debug(f'Received commands from server: {msg}')
 
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
-                    self.target__printer.pause()
+                    self.printer.pause()
                 if command['cmd'] == 'cancel':
-                    self.target__printer.cancel()
+                    self.printer.cancel()
                 if command['cmd'] == 'resume':
-                    self.target__printer.resume()
+                    self.printer.resume()
 
         if 'passthru' in msg:
-            _logger.debug(f'Received passthru from server: {msg}')
-
-            passthru = msg['passthru']
-            ack_ref = passthru.get('ref')
-            if ack_ref is not None:
-                # same msg may arrive through both ws and datachannel
-                if ack_ref in self.model.seen_refs:
-                    _logger.debug('Ignoring already processed passthru message')
-                    return
-                # no need to remove item or check size
-                # as deque manages that when maxlen is set
-                self.model.seen_refs.append(ack_ref)
-
-            error = None
-            try:
-                target = getattr(self, 'target_' + passthru.get('target'))
-                func = getattr(target, passthru['func'], None)
-                ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
-            except AttributeError:
-                error = 'Request not supported. Please make sure moonraker-obico is updated to the latest version. If moonraker-obico is already up to date and you still see this error, please contact Obico support at support@obico.io'
-            except Exception as e:
-                error = str(e)
-                self.sentry.captureException()
-
-            if ack_ref is not None:
-                if error:
-                    resp = {'ref': ack_ref, 'error': error}
-                else:
-                    resp = {'ref': ack_ref, 'ret': ret_value}
-
-                self.server_conn.send_ws_msg_to_server({'passthru': resp})
+            passthru_thread = threading.Thread(target=self.passthru_executor.run, args=(msg,))
+            passthru_thread.is_daemon = True
+            passthru_thread.start()
 
         if msg.get('janus') and self.janus:
             _logger.debug(f'Received janus from server: {msg}')

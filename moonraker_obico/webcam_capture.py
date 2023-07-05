@@ -95,7 +95,7 @@ class MjpegStreamChunker:
         if not len(line.strip()): # don't parse empty lines as the boundary
             self.current_chunk.write(line)
             return None
-        
+
         if not self.boundary:
             self.boundary = line
             self.current_chunk.write(line)
