@@ -6,7 +6,6 @@ import dataclasses
 import time
 import logging
 import threading
-import collections
 import queue
 import json
 import re
@@ -27,7 +26,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .passthru_targets import FileDownloader, Printer, MoonrakerApi, FileOperations
+from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
 
 
 _logger = logging.getLogger('obico.app')
@@ -45,7 +44,6 @@ class App(object):
         remote_status: Dict
         linked_printer: Dict
         printer_state: PrinterState
-        seen_refs: collections.deque
 
         def is_configured(self):
             return True  # FIXME
@@ -59,8 +57,9 @@ class App(object):
         self.jpeg_poster = None
         self.webcam_streamer = None
         self.local_tunnel = None
+        self.printer = None
+        self.passthru_executor = None
         self.target_file_downloader = None
-        self.target__printer = None   # The client would pass "_printer" instead of "printer" for historic reasons
         self.target_moonraker_api = None
         self.q = queue.Queue(maxsize=1000)
         self.target_file_operations = None
@@ -103,7 +102,6 @@ class App(object):
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
             printer_state=PrinterState(config),
-            seen_refs=collections.deque(maxlen=100),
         )
         self.sentry = SentryWrapper(config=config)
 
@@ -121,11 +119,16 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.target_webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer.get('is_pro'), self.sentry)
-        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
-        self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
-        self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
-        self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+        self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
+        self.passthru_executor = PassthruExecutor(dict(
+                _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
+                webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer.get('is_pro'), self.sentry),
+                file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
+                moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
+                target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+            ),
+            self.server_conn,
+            self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -365,47 +368,16 @@ class App(object):
 
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
-                    self.target__printer.pause()
+                    self.printer.pause()
                 if command['cmd'] == 'cancel':
-                    self.target__printer.cancel()
+                    self.printer.cancel()
                 if command['cmd'] == 'resume':
-                    self.target__printer.resume()
+                    self.printer.resume()
 
         if 'passthru' in msg:
-            _logger.debug(f'Received passthru from server: {msg}')
-
-            passthru = msg['passthru']
-            target = getattr(self, 'target_' + passthru.get('target'))
-            func = getattr(target, passthru['func'], None)
-
-            if not func:
-                self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
-                return
-
-            ack_ref = passthru.get('ref')
-            if ack_ref is not None:
-                # same msg may arrive through both ws and datachannel
-                if ack_ref in self.model.seen_refs:
-                    _logger.debug('Ignoring already processed passthru message')
-                    return
-                # no need to remove item or check size
-                # as deque manages that when maxlen is set
-                self.model.seen_refs.append(ack_ref)
-
-            error = None
-            try:
-                ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
-            except Exception as e:
-                error = str(e)
-                self.sentry.captureException()
-
-            if ack_ref is not None:
-                if error:
-                    resp = {'ref': ack_ref, 'error': error}
-                else:
-                    resp = {'ref': ack_ref, 'ret': ret_value}
-
-                self.server_conn.send_ws_msg_to_server({'passthru': resp})
+            passthru_thread = threading.Thread(target=self.passthru_executor.run, args=(msg,))
+            passthru_thread.is_daemon = True
+            passthru_thread.start()
 
         if msg.get('janus') and self.janus:
             _logger.debug(f'Received janus from server: {msg}')

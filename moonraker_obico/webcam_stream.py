@@ -137,7 +137,7 @@ class WebcamStreamer:
 
         encoder = h264_encoder()
 
-        stream_url = webcam_config.stream_url
+        stream_url = webcam_config.get('stream_url')
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
@@ -154,7 +154,7 @@ class WebcamStreamer:
             _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
 
         bitrate = bitrate_for_dim(img_w, img_h)
-        fps = webcam_config.target_fps
+        fps = webcam_config.get('target_fps')
         if not self.is_pro:
             fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
             bitrate = int(bitrate/2)

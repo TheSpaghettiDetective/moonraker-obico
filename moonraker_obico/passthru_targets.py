@@ -1,4 +1,5 @@
 import logging
+import collections
 import requests
 import os
 import sys
@@ -10,10 +11,56 @@ import pathlib
 from .utils import sanitize_filename
 from .state_transition import call_func_with_state_transition
 
-_logger = logging.getLogger('obico.file_downloader')
+_logger = logging.getLogger('obico.passthru')
 
 MAX_GCODE_DOWNLOAD_SECONDS = 10 * 60
 
+
+class PassthruExecutor:
+
+    def __init__(self, passthru_targets, server_conn, sentry):
+        self.passthru_targets = passthru_targets
+        self.server_conn = server_conn
+        self.sentry = sentry
+
+        self.seen_refs = collections.deque(maxlen=100)
+
+    def run(self, passthru_msg):
+        _logger.debug(f'Received passthru from server: {passthru_msg}')
+
+        passthru = passthru_msg['passthru']
+        target = self.passthru_targets.get(passthru.get('target'))
+        func = getattr(target, passthru['func'], None)
+
+        if not func:
+            self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
+            return
+
+        ack_ref = passthru.get('ref')
+        if ack_ref is not None:
+            # same msg may arrive through both ws and datachannel
+            if ack_ref in self.seen_refs:
+                _logger.debug('Ignoring already processed passthru message')
+                return
+            self.seen_refs.append(ack_ref)
+
+        error = None
+        try:
+            ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
+        except Exception as e:
+            error = str(e)
+            self.sentry.captureException()
+
+        if ack_ref is not None:
+            if error:
+                resp = {'ref': ack_ref, 'error': error}
+            else:
+                resp = {'ref': ack_ref, 'ret': ret_value}
+
+            self.server_conn.send_ws_msg_to_server({'passthru': resp})
+
+
+### Below are individual passthru target
 
 class FileDownloader:
 
@@ -193,7 +240,7 @@ class FileOperations:
     def start_printer_local_print(self, file_to_print):
         if not self.moonrakerconn:
             return None, 'Printer is not connected!'
-        
+
         ret_value = None
         error = None
         filepath = file_to_print['url']
