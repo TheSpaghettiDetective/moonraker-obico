@@ -65,14 +65,16 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
 
 class WebcamStreamer:
 
-    def __init__(self, server_conn, moonrakerconn, sentry):
+    def __init__(self, server_conn, moonrakerconn, app_config, is_pro, sentry):
         self.server_conn = server_conn
         self.moonrakerconn = moonrakerconn
+        self.app_config = app_config
+        self.is_pro = is_pro
         self.sentry = sentry
 
         self.janus = None
 
-    def start(self, webcam_name, app_config, is_pro=False,  **kwargs):
+    def start(self, webcam_name, **kwargs):
 
         webcam_config = (self.moonrakerconn.api_get('server/webcams/item', raise_for_status=False, name=webcam_name) or {}).get('webcam')
         if not isinstance(webcam_config, dict) or not webcam_config.get('enabled'):
@@ -82,7 +84,7 @@ class WebcamStreamer:
             self.janus.shutdown()
 
         if 'mjpeg' in webcam_config.get('service').lower():
-            self.janus = JanusConn(app_config, self.server_conn, is_pro, self.sentry)
+            self.janus = JanusConn(self.app_config, self.server_conn, self.is_pro, self.sentry)
             janus_thread = Thread(target=self.janus.start)
             janus_thread.daemon = True
             janus_thread.start()
@@ -92,13 +94,13 @@ class WebcamStreamer:
                 return
 
             try:
-                self.ffmpeg_from_mjpeg(webcam_config, is_pro)
+                self.ffmpeg_from_mjpeg(webcam_config)
 
             except Exception:
                 self.sentry.captureException()
 
 
-    def ffmpeg_from_mjpeg(self, webcam_config, is_pro):
+    def ffmpeg_from_mjpeg(self, webcam_config):
 
         @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
         def get_webcam_resolution(webcam_config):
@@ -119,7 +121,7 @@ class WebcamStreamer:
 
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
-        if is_pro:
+        if self.is_pro:
             # camera-stream is introduced in Crowsnest V4
             try:
                 camera_streamer_mp4_url = 'http://127.0.0.1:8080/video.mp4'
@@ -153,7 +155,7 @@ class WebcamStreamer:
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.target_fps
-        if not is_pro:
+        if not self.is_pro:
             fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
             bitrate = int(bitrate/2)
 
