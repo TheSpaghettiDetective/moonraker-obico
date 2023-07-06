@@ -13,7 +13,7 @@ from urllib.error import URLError, HTTPError
 import requests
 
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
-from .webcam_capture import capture_jpeg
+from .webcam_capture import capture_jpeg, webcam_full_url
 from .janus import JanusConn
 
 _logger = logging.getLogger('obico.webcam_stream')
@@ -91,7 +91,7 @@ class WebcamStreamer:
 
             if not pi_version():
                 _logger.warning('Not running on a Pi. Quitting video_pipeline.')
-                return
+                return (None, 'Not running on a Pi. Quitting video_pipeline.')
 
             try:
                 self.ffmpeg_from_mjpeg(webcam_config)
@@ -99,6 +99,7 @@ class WebcamStreamer:
             except Exception:
                 self.sentry.captureException()
 
+        return ('ok', None)
 
     def ffmpeg_from_mjpeg(self, webcam_config):
 
@@ -137,12 +138,12 @@ class WebcamStreamer:
 
         encoder = h264_encoder()
 
-        stream_url = webcam_config.get('stream_url')
+        stream_url = webcam_full_url(webcam_config.get('stream_url'))
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
         # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
-        time.sleep(15)
+        #time.sleep(15)
         (img_w, img_h) = (640, 480)
         try:
             (_, img_w, img_h) = get_webcam_resolution(webcam_config)

@@ -379,9 +379,9 @@ class App(object):
             passthru_thread.is_daemon = True
             passthru_thread.start()
 
-        if msg.get('janus') and self.janus:
+        if msg.get('janus') and self.webcam_streamer and self.webcam_streamer.janus:
             _logger.debug(f'Received janus from server: {msg}')
-            self.janus.pass_to_janus(msg.get('janus'))
+            self.webcam_streamer.janus.pass_to_janus(msg.get('janus'))
 
         if msg.get('http.tunnelv2') and self.local_tunnel:
             kwargs = msg.get('http.tunnelv2')
