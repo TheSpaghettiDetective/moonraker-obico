@@ -28,10 +28,9 @@ EOF
 
 link_to_server() {
   if [ ! $KEEP_QUIET = "y" ]; then
+    print_header " Link Printer to Obico Server "
     cat <<EOF
-${cyan}
-=============================== Link Printer to Obico Server ======================================
-${default}
+
 To link to your Obico Server account, you need to obtain the 6-digit verification code
 in the Obico mobile or web app, and enter the code below.
 
@@ -48,17 +47,17 @@ EOF
 }
 
 success() {
-  echo -e "\n\n\n"
+  echo -e "\n\n"
   banner
+  echo -e "\n"
+  print_header "="
+  echo -n "${cyan}"
+  array=("" "SUCCESS!!!" "Now enjoy Obico for Klipper!" "")
+  print_centered_lines "${array[@]}"
+  print_header "="
+
   cat <<EOF
-${cyan}
-====================================================================================================
-###                                                                                              ###
-###                                       SUCCESS!!!                                             ###
-###                             Now enjoy Obico for Klipper!                                     ###
-###                                                                                              ###
-====================================================================================================
-${default}
+
 The changes we have made to your system:
 
 - System service: /etc/systemd/system/${OBICO_SERVICE_NAME}

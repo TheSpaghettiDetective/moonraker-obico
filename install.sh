@@ -61,10 +61,10 @@ EOF
 }
 
 prompt_for_settings() {
-    cat <<EOF
-${cyan}
-================================= Moonraker Info ==============================================
-${default}
+  print_header " Moonraker Info"
+
+cat <<EOF
+
 We need info about your Moonraker. If you are not sure, just leave them as defaults.
 
 EOF
@@ -85,13 +85,12 @@ ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
   PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
-  sudo apt-get update --allow-releaseinfo-change
-  sudo apt-get install --yes ${PKGLIST}
-
-  echo -e ""
+  run_with_progress sudo bash -c "apt-get update --allow-releaseinfo-change -qq && sudo apt-get install --yes -qq ${PKGLIST}"
+  echo ""
+  report_status "Installing required python modules... You may be prompted to enter password."
   ensure_venv
   debug Running... "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
-  "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
+  run_with_progress "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
   echo ""
 }
 
@@ -120,10 +119,9 @@ cfg_existed() {
 
 create_config() {
   if [ -z "${OBICO_SERVER}" ]; then
+    print_header " Obico Server URL "
     cat <<EOF
-${cyan}
-================================= Obico Server URL ==============================================
-${default}
+
 Now tell us what Obico Server you want to link your printer to.
 You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
 For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
