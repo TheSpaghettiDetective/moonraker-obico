@@ -15,7 +15,6 @@ MOONRAKER_PORT="7125"
 OBICO_SERVICE_NAME="moonraker-obico"
 OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
-JSON_PARSE_PY="/tmp/json_parse.py"
 OVERWRITE_CONFIG="n"
 SKIP_LINKING="n"
 
@@ -226,32 +225,6 @@ EOF
 	fi
 }
 
-ensure_json_parser() {
-cat <<EOF > ${JSON_PARSE_PY}
-def find(element, json):
-    try:
-        keys = element.split('.')
-        rv = json
-        for key in keys:
-            try:
-                key = int(key)
-            except:
-                pass
-            rv = rv[key]
-        return rv
-    except:
-        return None
-
-if __name__ == '__main__':
-    import sys, json
-    ret = find(sys.argv[1], json.load(sys.stdin))
-    if ret is None:
-        sys.exit(1)
-
-    print(ret)
-EOF
-}
-
 # Helper functions
 
 exit_on_error() {
@@ -324,7 +297,6 @@ done
 welcome
 ensure_not_octoprint
 ensure_deps
-ensure_json_parser
 
 if "${OBICO_DIR}/scripts/tsd_service_existed.sh" ; then
   exit 0
