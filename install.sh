@@ -142,12 +142,9 @@ prompt_for_settings() {
 ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
-  # PKGLIST="python3 python3-pip python3-venv ffmpeg janus"
   PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
   sudo apt-get update --allow-releaseinfo-change
   sudo apt-get install --yes ${PKGLIST}
-  # sudo systemctl stop janus
-  # sudo systemctl disable janus
 
   echo -e ""
   ensure_venv
