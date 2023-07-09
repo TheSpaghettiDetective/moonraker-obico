@@ -66,7 +66,7 @@ prompt_for_settings() {
 ${cyan}
 ================================= Moonraker Info ==============================================
 ${default}
-We need info about your Moonraker. If you are not sure, just leave them as default.
+We need info about your Moonraker. If you are not sure, just leave them as defaults.
 
 EOF
 
@@ -343,7 +343,6 @@ if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "
   fi
 
 else
-
   prompt_for_settings
   debug MOONRAKER_CONFIG_FILE: "${MOONRAKER_CONFIG_FILE}"
   debug MOONRAKER_CONF_DIR: "${MOONRAKER_CONF_DIR}"

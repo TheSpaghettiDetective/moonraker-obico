@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 OBICO_DIR=$(realpath $(dirname "$0")/..)
 
 . "${OBICO_DIR}/scripts/funcs.sh"
@@ -45,16 +43,8 @@ EOF
   export OBICO_ENV # Expose OBICO_ENV to link.py so that it can print out the debugging command.
 
   debug Running... PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
-  if ! PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"; then
-    return 1
-  fi
-
-  if [ -z "${SUFFIX}" ] || [ "${SUFFIX}" == '-' ]; then
-    OBICO_SERVICE_NAME="moonraker-obico"
-  else
-    OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
-  fi
-  sudo systemctl restart "${OBICO_SERVICE_NAME}"
+  PYTHONPATH="${OBICO_DIR}:${PYTHONPATH}" ${OBICO_ENV}/bin/python3 -m moonraker_obico.link -c "${OBICO_CFG_FILE}"
+  return $?
 }
 
 success() {
@@ -86,6 +76,22 @@ EOF
 
 }
 
+did_not_finish() {
+    cat <<EOF
+${yellow}
+The process to link to your Obico Server account didn't finish.
+${default}
+
+To resume the linking process at a later time, run:
+
+-------------------------------------------------------------------------------------------------
+cd ~/moonraker-obico
+./install.sh
+-------------------------------------------------------------------------------------------------
+
+EOF
+}
+
 prompt_for_sentry() {
 	if grep -q "sentry_opt" "${OBICO_CFG_FILE}" ; then
 		return 0
@@ -114,33 +120,38 @@ while getopts "hqc:n:d" arg; do
     esac
 done
 
+if [ -z "${SUFFIX}" ] || [ "${SUFFIX}" == '-' ]; then
+  OBICO_SERVICE_NAME="moonraker-obico"
+else
+  OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
+fi
+
 if [ -z "${OBICO_CFG_FILE}" ]; then
   usage && exit 1
 fi
 
 ensure_venv
 
-if link_to_server; then
-  if [ ! $KEEP_QUIET = "y" ]; then
-    prompt_for_sentry
-    success
-  fi
-else
-  if [ ! $KEEP_QUIET = "y" ]; then
-    oops
-    cat <<EOF
-${red}
-The process to link to your Obico Server account didn't finish.
-${default}
+link_to_server
+link_exit_code=$?
+debug link_to_server exited with $link_exit_code
 
-To resume the linking process at a later time, run:
+sudo systemctl restart "${OBICO_SERVICE_NAME}"
 
--------------------------------------------------------------------------------------------------
-cd ~/moonraker-obico
-./install.sh
--------------------------------------------------------------------------------------------------
-
-EOF
-    need_help
-  fi
+if [ ! $KEEP_QUIET = "y" ]; then
+  case $link_exit_code in
+    0)
+      prompt_for_sentry
+      success
+      ;;
+    255)
+      did_not_finish
+      need_help
+      ;;
+    *)
+      oops
+      did_not_finish
+      need_help
+      ;;
+  esac
 fi
