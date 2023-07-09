@@ -53,7 +53,7 @@ To abort, simply press 'Enter'.
     while True:
         code = input('\nEnter verification code (or leave it empty to abort): ')
         if not code.strip():
-            linking_interrupted(None, None)
+            sys.exit(255)
 
         try:
             if debug:
