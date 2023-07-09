@@ -25,7 +25,7 @@ usage() {
     echo ""
   fi
   cat <<EOF
-Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended if you have only 1 printer
+Usage: $0 <[global_options]>   # Interactive installation to get moonraker-obico set up. Recommended if you have only 1 printer
        $0 <[global_options]> <[moonraker_setting_options]>   # Recommended for multiple-printer setup
 
 Global options:
@@ -41,17 +41,6 @@ Moonraker setting options (${yellow}if any of them are specified, all need to be
           -C   Moonraker config file path
           -l   The directory for moonraker-obico log files, which are rotated based on size.
           -S   The URL of the obico server to link the printer to, e.g., https://app.obico.io
-EOF
-}
-
-manual_setting_warning() {
-  cat <<EOF
-${yellow}
-We couldn't automatically detect the settings. Please enter them below to continue.
-
-!!!WARNING: Manually entering the Moonraker settings can be error prone.
-We highly recommend using KIAUH if you have a non-standard Klipper installation, e.g., running multiple Moonraker instances.
-${default}
 EOF
 }
 
@@ -72,63 +61,17 @@ EOF
   fi
 }
 
-discover_sys_settings() {
-  report_status "Detecting the softwares and settings of your Klipper system ..."
-
-  mr_config_file="${HOME}/printer_data/config/moonraker.conf"
-  mr_log_path="${HOME}/printer_data/logs"
-
-  # In case it's moonraker before https://github.com/Arksine/moonraker/pull/491
-  if [ ! -f "${mr_config_file}" -o ! -d "${mr_log_path}" ]; then
-    mr_config_file="${HOME}/klipper_config/moonraker.conf"
-    mr_log_path="${HOME}/klipper_logs"
-  fi
-
-  if [ ! -f "${mr_config_file}" -o ! -d "${mr_log_path}" ]; then
-    return 1
-  fi
-
-  if ! mr_port=$(${OBICO_ENV}/bin/python3 -c "import configparser; c = configparser.ConfigParser(); c.read('${mr_config_file}'); print(c['server']['port'])"); then
-    return 1
-  fi
-
-  if ! mr_database=$(curl -s "http://${MOONRAKER_HOST}:${mr_port}/server/database/list") ; then
-    return 1
-  fi
-
-  toolchain_msg=""
-  if echo $mr_database | grep -qi 'mainsail' ; then
-    toolchain_msg="${toolchain_msg} Mainsail installed"
-  fi
-
-  if echo $mr_database | grep -qi 'fluidd' ; then
-    toolchain_msg="${toolchain_msg} Fluidd installed"
-  fi
-
-  if [ -z "${toolchain_msg}" ]; then
-    toolchain_msg=" Not detected"
-  fi
-
-  echo -e "The following have been detected:\n"
-  echo -e "- Web Server: Moonraker"
-  echo -e "- Web Frontend:${toolchain_msg}"
-  echo -e "- Moonraker host: ${MOONRAKER_HOST}"
-  echo -e "- Moonraker port: ${mr_port}\n"
-  read -p "Is this correct? [Y/n]: " -e -i "Y" correct
-  echo ""
-
-  if [ "${correct^^}" == "Y" ] ; then
-    MOONRAKER_CONFIG_FILE="${mr_config_file}"
-    MOONRAKER_CONF_DIR=$(dirname "${MOONRAKER_CONFIG_FILE}")
-    MOONRAKER_LOG_DIR="${mr_log_path}"
-    MOONRAKER_PORT="${mr_port}"
-    return 0
-  fi
-  return 1
-}
-
 prompt_for_settings() {
-  manual_setting_warning
+    cat <<EOF
+${cyan}
+================================= Moonraker Info ==============================================
+${default}
+We need info about your Moonraker. If you are not sure, just leave them as default.
+
+EOF
+
+  read -p "Moonraker host: " -e -i "${MOONRAKER_HOST}" user_input
+  eval MOONRAKER_HOST="${user_input}"
   read -p "Moonraker port: " -e -i "${MOONRAKER_PORT}" user_input
   eval MOONRAKER_PORT="${user_input}"
   read -p "Moonraker config file: " -e -i "${MOONRAKER_CONFIG_FILE}" user_input
@@ -142,9 +85,12 @@ prompt_for_settings() {
 ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
+  # PKGLIST="python3 python3-pip python3-venv ffmpeg janus"
   PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
   sudo apt-get update --allow-releaseinfo-change
   sudo apt-get install --yes ${PKGLIST}
+  # sudo systemctl stop janus
+  # sudo systemctl disable janus
 
   echo -e ""
   ensure_venv
@@ -398,10 +344,7 @@ if [ -n "${mr_host}" ] || [ -n "${mr_port}" ] || [ -n "${mr_config}" ] || [ -n "
 
 else
 
-  if ! discover_sys_settings ; then
-    prompt_for_settings
-  fi
-
+  prompt_for_settings
   debug MOONRAKER_CONFIG_FILE: "${MOONRAKER_CONFIG_FILE}"
   debug MOONRAKER_CONF_DIR: "${MOONRAKER_CONF_DIR}"
   debug MOONRAKER_LOG_DIR: "${MOONRAKER_LOG_DIR}"
