@@ -32,6 +32,7 @@ Global options:
           -L   Skip the step to link to the Obico server.
           -u   Show uninstallation instructions
           -d   Show debugging info
+          -U   Update moonraker-obico to the latest version
 
 Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
@@ -220,6 +221,10 @@ EOF
 	fi
 }
 
+update() {
+  ensure_deps
+}
+
 # Helper functions
 
 exit_on_error() {
@@ -270,7 +275,7 @@ trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
-while getopts "hn:H:p:C:l:S:fLusd" arg; do
+while getopts "hn:H:p:C:l:S:fLusdU" arg; do
     case $arg in
         h) usage && exit 0;;
         H) mr_host=${OPTARG};;
@@ -284,6 +289,7 @@ while getopts "hn:H:p:C:l:S:fLusd" arg; do
         L) SKIP_LINKING="y";;
         d) DEBUG="y";;
         u) uninstall ;;
+        U) update && exit 0;;
         *) usage && exit 1;;
     esac
 done
