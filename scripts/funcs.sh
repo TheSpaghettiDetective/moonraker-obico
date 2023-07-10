@@ -78,36 +78,6 @@ Need help? Stop by:
 EOF
 }
 
-animate_dots() {
-  local delay_seconds=0.2 # Delay between each dot in seconds
-  local max_dots=70       # Maximum number of dots in the animation
-  local count=0
-  while (( count < max_dots )); do
-    printf "."
-    sleep "$delay_seconds"
-    count=$((count + 1))
-  done
-}
-
-run_with_progress() {
-  local command="$1"
-  shift
-
-  animate_dots &  # Run the animation in the background
-  local pid=$!    # Store the process ID of the background animation
-
-  # Run the provided command with its arguments
-  "$command" "$@"
-  exit_code=$?
-
-  # Stop the animation by killing the process
-  sudo kill "$pid" 2>/dev/null || true
-
-  if [ $exit_code -eq 0 ]; then
-    echo "Done!"
-  fi
-}
-
 print_centered_lines() {
   local contents=("$@")
 
