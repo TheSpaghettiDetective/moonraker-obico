@@ -29,21 +29,27 @@ debug() {
 }
 
 banner() {
-  echo -e "${cyan}"
+  echo -en "${cyan}"
   cat "${OBICO_DIR}/scripts/banner"
-  echo -e "${default}"
+  echo -en "${default}"
+}
+
+brand() {
+  echo -en "${cyan}"
+  cat "${OBICO_DIR}/scripts/brand"
+  echo -en "${default}"
 }
 
 welcome() {
-  cat <<EOF
-${cyan}
-======================================================================================================
-###                                                                                                ###
-###                       Install and Configure Obico for Klipper                                  ###
-###                                                                                                ###
-======================================================================================================
-${default}
-EOF
+  brand
+  echo ""
+  print_header "> Obico for Klipper <"
+  echo -n "${cyan}"
+  array=("" "* AI-Powered Failure Detection" "* Free Remote Monitoring and Access " "* 25FPS High-Def Webcam Streaming " "* Free 4.9-Star Mobile App" "")
+  print_centered_lines "${array[@]}"
+
+  print_header "="
+  echo ""
 }
 
 oops() {
@@ -72,3 +78,34 @@ Need help? Stop by:
 EOF
 }
 
+print_centered_lines() {
+  local contents=("$@")
+
+  for line in "${contents[@]}"; do
+    local line_length=${#line}
+    local padding_length=$(( (65 - line_length) / 2 ))
+
+    local padding=""
+    for (( i = 0; i < padding_length; i++ )); do
+      padding+=" "
+    done
+
+    local centered_line="###${padding}${line} ${padding}###"
+    echo -e "$centered_line"
+  done
+}
+
+print_header() {
+  local text="$1"
+  local line_length=72
+  local text_length=${#text}
+
+  # Calculate the number of "=" characters to add on each side
+  local padding_length=$(( (line_length - text_length) / 2 ))
+
+  # Create the padding string filled with "=" characters
+  local padding="$(printf '%*s' "$padding_length" | tr ' ' '=')"
+
+  # Print the final line with the centered text
+  echo "${cyan}${padding}${text}${padding}${default}"
+}
