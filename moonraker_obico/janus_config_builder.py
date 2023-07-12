@@ -100,12 +100,12 @@ events: {
 }
 """)
 
-def streaming_jcfg_rtsp_section(section_id, rtsp_url, dataport):
+def streaming_jcfg_rtsp_section(janus_section_id, rtsp_url, dataport):
 
     return("""
-h264-{section_id}: {{
+h264-{janus_section_id}: {{
         type = "rtsp"
-        id = {section_id}
+        id = {janus_section_id}
         description = "h264-video"
         enabled = true
         audio = false
@@ -121,14 +121,14 @@ h264-{section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(section_id=section_id, rtsp_url=rtsp_url, dataport=dataport))
+""".format(janus_section_id=janus_section_id, rtsp_url=rtsp_url, dataport=dataport))
 
 
-def streaming_jcfg_rtp_section(section_id, videoport, videortcpport, dataport):
+def streaming_jcfg_rtp_section(janus_section_id, videoport, videortcpport, dataport):
     return("""
-h264-{section_id}: {{
+h264-{janus_section_id}: {{
         type = "rtp"
-        id = {section_id}
+        id = {janus_section_id}
         description = "h264-video"
         enabled = true
         audio = false
@@ -146,14 +146,14 @@ h264-{section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(section_id=section_id, videoport=videoport, videortcpport=videortcpport, dataport=dataport))
+""".format(janus_section_id=janus_section_id, videoport=videoport, videortcpport=videortcpport, dataport=dataport))
 
 
-def streaming_jcfg_mjpeg_section(section_id, mjpeg_dataport):
+def streaming_jcfg_mjpeg_section(janus_section_id, mjpeg_dataport):
     return("""
-mjpeg-{section_id}: {{
+mjpeg-{janus_section_id}: {{
         type = "rtp"
-        id = {section_id}
+        id = {janus_section_id}
         description = "mjpeg-data"
         audio = false
         video = false
@@ -163,20 +163,20 @@ mjpeg-{section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(section_id=section_id, mjpeg_dataport=mjpeg_dataport))
+""".format(janus_section_id=janus_section_id, mjpeg_dataport=mjpeg_dataport))
 
 
 def build_janus_plugin_streaming_jcfg(webcams):
     streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=RUNTIME_JANUS_ETC_DIR)
     with open(streaming_jcfg_path, 'w') as f:
         for webcam in webcams:
-            if webcam.get('service') == 'webrtc-camerastreamer' and webcam.get('rtsp_port'):
-                f.write(streaming_jcfg_rtsp_section(webcam.get('section_id'), 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam.get('rtsp_port')), webcam.get('dataport')))
-            elif 'mjpeg' in webcam.get('service'):
-                if webcam.get('mjpeg_dataport'):
-                    f.write(streaming_jcfg_mjpeg_section(webcam.get('section_id'), webcam.get('mjpeg_dataport')))
-                elif webcam.get('videoport') and webcam.get('videortcpport') and webcam.get('dataport'):
-                    f.write(streaming_jcfg_rtp_section(webcam.get('section_id'), webcam.get('videoport'), webcam.get('videortcpport'), webcam.get('dataport')))
+            if webcam['moonraker_config']['service'] == 'webrtc-camerastreamer' and webcam['config'].get('rtsp_port'):
+                f.write(streaming_jcfg_rtsp_section(webcam['runtime']['janus_section_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['config']['rtsp_port']), webcam['runtime']['dataport']))
+            elif 'mjpeg' in webcam['moonraker_config']['service']:
+                if webcam['runtime'].get('mjpeg_dataport'):
+                    f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['janus_section_id'], webcam['runtime']['mjpeg_dataport']))
+                elif webcam['runtime'].get('videoport') and webcam['runtime'].get('videortcpport') and webcam['runtime'].get('dataport'):
+                    f.write(streaming_jcfg_rtp_section(webcam['runtime']['janus_section_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
                 else:
                     raise Exception('Got webcam config {webcam} missing info for janus config'.format(webcam=webcam))
             else:
@@ -188,8 +188,8 @@ def build_janus_transport_websocket_jcfg():
     tpl_path = "{tpl_etc_dir}/janus.transport.websockets.jcfg.template".format(tpl_etc_dir=TPL_JANUS_ETC_DIR)
     shutil.copy(tpl_path, target_path)
 
-def build(webcams):
-    build_janus_jcfg('asdf')
+def build_janus_config(webcams, printer_auth_token):
+    build_janus_jcfg(printer_auth_token)
     build_janus_plugin_streaming_jcfg(webcams)
     build_janus_transport_websocket_jcfg()
 

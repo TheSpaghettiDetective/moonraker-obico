@@ -120,9 +120,10 @@ class App(object):
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
+        self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer, self.sentry)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
-                webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer, self.sentry),
+                webcam_streamer = self.webcam_streamer,
                 file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
                 moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
                 target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
@@ -144,6 +145,10 @@ class App(object):
         thread.start()
 
         thread = threading.Thread(target=self.moonrakerconn.start)
+        thread.daemon = True
+        thread.start()
+
+        thread = threading.Thread(target=self.webcam_streamer.run_pipeline)
         thread.daemon = True
         thread.start()
 

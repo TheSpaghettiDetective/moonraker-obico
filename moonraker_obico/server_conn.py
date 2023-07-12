@@ -2,11 +2,11 @@ from typing import Optional, Dict, List, Tuple
 import requests  # type: ignore
 import logging
 import time
-import backoff
 import queue
 import bson
 import json
 from collections import deque
+import backoff
 
 from .utils import ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -125,10 +125,6 @@ class ServerConn:
                 pass
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
-
-    def get_configured_webcams(self, printer_id):
-        resp = self.send_http_request('GET', '/api/v1/cameras/?printer_id={}'.format(printer_id), raise_exception=True)
-        return resp.json()
 
     def send_http_request(self, method, uri, timeout=10, raise_exception=True, skip_debug_logging=False, **kwargs):
         endpoint = self.config.server.canonical_endpoint_prefix() + uri

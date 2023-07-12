@@ -15,6 +15,7 @@ import requests
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
 from .webcam_capture import capture_jpeg, webcam_full_url
 from .janus import JanusConn
+from .janus_config_builder import build_janus_config
 
 _logger = logging.getLogger('obico.webcam_stream')
 
@@ -75,7 +76,47 @@ class WebcamStreamer:
         self.janus = None
 
     def run_pipeline(self):
-        self.configured_webcams = self.server_conn.get_configured_webcams(self.linked_printer)
+        moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
+        self.webcams = []
+        for webcam in self.linked_printer.get('cameras', []):
+            moonraker_webcam = next(filter(lambda item: item.get('name') == webcam['name'], moonraker_webcams), None) # Find a Moonraker webcam that matches the name, or None if not found
+            if moonraker_webcam is None or not moonraker_webcam.get('enabled'):
+                webcam['error'] = '{webcam_name} is not configured in Moonraker, or is disabled.'.format(webcam_name=webcam['name'])
+            else:
+                webcam['moonraker_config'] = moonraker_webcam
+
+            self.webcams.append(webcam)
+
+        # TODO: construct self.webcams if cameras are not configured in Obico
+
+        self.assign_janus_params()
+        build_janus_config(self.webcams, self.app_config.server.auth_token)
+
+
+    def assign_janus_params(self):
+        # TODO: reorder self.webcams so that, if possible, it's compatible with old mobile app versions
+
+        cur_janus_section_id = 1
+        cur_port_num = 17730
+        for webcam in self.webcams:
+            webcam['runtime'] = {}
+            webcam['runtime']['janus_section_id'] = cur_janus_section_id
+            cur_janus_section_id += 1
+
+            if webcam['config']['mode'] == 'h264-rtsp':
+                 webcam['runtime']['dataport'] = cur_port_num
+                 cur_port_num += 1
+            elif webcam['config']['mode'] in ('h264-copy', 'h264-recode'):
+                 webcam['runtime']['videoport'] = cur_port_num
+                 cur_port_num += 1
+                 webcam['runtime']['videortcpport'] = cur_port_num
+                 cur_port_num += 1
+                 webcam['runtime']['dataport'] = cur_port_num
+                 cur_port_num += 1
+            elif webcam['config']['mode'] == 'mjpeg':
+                 webcam['runtime']['mjpeg_dataport'] = cur_port_num
+                 cur_port_num += 1
+
 
     def start(self, webcam_name, **kwargs):
 
