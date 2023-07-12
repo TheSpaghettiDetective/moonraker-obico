@@ -11,7 +11,7 @@ USE_RTSP="n"
 
 mkdir -p "${RUNTIME_JANUS_ETC_DIR}"
 
-PRECOMPILED_DIR="${JANUS_ROOT_DIR}/precomplied/debian.$( debian_variant )"
+PRECOMPILED_DIR="${JANUS_ROOT_DIR}/precomplied/raspbian.$( debian_variant )"
 
 precompiled_janus_jcfg_folders_section() {
   lib_janus_dir="${PRECOMPILED_DIR}/lib/janus"

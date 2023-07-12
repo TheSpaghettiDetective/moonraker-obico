@@ -122,7 +122,7 @@ class App(object):
         self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
-                webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer.get('is_pro'), self.sentry),
+                webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer, self.sentry),
                 file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
                 moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
                 target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
