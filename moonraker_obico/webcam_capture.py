@@ -78,58 +78,6 @@ def capture_jpeg(webcam_config, force_stream_url=False):
                         raise Exception('Wrong mjpeg data format')
 
 
-
-@backoff.on_exception(backoff.expo, Exception, max_tries=3)
-@backoff.on_predicate(backoff.expo, max_tries=3)
-def capture_jpeg_legacy(webcam_config, force_stream_url=False):
-    MAX_JPEG_SIZE = 5000000
-
-    snapshot_url = webcam_config.snapshot_url
-    if snapshot_url and not force_stream_url:
-        snapshot_validate_ssl = webcam_config.snapshot_ssl_validation
-
-        r = requests.get(snapshot_url, stream=True, timeout=5, verify=snapshot_validate_ssl)
-        r.raise_for_status()
-
-        response_content = b''
-        start_time = time.monotonic()
-        for chunk in r.iter_content(chunk_size=1024):
-            response_content += chunk
-            if len(response_content) > MAX_JPEG_SIZE:
-                r.close()
-                raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
-
-        r.close()
-        return response_content
-
-    else:
-        stream_url = webcam_config.stream_url
-        if not stream_url:
-            raise Exception('Invalid Webcam snapshot URL "{}" or stream URL: "{}"'.format(webcam_config.snapshot_url, webcam_config.stream_url))
-
-        with closing(urlopen(stream_url)) as res:
-            chunker = MjpegStreamChunker()
-
-            data_bytes = 0
-            while True:
-                data = res.readline()
-                data_bytes += len(data)
-                if data == b'':
-                    raise Exception('End of stream before a valid jpeg is found')
-                if data_bytes > MAX_JPEG_SIZE:
-                    raise Exception('Reached the size cap before a valid jpeg is found.')
-
-                mjpg = chunker.findMjpegChunk(data)
-                if mjpg:
-                    res.close()
-
-                    mjpeg_headers_index = mjpg.find(b'\r\n'*2)
-                    if mjpeg_headers_index > 0:
-                        return mjpg[mjpeg_headers_index+4:]
-                    else:
-                        raise Exception('Wrong mjpeg data format')
-
-
 class MjpegStreamChunker:
 
     def __init__(self):
