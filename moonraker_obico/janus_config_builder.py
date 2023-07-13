@@ -143,6 +143,7 @@ h264-{janus_section_id}: {{
         enabled = true
         audio = false
         audioiface = "127.0.0.1"
+        video = true
         videoport =  {videoport}
         videortcpport = {videortcpport}
         videoiface = "127.0.0.1"

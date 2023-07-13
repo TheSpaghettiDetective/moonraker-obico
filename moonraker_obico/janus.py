@@ -17,15 +17,14 @@ _logger = logging.getLogger('obico.janus')
 
 JANUS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-JANUS_WS_PORT = 17058
-JANUS_PRINTER_DATA_PORT = 17739
 MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
 CAMERA_STREAMER_RTSP_PORT = 8554
 
 
 class JanusConn:
 
-    def __init__(self, app_config, server_conn, is_pro, sentry):
+    def __init__(self, janus_port, app_config, server_conn, is_pro, sentry):
+        self.janus_port = janus_port
         self.app_config = app_config
         self.server_conn = server_conn
         self.is_pro = is_pro
@@ -36,19 +35,24 @@ class JanusConn:
         #self.webcam_streamer = None
         self.use_camera_streamer_rtsp = False
 
-    def start(self, janus_port, janus_bin_path, ld_lib_path):
+    def start(self, janus_bin_path, ld_lib_path):
+
         if os.getenv('JANUS_SERVER', '').strip() != '':
             _logger.warning('Using an external Janus gateway. Not starting the built-in Janus gateway.')
             self.start_janus_ws()
             return
 
         def run_janus_forever():
+            try:
+                self.kill_janus_if_running()
 
-            def run_janus():
                 janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
                 _logger.debug('Popen: {}'.format(janus_cmd))
                 self.janus_proc = psutil.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 self.janus_proc.nice(20)
+
+                with open(self.janus_pid_file_path(), 'w') as pid_file:
+                    pid_file.write(str(self.janus_proc.pid))
 
                 while True:
                     line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
@@ -59,8 +63,6 @@ class JanusConn:
                         if not self.shutting_down:
                             raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
-            try:
-                run_janus()
             except Exception as ex:
                 self.sentry.captureException()
 
@@ -78,29 +80,48 @@ class JanusConn:
         janus_proc_thread.daemon = True
         janus_proc_thread.start()
 
-        self.wait_for_janus(janus_port)
-        self.start_janus_ws(janus_port)
+        self.wait_for_janus()
+        self.start_janus_ws()
 
     def pass_to_janus(self, msg):
         if self.janus_ws and self.janus_ws.connected():
             self.janus_ws.send(msg)
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=10)
-    def wait_for_janus(self, janus_port):
-        time.sleep(1)
-        socket.socket().connect((JANUS_SERVER, janus_port))
+    def wait_for_janus(self):
+        time.sleep(0.2)
+        socket.socket().connect((JANUS_SERVER, self.janus_port))
 
-    def start_janus_ws(self, janus_port):
+    def start_janus_ws(self):
 
         def on_close(ws, **kwargs):
             _logger.warn('Janus WS connection closed!')
 
         self.janus_ws = WebSocketClient(
-            'ws://{}:{}/'.format(JANUS_SERVER, janus_port),
+            'ws://{}:{}/'.format(JANUS_SERVER, self.janus_port),
             on_ws_msg=self.process_janus_msg,
             on_ws_close=on_close,
             subprotocols=['janus-protocol'],
             waitsecs=5)
+
+    def janus_pid_file_path(self):
+        return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=self.janus_port)
+
+    def kill_janus_if_running(self):
+        try:
+            if self.janus_proc:
+                self.janus_proc.terminate()
+            self.janus_proc = None
+
+            # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
+            # Ensure the process is killed before launching a new one
+            with open(self.janus_pid_file_path(), 'r') as pid_file:
+                janus_pid = int(pid_file.read())
+                process_to_kill = psutil.Process(janus_pid)
+                process_to_kill.terminate()
+
+        except Exception:
+            pass
 
     def shutdown(self):
         self.shutting_down = True
@@ -110,13 +131,7 @@ class JanusConn:
 
         self.janus_ws = None
 
-        if self.janus_proc:
-            try:
-                self.janus_proc.terminate()
-            except Exception:
-                pass
-
-        self.janus_proc = None
+        self.kill_janus_if_running()
 
 #        if self.webcam_streamer:
 #            self.webcam_streamer.restore()

@@ -75,6 +75,7 @@ class WebcamStreamer:
         self.app_config = app_config
         self.linked_printer = linked_printer
         self.sentry = sentry
+        self.map_rtp_port_ffmpeg_proc = {}
 
         self.janus = None
 
@@ -94,8 +95,25 @@ class WebcamStreamer:
 
         self.assign_janus_params()
         (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
-        self.janus = JanusConn(self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
-        self.janus.start(JANUS_WS_PORT, janus_bin_path, ld_lib_path)
+        self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
+        self.janus.start(janus_bin_path, ld_lib_path)
+
+        if not self.wait_for_janus():
+            for webcam in self.webcams:
+                webcam.setdefault('error', 'Janus failed to start')
+
+        for webcam in self.webcams:
+            if webcam.get('error'):
+                continue    # Skip the one webcam that we have run into issues for
+
+            if webcam['config']['mode'] == 'h264-rtsp':
+                continue    # No extra process is needed when the mode is 'h264-rtsp'
+            elif webcam['config']['mode'] == 'h264-copy':
+                self.h264_copy(webcam)
+            elif webcam['config']['mode'] == 'h264-recode':
+                self.h264_recode(webcam)
+
+
 
 
     def assign_janus_params(self):
@@ -121,6 +139,14 @@ class WebcamStreamer:
             elif webcam['config']['mode'] == 'mjpeg':
                  webcam['runtime']['mjpeg_dataport'] = cur_port_num
                  cur_port_num += 1
+
+    def wait_for_janus(self):
+        for i in range(100):
+            time.sleep(0.1)
+            if self.janus and self.janus.janus_ws and self.janus.janus_ws.connected():
+                return True
+
+        return False
 
 
     def start(self, webcam_name, **kwargs):
@@ -150,7 +176,22 @@ class WebcamStreamer:
 
         return ('ok', None)
 
-    def ffmpeg_from_mjpeg(self, webcam_config):
+    def h264_copy(self, webcam):
+        try:
+            if not self.linked_printer.get('is_pro'):
+                raise Exception('Free user can not stream webcam in h264-copy mode')
+
+            h264_http_url =  webcam['config'].get('h264_http_url')
+            rtp_port = webcam['runtime']['videoport']
+
+            # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
+            self.start_ffmpeg(rtp_port, '-re -i {} -c:v copy'.format(h264_http_url), retry_after_quit=True)
+        except Exception as e:
+            self.sentry.captureException()
+            webcam['error'] = str(e)
+
+
+    def h264_recode(self, webcam):
 
         @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
         def get_webcam_resolution(webcam_config):
@@ -171,28 +212,13 @@ class WebcamStreamer:
 
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
-        if self.linked_printer.get('is_pro'):
-            # camera-stream is introduced in Crowsnest V4
-            try:
-                camera_streamer_mp4_url = 'http://127.0.0.1:8080/video.mp4'
-                _logger.info('Trying to start ffmpeg using camera-streamer H.264 source')
-                # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
-                self.start_ffmpeg('-re -i {} -c:v copy'.format(camera_streamer_mp4_url), retry_after_quit=True)
-                return
-            except Exception as e:
-                _logger.info(f'No camera-stream H.264 source found. Continue to legacy streaming: {e}')
-                pass
-
-        # The streaming mechansim for pre-1.0 OctoPi versions
-
         encoder = h264_encoder()
 
+        webcam_config = webcam['moonraker_config']
         stream_url = webcam_full_url(webcam_config.get('stream_url'))
         if not stream_url:
             raise Exception('stream_url not configured. Unable to stream the webcam.')
 
-        # crowsnest starts with a "NO SIGNAL" stream that is always 640x480. Wait for a few seconds to make sure it has the time to start a real stream
-        #time.sleep(15)
         (img_w, img_h) = (640, 480)
         try:
             (_, img_w, img_h) = get_webcam_resolution(webcam_config)
@@ -209,38 +235,44 @@ class WebcamStreamer:
             fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
             bitrate = int(bitrate/2)
 
-        self.start_ffmpeg('-re -i {} -filter:v fps={} -b:v {} -pix_fmt yuv420p -s {}x{} {}'.format(stream_url, fps, bitrate, img_w, img_h, encoder))
+        rtp_port = webcam['runtime']['videoport']
+        self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {mg_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
 
-    def start_ffmpeg(self, ffmpeg_args, retry_after_quit=False):
-        ffmpeg_cmd = '{} -loglevel error {} -an -f rtp rtp://{}:17734?pkt_size=1300'.format(FFMPEG, ffmpeg_args, JANUS_SERVER)
+    def start_ffmpeg(self, rtp_port, ffmpeg_args, retry_after_quit=False):
+        ffmpeg_cmd = '{ffmpeg} -loglevel error {ffmpeg_args} -an -f rtp rtp://{janus_server}:{rtp_port}?pkt_size=1300'.format(ffmpeg=FFMPEG, ffmpeg_args=ffmpeg_args, janus_server=JANUS_SERVER, rtp_port=rtp_port)
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
-        self.ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
-        self.ffmpeg_proc.nice(10)
+        ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
+        ffmpeg_proc.nice(20)
+
+        self.map_rtp_port_ffmpeg_proc[str(rtp_port)] = ffmpeg_proc
+
+        with open(self.ffmpeg_pid_file_path(rtp_port), 'w') as pid_file:
+            pid_file.write(str(ffmpeg_proc.pid))
 
         try:
-            returncode = self.ffmpeg_proc.wait(timeout=10) # If ffmpeg fails, it usually does so without 10s
-            (stdoutdata, stderrdata) = self.ffmpeg_proc.communicate()
+            returncode = ffmpeg_proc.wait(timeout=10) # If ffmpeg fails, it usually does so without 10s
+            (stdoutdata, stderrdata) = ffmpeg_proc.communicate()
             msg = 'STDOUT:\n{}\nSTDERR:\n{}\n'.format(stdoutdata, stderrdata)
             _logger.error(msg)
             raise Exception('ffmpeg failed! Exit code: {}'.format(returncode))
         except psutil.TimeoutExpired:
            pass
 
-        cpu_watch_dog(self.ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
+        cpu_watch_dog(ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
 
-        def monitor_ffmpeg_process(retry_after_quit=False):
+        def monitor_ffmpeg_process(ffmpeg_proc, retry_after_quit=False):
             # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
             ring_buffer = deque(maxlen=50)
             ffmpeg_backoff = ExpoBackoff(3)
             while True:
-                err = to_unicode(self.ffmpeg_proc.stderr.readline(), errors='replace')
+                err = to_unicode(ffmpeg_proc.stderr.readline(), errors='replace')
                 if not err:  # EOF when process ends?
                     if self.shutting_down:
                         return
 
-                    returncode = self.ffmpeg_proc.wait()
+                    returncode = ffmpeg_proc.wait()
                     msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
                     _logger.debug(msg)
                     self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
@@ -249,24 +281,36 @@ class WebcamStreamer:
                         ffmpeg_backoff.more('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
                         ring_buffer = deque(maxlen=50)
                         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
-                        self.ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
+                        ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
                     else:
                         return
                 else:
                     ring_buffer.append(err)
 
-        ffmpeg_thread = Thread(target=monitor_ffmpeg_process, kwargs=dict(retry_after_quit=retry_after_quit))
+        ffmpeg_thread = Thread(target=monitor_ffmpeg_process, kwargs=dict(ffmpeg_proc=ffmpeg_proc, retry_after_quit=retry_after_quit))
         ffmpeg_thread.daemon = True
         ffmpeg_thread.start()
 
+    def ffmpeg_pid_file_path(self, rtp_port):
+        return '/tmp/obico-ffmpeg-{rtp_port}.pid'.format(rtp_port=rtp_port)
+
+    def kill_all_ffmpeg_if_running(self):
+        for rtc_port, ffmpeg_proc in self.map_rtp_port_ffmpeg_proc.items():
+            self.kill_all_ffmpeg_if_running(rtc_port, ffmpeg_proc)
+
+    def kill_ffmpeg_if_running(self, rtc_port, ffmpeg_proc):
+        try:
+            ffmpeg_proc.terminate()
+        except Exception:
+            pass
+
+        # It is possible that some orphaned ffmpeg process is running (maybe previous python process was killed -9?).
+        # Ensure all ffmpeg processes are killed
+        with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
+            ffmpeg_pid = int(pid_file.read())
+            process_to_kill = psutil.Process(ffmpeg_pid)
+            process_to_kill.terminate()
 
     def restore(self):
         self.shutting_down = True
-
-        if self.ffmpeg_proc:
-            try:
-                self.ffmpeg_proc.terminate()
-            except Exception:
-                pass
-
-        self.ffmpeg_proc = None
+        self.kill_all_ffmpeg_if_running()
