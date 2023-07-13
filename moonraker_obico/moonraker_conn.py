@@ -138,7 +138,7 @@ class MoonrakerConn:
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
                             rotation = cfg.get('rotation', 0),
-                         ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
+                         ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
 
                 if len(webcam_configs) > 0:
                     return  webcam_configs
@@ -151,7 +151,7 @@ class MoonrakerConn:
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
                             rotation = cfg.get('rotation', 0),
-                         ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() ]
+                         ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
                 return  webcam_configs
 
             # Check for the standard namespace for webcams
@@ -165,7 +165,7 @@ class MoonrakerConn:
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
                             rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
-                        ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() ]
+                        ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
 
             # webcam configs not found in the standard location. Try fluidd's flavor
             result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
@@ -177,7 +177,7 @@ class MoonrakerConn:
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
                             rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
-                        ) for cfg in result.get('value', {}).get('cameras', []) if not cfg.get('enabled', False) ]
+                        ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
 
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             return []

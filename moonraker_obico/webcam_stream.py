@@ -87,6 +87,7 @@ class WebcamStreamer:
         self.kill_all_ffmpeg_if_running()
 
         moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
+
         self.webcams = []
         for webcam in webcams:
             moonraker_webcam = next(filter(lambda item: item.get('name') == webcam['name'], moonraker_webcams), None) # Find a Moonraker webcam that matches the name, or None if not found
@@ -97,7 +98,8 @@ class WebcamStreamer:
 
             self.webcams.append(webcam)
 
-        # TODO: construct self.webcams if cameras are not configured in Obico
+        if not self.webcams: # Default webcam list if cameras are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
+            self.webcams = self.default_webcams()
 
         self.assign_janus_params()
         (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
@@ -295,3 +297,31 @@ class WebcamStreamer:
     def restore(self):
         self.shutting_down = True
         self.kill_all_ffmpeg_if_running()
+
+    def default_webcams(self):
+        # Default webcam list if cameras are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
+
+        if self.app_config.webcam.disable_video_streaming:
+            return []
+
+        moonraker_webcam = self.app_config.webcam.moonraker_webcam_config or {}
+
+        # We need at least stream_url to even start legacy streaming
+        if not self.app_config.webcam.stream_url:
+            return []
+
+        moonraker_webcam.update(dict(
+            stream_url=self.app_config.webcam.stream_url,
+            snapshot_url=self.app_config.webcam.snapshot_url,
+            target_fps=self.app_config.webcam.target_fps,
+            flip_horizontal=self.app_config.webcam.flip_h,
+            flip_vertical=self.app_config.webcam.flip_v,
+            rotation=self.app_config.webcam.rotation,
+        ))
+        moonraker_webcam.setdefault('service', 'mjpegstreamer-adaptive')
+
+        return [dict(
+                name='legacy',
+                config={'mode': 'h264-recode'},
+                moonraker_config=moonraker_webcam,
+            )]
