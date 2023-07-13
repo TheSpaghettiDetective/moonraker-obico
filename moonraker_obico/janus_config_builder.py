@@ -1,4 +1,5 @@
 import sys
+import logging
 import json
 import os
 import distro
@@ -14,17 +15,15 @@ RUNTIME_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'runtime', 'etc', 'janus')
 TPL_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'templates', 'etc', 'janus')
 PRECOMPILED_DIR = '{root_dir}/precomplied/{os_id}.{os_version}.{os_bit}-bit'.format(root_dir=JANUS_ROOT_DIR, os_id=distro.id(), os_version=distro.major_version(), os_bit='64' if is_os_64bit() else '32')
 
-def precompiled_janus_jcfg_folders_section(precompiled_janus_dir):
-  lib_dir = os.path.join(precompiled_janus_dir, 'lib')
-  if os.path.exists(lib_path) and os.path.isdir(lib_path):
-      return """
+_logger = logging.getLogger('obico.janus_config_builder')
+
+def precompiled_janus_jcfg_folders_section(lib_dir):
+    return """
             plugins_folder = "{lib_dir}/janus/plugins"                     # Plugins folder
             transports_folder = "{lib_dir}/janus/transports"       # Transports folder
             events_folder = "{lib_dir}/janus/events"                       # Event handlers folder
             loggers_folder = "{lib_dir}/janus/loggers"
-    """.format(lib_dir=lib_dir)
-
-  return None
+""".format(lib_dir=lib_dir)
 
 def system_janus_jcfg_folders_section(janus_jcfg_path):
   pattern = r'^\s*(plugins_folder|transports_folder|events_folder|loggers_folder)\s*='
@@ -39,8 +38,12 @@ def system_janus_jcfg_folders_section(janus_jcfg_path):
 
 
 def find_system_janus_jcfg_path():
-    janus_path = None
+    janus_path = shutil.which('janus')
     janus_jcfg_path = None
+
+    if not janus_path:
+        return (None, None)
+
     try:
         output = subprocess.check_output(['dpkg', '-L', 'janus'], universal_newlines=True)
         paths = output.split('\n')
@@ -48,8 +51,6 @@ def find_system_janus_jcfg_path():
             path = path.strip()
             if path.endswith('/janus.jcfg'):
                 janus_jcfg_path = path
-            if path.endswith('/janus') and os.path.isfile(path) and os.access(path, os.X_OK):
-                janus_path = path
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
@@ -59,14 +60,21 @@ def find_system_janus_jcfg_path():
 def build_janus_jcfg(auth_token):
     janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
 
-    (system_janus_bin_path, system_janus_jcfg_path) = find_system_janus_jcfg_path()
-    if system_janus_bin_path and system_janus_jcfg_path:
+    ld_lib_path = None
+    janus_bin_path = None
+    folder_section = None
+
+    (janus_bin_path, system_janus_jcfg_path) = find_system_janus_jcfg_path()
+    if janus_bin_path and system_janus_jcfg_path:
         folder_section = system_janus_jcfg_folders_section(system_janus_jcfg_path)
     else:
-        folder_section = precompiled_janus_jcfg_folders_section(PRECOMPILED_DIR)
+        janus_bin_path = os.path.join(PRECOMPILED_DIR, 'bin', 'janus')
+        ld_lib_path = os.path.join(PRECOMPILED_DIR, 'lib')
+        if os.path.exists(janus_bin_path) and os.path.exists(ld_lib_path) and os.path.isdir(ld_lib_path):
+            folder_section = precompiled_janus_jcfg_folders_section(ld_lib_path)
 
-    if not folder_section:
-        return False
+    if not janus_bin_path or not folder_section:
+        return (None, None)
 
     with open(janus_jcfg_path, 'w') as f:
         f.write("""
@@ -99,6 +107,8 @@ transports: {
 events: {
 }
 """)
+
+    return (janus_bin_path, ld_lib_path)
 
 def streaming_jcfg_rtsp_section(janus_section_id, rtsp_url, dataport):
 
@@ -133,7 +143,6 @@ h264-{janus_section_id}: {{
         enabled = true
         audio = false
         audioiface = "127.0.0.1"
-        enabled = true
         videoport =  {videoport}
         videortcpport = {videortcpport}
         videoiface = "127.0.0.1"
@@ -183,20 +192,68 @@ def build_janus_plugin_streaming_jcfg(webcams):
                 webcam['stream_error'] = 'Got webcam config {webcam} not suitable for streaming'.format(webcam=webcam)
 
 
-def build_janus_transport_websocket_jcfg():
+def build_janus_transport_websocket_jcfg(ws_port, admin_ws_port):
     target_path = "{etc_dir}/janus.transport.websockets.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
-    tpl_path = "{tpl_etc_dir}/janus.transport.websockets.jcfg.template".format(tpl_etc_dir=TPL_JANUS_ETC_DIR)
-    shutil.copy(tpl_path, target_path)
+    with open(target_path, 'w') as f:
+        f.write("""
+# WebSockets stuff: whether they should be enabled, which ports they
+# should use, and so on.
+general: {{
+	json = "indented"				# Whether the JSON messages should be indented (default),
+									# plain (no indentation) or compact (no indentation and no spaces)
+	#pingpong_trigger = 30			# After how many seconds of idle, a PING should be sent
+	#pingpong_timeout = 10			# After how many seconds of not getting a PONG, a timeout should be detected
 
-def build_janus_config(webcams, printer_auth_token):
-    build_janus_jcfg(printer_auth_token)
+	ws = true						# Whether to enable the WebSockets API
+	ws_port = {ws_port}				# WebSockets server port
+	#ws_interface = "eth0"			# Whether we should bind this server to a specific interface only
+	ws_ip = "127.0.0.1"			# Whether we should bind this server to a specific IP address only
+	wss = false						# Whether to enable secure WebSockets
+	#wss_port = 8989				# WebSockets server secure port, if enabled
+	#wss_interface = "eth0"			# Whether we should bind this server to a specific interface only
+	#wss_ip = "192.168.0.1"			# Whether we should bind this server to a specific IP address only
+	#ws_logging = "err,warn"		# libwebsockets debugging level as a comma separated list of things
+									# to debug, supported values: err, warn, notice, info, debug, parser,
+									# header, ext, client, latency, user, count (plus 'none' and 'all')
+	#ws_acl = "127.,192.168.0."		# Only allow requests coming from this comma separated list of addresses
+}}
+
+# If you want to expose the Admin API via WebSockets as well, you need to
+# specify a different server instance, as you cannot mix Janus API and
+# Admin API messaging. Notice that by default the Admin API support via
+# WebSockets is disabled.
+admin: {{
+	admin_ws = false					# Whether to enable the Admin API WebSockets API
+	admin_ws_port = {admin_ws_port}		# Admin API WebSockets server port, if enabled
+	#admin_ws_interface = "eth0"		# Whether we should bind this server to a specific interface only
+	#admin_ws_ip = "192.168.0.1"		# Whether we should bind this server to a specific IP address only
+	admin_wss = false					# Whether to enable the Admin API secure WebSockets
+	#admin_wss_port = 7989				# Admin API WebSockets server secure port, if enabled
+	#admin_wss_interface = "eth0"		# Whether we should bind this server to a specific interface only
+	#admin_wss_ip = "192.168.0.1"		# Whether we should bind this server to a specific IP address only
+	#admin_ws_acl = "127.,192.168.0."	# Only allow requests coming from this comma separated list of addresses
+}}
+
+# Certificate and key to use for any secure WebSocket server, if enabled (and passphrase if needed).
+certificates: {{
+	#cert_pem = "/path/to/cert.pem"
+	#cert_key = "/path/to/key.pem"
+	#cert_pwd = "secretpassphrase"
+}}
+""".format(ws_port=ws_port, admin_ws_port=admin_ws_port))
+
+
+def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
+    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
+    _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
     build_janus_plugin_streaming_jcfg(webcams)
-    build_janus_transport_websocket_jcfg()
+    build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
 
+    return (janus_bin_path, ld_lib_path)
 
 if __name__ == '__main__':
     file_path = sys.argv[1]
     with open(file_path, 'r') as json_file:
         webcams = json.load(json_file)['result']['webcams']
 
-    build(webcams)
+    build_janus_config(webcams, 'asdf')

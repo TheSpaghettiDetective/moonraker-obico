@@ -10,6 +10,7 @@ import psutil
 
 from .utils import pi_version, to_unicode, is_port_open
 from .ws import WebSocketClient
+from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
 #from .webcam_stream import WebcamStreamer
 
 _logger = logging.getLogger('obico.janus')
@@ -20,10 +21,6 @@ JANUS_WS_PORT = 17058
 JANUS_PRINTER_DATA_PORT = 17739
 MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
 CAMERA_STREAMER_RTSP_PORT = 8554
-
-
-class JanusNotSupportedException(Exception):
-    pass
 
 
 class JanusConn:
@@ -39,8 +36,7 @@ class JanusConn:
         #self.webcam_streamer = None
         self.use_camera_streamer_rtsp = False
 
-    def start(self):
-
+    def start(self, janus_port, janus_bin_path, ld_lib_path):
         if os.getenv('JANUS_SERVER', '').strip() != '':
             _logger.warning('Using an external Janus gateway. Not starting the built-in Janus gateway.')
             self.start_janus_ws()
@@ -48,28 +44,11 @@ class JanusConn:
 
         def run_janus_forever():
 
-            def setup_janus_config():
-                video_enabled = 'true'
-                auth_token = self.app_config.server.auth_token
-
-                cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
-                setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
-                if self.use_camera_streamer_rtsp:
-                    setup_cmd += ' -r'
-
-                _logger.debug('Popen: {}'.format(setup_cmd))
-                setup_proc = psutil.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                returncode = setup_proc.wait()
-                (stdoutdata, stderrdata) = setup_proc.communicate()
-                if returncode != 0:
-                    raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
-
             def run_janus():
-                janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
+                janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
                 _logger.debug('Popen: {}'.format(janus_cmd))
                 self.janus_proc = psutil.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                self.janus_proc.nice(10)
+                self.janus_proc.nice(20)
 
                 while True:
                     line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
@@ -81,10 +60,7 @@ class JanusConn:
                             raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
 
             try:
-                setup_janus_config()
                 run_janus()
-            except JanusNotSupportedException as e:
-                _logger.warning(e)
             except Exception as ex:
                 self.sentry.captureException()
 
@@ -102,25 +78,25 @@ class JanusConn:
         janus_proc_thread.daemon = True
         janus_proc_thread.start()
 
-        self.wait_for_janus()
-        self.start_janus_ws()
+        self.wait_for_janus(janus_port)
+        self.start_janus_ws(janus_port)
 
     def pass_to_janus(self, msg):
         if self.janus_ws and self.janus_ws.connected():
             self.janus_ws.send(msg)
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=10)
-    def wait_for_janus(self):
+    def wait_for_janus(self, janus_port):
         time.sleep(1)
-        socket.socket().connect((JANUS_SERVER, JANUS_WS_PORT))
+        socket.socket().connect((JANUS_SERVER, janus_port))
 
-    def start_janus_ws(self):
+    def start_janus_ws(self, janus_port):
 
         def on_close(ws, **kwargs):
             _logger.warn('Janus WS connection closed!')
 
         self.janus_ws = WebSocketClient(
-            'ws://{}:{}/'.format(JANUS_SERVER, JANUS_WS_PORT),
+            'ws://{}:{}/'.format(JANUS_SERVER, janus_port),
             on_ws_msg=self.process_janus_msg,
             on_ws_close=on_close,
             subprotocols=['janus-protocol'],
@@ -145,7 +121,7 @@ class JanusConn:
 #        if self.webcam_streamer:
 #            self.webcam_streamer.restore()
 #
-    def process_janus_msg(self, raw_msg):
+    def process_janus_msg(self, ws, raw_msg):
         try:
             msg = json.loads(raw_msg)
 

@@ -23,6 +23,9 @@ JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
 FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 
+JANUS_WS_PORT = 17730   # Janus needs to use 17730 up to 17750. Hard-coded for now. may need to make it dynamic if the problem of port conflict is too much
+JANUS_ADMIN_WS_PORT = JANUS_WS_PORT + 1
+
 PI_CAM_RESOLUTIONS = {
     'low': ((320, 240), (480, 270)),  # resolution for 4:3 and 16:9
     'medium': ((640, 480), (960, 540)),
@@ -90,14 +93,16 @@ class WebcamStreamer:
         # TODO: construct self.webcams if cameras are not configured in Obico
 
         self.assign_janus_params()
-        build_janus_config(self.webcams, self.app_config.server.auth_token)
+        (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
+        self.janus = JanusConn(self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
+        self.janus.start(JANUS_WS_PORT, janus_bin_path, ld_lib_path)
 
 
     def assign_janus_params(self):
         # TODO: reorder self.webcams so that, if possible, it's compatible with old mobile app versions
 
         cur_janus_section_id = 1
-        cur_port_num = 17730
+        cur_port_num = JANUS_ADMIN_WS_PORT + 1
         for webcam in self.webcams:
             webcam['runtime'] = {}
             webcam['runtime']['janus_section_id'] = cur_janus_section_id
