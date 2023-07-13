@@ -12,11 +12,11 @@ def setup_logging(logging_config):
     logger = logging.getLogger()
     log_level = log_level_info.get(logging_config.level.upper(), logging.INFO)
     logger.setLevel(log_level)
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
     formatter = logging.Formatter(
         "%(asctime)s  %(levelname)8s  %(name)s - %(message)s"
     )
-
 
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(formatter)

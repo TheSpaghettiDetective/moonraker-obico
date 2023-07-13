@@ -11,6 +11,8 @@ import psutil
 import backoff
 from urllib.error import URLError, HTTPError
 import requests
+import base64
+import socket
 
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
 from .webcam_capture import capture_jpeg, webcam_full_url
@@ -76,15 +78,15 @@ class WebcamStreamer:
         self.linked_printer = linked_printer
         self.sentry = sentry
         self.map_rtp_port_ffmpeg_proc = {}
+        self.mjpeg_sock_list = []
 
         self.janus = None
+        self.shutting_down = False
 
     def start(self, webcams):
 
-        if self.janus:
-            self.janus.shutdown()
-
-        self.kill_all_ffmpeg_if_running()
+        self.shutdown_subprocesses()
+        self.close_all_mjpeg_socks()
 
         moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
 
@@ -102,7 +104,7 @@ class WebcamStreamer:
             self.webcams = self.default_webcams()
 
         self.assign_janus_params()
-        (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
+        (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT, self.sentry)
         self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
         self.janus.start(janus_bin_path, ld_lib_path)
 
@@ -120,18 +122,29 @@ class WebcamStreamer:
                 self.h264_copy(webcam)
             elif webcam['config']['mode'] == 'h264-recode':
                 self.h264_recode(webcam)
+            elif webcam['config']['mode'] == 'mjpeg-webrtc':
+                self.mjpeg_webrtc(webcam)
 
         return ('ok', None)
 
     def assign_janus_params(self):
-        # TODO: reorder self.webcams so that, if possible, it's compatible with old mobile app versions
+        first_h264_webcam = next(filter(lambda item: 'h264' in item['config']['mode'], self.webcams), None)
+        if first_h264_webcam:
+            first_h264_webcam.setdefault('runtime', {})
+            first_h264_webcam['runtime']['janus_section_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
 
-        cur_janus_section_id = 1
+        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item['config']['mode'], self.webcams), None)
+        if first_mjpeg_webcam:
+            first_mjpeg_webcam.setdefault('runtime', {})
+            first_mjpeg_webcam['runtime']['janus_section_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
+
+        cur_janus_section_id = 3
         cur_port_num = JANUS_ADMIN_WS_PORT + 1
         for webcam in self.webcams:
-            webcam['runtime'] = {}
-            webcam['runtime']['janus_section_id'] = cur_janus_section_id
-            cur_janus_section_id += 1
+            webcam.setdefault('runtime', {})
+            if not webcam['runtime'].get('janus_section_id'):
+                webcam['runtime']['janus_section_id'] = cur_janus_section_id
+                cur_janus_section_id += 1
 
             if webcam['config']['mode'] == 'h264-rtsp':
                  webcam['runtime']['dataport'] = cur_port_num
@@ -143,9 +156,10 @@ class WebcamStreamer:
                  cur_port_num += 1
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['config']['mode'] == 'mjpeg':
+            elif webcam['config']['mode'] == 'mjpeg-webrtc':
                  webcam['runtime']['mjpeg_dataport'] = cur_port_num
                  cur_port_num += 1
+
 
     def wait_for_janus(self):
         for i in range(100):
@@ -154,7 +168,6 @@ class WebcamStreamer:
                 return True
 
         return False
-
 
 
     def h264_copy(self, webcam):
@@ -219,6 +232,7 @@ class WebcamStreamer:
         rtp_port = webcam['runtime']['videoport']
         self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
 
+
     def start_ffmpeg(self, rtp_port, ffmpeg_args, retry_after_quit=False):
         ffmpeg_cmd = '{ffmpeg} -loglevel error {ffmpeg_args} -an -f rtp rtp://{janus_server}:{rtp_port}?pkt_size=1300'.format(ffmpeg=FFMPEG, ffmpeg_args=ffmpeg_args, janus_server=JANUS_SERVER, rtp_port=rtp_port)
 
@@ -272,6 +286,49 @@ class WebcamStreamer:
         ffmpeg_thread.daemon = True
         ffmpeg_thread.start()
 
+    def mjpeg_webrtc(self, webcam):
+
+        @backoff.on_exception(backoff.expo, Exception)
+        def mjpeg_loop():
+
+            mjpeg_dataport = webcam['runtime']['mjpeg_dataport']
+
+            bandwidth_throttle = 0.004
+            if pi_version() == "0":    # If Pi Zero
+                bandwidth_throttle *= 2
+
+            mjpeg_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.mjpeg_sock_list.append(mjpeg_sock)
+
+            last_frame_sent = 0
+
+            while True:
+                if self.shutting_down:
+                    return
+
+                time.sleep( max(last_frame_sent+0.5-time.time(), 0) )  # No more than 1 frame per 0.5 second
+
+                jpg = None
+                try:
+                    jpg = capture_jpeg(webcam['moonraker_config'])
+                except Exception as e:
+                    _logger.warning('Failed to capture jpeg - ' + str(e))
+
+                if not jpg:
+                    continue
+
+                encoded = base64.b64encode(jpg)
+                mjpeg_sock.sendto(bytes('\r\n{}:{}\r\n'.format(len(encoded), len(jpg)), 'utf-8'), (JANUS_SERVER, mjpeg_dataport)) # simple header format for client to recognize
+                for chunk in [encoded[i:i+1400] for i in range(0, len(encoded), 1400)]:
+                    mjpeg_sock.sendto(chunk, (JANUS_SERVER, mjpeg_dataport))
+                    time.sleep(bandwidth_throttle)
+
+            last_frame_sent = time.time()
+
+        mjpeg_loop_thread = Thread(target=mjpeg_loop)
+        mjpeg_loop_thread.daemon = True
+        mjpeg_loop_thread.start()
+
     def ffmpeg_pid_file_path(self, rtp_port):
         return '/tmp/obico-ffmpeg-{rtp_port}.pid'.format(rtp_port=rtp_port)
 
@@ -294,9 +351,19 @@ class WebcamStreamer:
             process_to_kill = psutil.Process(ffmpeg_pid)
             process_to_kill.terminate()
 
-    def restore(self):
+    def shutdown(self):
         self.shutting_down = True
+        self.shutdown_subprocesses()
+        self.close_all_mjpeg_socks()
+
+    def shutdown_subprocesses(self):
+        if self.janus:
+            self.janus.shutdown()
         self.kill_all_ffmpeg_if_running()
+
+    def close_all_mjpeg_socks(self):
+        for mjpeg_sock in self.mjpeg_sock_list:
+            mjpeg_sock.close()
 
     def default_webcams(self):
         # Default webcam list if cameras are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism

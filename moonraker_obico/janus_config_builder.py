@@ -181,21 +181,34 @@ mjpeg-{janus_section_id}: {{
 """.format(janus_section_id=janus_section_id, mjpeg_dataport=mjpeg_dataport))
 
 
-def build_janus_plugin_streaming_jcfg(webcams):
+def build_janus_plugin_streaming_jcfg(webcams, sentry):
     streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=RUNTIME_JANUS_ETC_DIR)
     with open(streaming_jcfg_path, 'w') as f:
         for webcam in webcams:
-            if webcam['moonraker_config']['service'] == 'webrtc-camerastreamer' and webcam['config'].get('rtsp_port'):
-                f.write(streaming_jcfg_rtsp_section(webcam['runtime']['janus_section_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['config']['rtsp_port']), webcam['runtime']['dataport']))
-            elif 'mjpeg' in webcam['moonraker_config']['service']:
-                if webcam['runtime'].get('mjpeg_dataport'):
-                    f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['janus_section_id'], webcam['runtime']['mjpeg_dataport']))
-                elif webcam['runtime'].get('videoport') and webcam['runtime'].get('videortcpport') and webcam['runtime'].get('dataport'):
-                    f.write(streaming_jcfg_rtp_section(webcam['runtime']['janus_section_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
+
+            try:
+                if webcam['config']['mode'] == 'h264-rtsp':
+                    if webcam['config'].get('rtsp_port'):
+                        f.write(streaming_jcfg_rtsp_section(webcam['runtime']['janus_section_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['config']['rtsp_port']), webcam['runtime']['dataport']))
+                    else:
+                        raise Exception('config.rtsp_port is required to do h264-rtsp streaming')
+
+                elif webcam['config']['mode'] in ('h264-copy', 'h264-recode'):
+                    if webcam['runtime'].get('videoport') and webcam['runtime'].get('videortcpport') and webcam['runtime'].get('dataport'):
+                        f.write(streaming_jcfg_rtp_section(webcam['runtime']['janus_section_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
+                    else:
+                        raise Exception('Missing runtime parameters required in building h264-xxx section')
+
+                elif webcam['config']['mode'] == 'mjpeg-webrtc':
+                    if webcam['runtime'].get('mjpeg_dataport'):
+                        f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['janus_section_id'], webcam['runtime']['mjpeg_dataport']))
+                    else:
+                        raise Exception('Missing runtime parameters required in building mjpeg-webrtc section')
                 else:
-                    raise Exception('Got webcam config {webcam} missing info for janus config'.format(webcam=webcam))
-            else:
-                webcam['stream_error'] = 'Got webcam config {webcam} not suitable for streaming'.format(webcam=webcam)
+                    raise Exception('Unknown streaming mode "{}"'.format(webcam['config']['mode']))
+            except Exception as e:
+                sentry.captureException()
+                webcam['error'] = 'Error in building janus streaming configuration file - {}'.format(str(e))
 
 
 def build_janus_transport_websocket_jcfg(ws_port, admin_ws_port):
@@ -249,17 +262,10 @@ certificates: {{
 """.format(ws_port=ws_port, admin_ws_port=admin_ws_port))
 
 
-def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
+def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port, sentry):
     (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
-    build_janus_plugin_streaming_jcfg(webcams)
+    build_janus_plugin_streaming_jcfg(webcams, sentry)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
 
     return (janus_bin_path, ld_lib_path)
-
-if __name__ == '__main__':
-    file_path = sys.argv[1]
-    with open(file_path, 'r') as json_file:
-        webcams = json.load(json_file)['result']['webcams']
-
-    build_janus_config(webcams, 'asdf')
