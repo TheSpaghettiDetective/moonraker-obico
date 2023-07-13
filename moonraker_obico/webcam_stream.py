@@ -79,10 +79,16 @@ class WebcamStreamer:
 
         self.janus = None
 
-    def run_pipeline(self):
+    def start(self, webcams):
+
+        if self.janus:
+            self.janus.shutdown()
+
+        self.kill_all_ffmpeg_if_running()
+
         moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
         self.webcams = []
-        for webcam in self.linked_printer.get('cameras', []):
+        for webcam in webcams:
             moonraker_webcam = next(filter(lambda item: item.get('name') == webcam['name'], moonraker_webcams), None) # Find a Moonraker webcam that matches the name, or None if not found
             if moonraker_webcam is None or not moonraker_webcam.get('enabled'):
                 webcam['error'] = '{webcam_name} is not configured in Moonraker, or is disabled.'.format(webcam_name=webcam['name'])
@@ -113,8 +119,7 @@ class WebcamStreamer:
             elif webcam['config']['mode'] == 'h264-recode':
                 self.h264_recode(webcam)
 
-
-
+        return ('ok', None)
 
     def assign_janus_params(self):
         # TODO: reorder self.webcams so that, if possible, it's compatible with old mobile app versions
@@ -149,32 +154,6 @@ class WebcamStreamer:
         return False
 
 
-    def start(self, webcam_name, **kwargs):
-
-        webcam_config = (self.moonrakerconn.api_get('server/webcams/item', raise_for_status=False, name=webcam_name) or {}).get('webcam')
-        if not isinstance(webcam_config, dict) or not webcam_config.get('enabled'):
-            raise Exception(f'{webcam_name} is not configured or is disabled')
-
-        if self.janus:
-            self.janus.shutdown()
-
-        if 'mjpeg' in webcam_config.get('service').lower():
-            self.janus = JanusConn(self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
-            janus_thread = Thread(target=self.janus.start)
-            janus_thread.daemon = True
-            janus_thread.start()
-
-            if not pi_version():
-                _logger.warning('Not running on a Pi. Quitting video_pipeline.')
-                return (None, 'Not running on a Pi. Quitting video_pipeline.')
-
-            try:
-                self.ffmpeg_from_mjpeg(webcam_config)
-
-            except Exception:
-                self.sentry.captureException()
-
-        return ('ok', None)
 
     def h264_copy(self, webcam):
         try:
@@ -236,7 +215,7 @@ class WebcamStreamer:
             bitrate = int(bitrate/2)
 
         rtp_port = webcam['runtime']['videoport']
-        self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {mg_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
+        self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
 
     def start_ffmpeg(self, rtp_port, ffmpeg_args, retry_after_quit=False):
         ffmpeg_cmd = '{ffmpeg} -loglevel error {ffmpeg_args} -an -f rtp rtp://{janus_server}:{rtp_port}?pkt_size=1300'.format(ffmpeg=FFMPEG, ffmpeg_args=ffmpeg_args, janus_server=JANUS_SERVER, rtp_port=rtp_port)
@@ -296,7 +275,9 @@ class WebcamStreamer:
 
     def kill_all_ffmpeg_if_running(self):
         for rtc_port, ffmpeg_proc in self.map_rtp_port_ffmpeg_proc.items():
-            self.kill_all_ffmpeg_if_running(rtc_port, ffmpeg_proc)
+            self.kill_ffmpeg_if_running(rtc_port, ffmpeg_proc)
+
+        self.map_rtp_port_ffmpeg_proc = {}
 
     def kill_ffmpeg_if_running(self, rtc_port, ffmpeg_proc):
         try:

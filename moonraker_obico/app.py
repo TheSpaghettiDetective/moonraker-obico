@@ -148,7 +148,7 @@ class App(object):
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(target=self.webcam_streamer.run_pipeline)
+        thread = threading.Thread(target=self.webcam_streamer.start, args=(self.model.linked_printer.get('cameras', []),))
         thread.daemon = True
         thread.start()
 
