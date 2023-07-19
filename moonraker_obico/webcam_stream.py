@@ -347,10 +347,12 @@ class WebcamStreamer:
             process_to_kill.terminate()
             process_to_kill.wait(5)
 
-    def shutdown(self):
+    def shutdown(self, args):
         self.shutting_down = True
         self.shutdown_subprocesses()
         self.close_all_mjpeg_socks()
+        if args is not None:
+            return None, None
 
     def shutdown_subprocesses(self):
         if self.janus:
