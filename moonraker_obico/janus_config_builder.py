@@ -72,7 +72,6 @@ def build_janus_jcfg(auth_token):
     (janus_bin_path, system_janus_jcfg_path) = find_system_janus_jcfg_path()
     if janus_bin_path and system_janus_jcfg_path:
         folder_section = system_janus_jcfg_folders_section(system_janus_jcfg_path)
-        ld_lib_path = os.path.join(PRECOMPILED_DIR, 'lib')
     else:
         janus_bin_path = os.path.join(PRECOMPILED_DIR, 'bin', 'janus')
         ld_lib_path = os.path.join(PRECOMPILED_DIR, 'lib')
