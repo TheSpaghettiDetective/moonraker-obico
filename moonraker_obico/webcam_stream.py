@@ -125,7 +125,7 @@ class WebcamStreamer:
             elif webcam['config']['mode'] == 'mjpeg-webrtc':
                 self.mjpeg_webrtc(webcam)
 
-        return ('ok', None)
+        return ('ok', None)  # return value expected for a passthru target
 
     def assign_janus_params(self):
         first_h264_webcam = next(filter(lambda item: 'h264' in item['config']['mode'], self.webcams), None)
@@ -347,12 +347,11 @@ class WebcamStreamer:
             process_to_kill.terminate()
             process_to_kill.wait(5)
 
-    def shutdown(self, args):
+    def shutdown(self):
         self.shutting_down = True
         self.shutdown_subprocesses()
         self.close_all_mjpeg_socks()
-        if args is not None:
-            return None, None
+        return ('ok', None)  # return value expected for a passthru target
 
     def shutdown_subprocesses(self):
         if self.janus:
