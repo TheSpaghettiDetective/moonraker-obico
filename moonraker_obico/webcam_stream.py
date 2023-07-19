@@ -77,7 +77,7 @@ class WebcamStreamer:
         self.app_config = app_config
         self.linked_printer = linked_printer
         self.sentry = sentry
-        self.map_rtp_port_ffmpeg_proc = {}
+        self.ffmpeg_out_rtp_ports = set()
         self.mjpeg_sock_list = []
 
         self.janus = None
@@ -241,7 +241,7 @@ class WebcamStreamer:
         ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
         ffmpeg_proc.nice(20)
 
-        self.map_rtp_port_ffmpeg_proc[str(rtp_port)] = ffmpeg_proc
+        self.ffmpeg_out_rtp_ports.add(str(rtp_port))
 
         with open(self.ffmpeg_pid_file_path(rtp_port), 'w') as pid_file:
             pid_file.write(str(ffmpeg_proc.pid))
@@ -262,8 +262,8 @@ class WebcamStreamer:
             ring_buffer = deque(maxlen=50)
             ffmpeg_backoff = ExpoBackoff(3)
             while True:
-                err = to_unicode(ffmpeg_proc.stderr.readline(), errors='replace')
-                if not err:  # EOF when process ends?
+                line = to_unicode(ffmpeg_proc.stderr.readline(), errors='replace')
+                if not line:  # line == None means the process quits
                     if self.shutting_down:
                         return
 
@@ -280,7 +280,7 @@ class WebcamStreamer:
                     else:
                         return
                 else:
-                    ring_buffer.append(err)
+                    ring_buffer.append(line)
 
         ffmpeg_thread = Thread(target=monitor_ffmpeg_process, kwargs=dict(ffmpeg_proc=ffmpeg_proc, retry_after_quit=retry_after_quit))
         ffmpeg_thread.daemon = True
@@ -333,23 +333,19 @@ class WebcamStreamer:
         return '/tmp/obico-ffmpeg-{rtp_port}.pid'.format(rtp_port=rtp_port)
 
     def kill_all_ffmpeg_if_running(self):
-        for rtc_port, ffmpeg_proc in self.map_rtp_port_ffmpeg_proc.items():
-            self.kill_ffmpeg_if_running(rtc_port, ffmpeg_proc)
+        for rtc_port in self.ffmpeg_out_rtp_ports:
+            self.kill_ffmpeg_if_running(rtc_port)
 
         self.map_rtp_port_ffmpeg_proc = {}
 
-    def kill_ffmpeg_if_running(self, rtc_port, ffmpeg_proc):
-        try:
-            ffmpeg_proc.terminate()
-        except Exception:
-            pass
-
+    def kill_ffmpeg_if_running(self, rtc_port):
         # It is possible that some orphaned ffmpeg process is running (maybe previous python process was killed -9?).
         # Ensure all ffmpeg processes are killed
         with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
             ffmpeg_pid = int(pid_file.read())
             process_to_kill = psutil.Process(ffmpeg_pid)
             process_to_kill.terminate()
+            process_to_kill.wait(5)
 
     def shutdown(self):
         self.shutting_down = True

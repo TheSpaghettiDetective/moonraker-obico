@@ -30,7 +30,6 @@ class JanusConn:
         self.is_pro = is_pro
         self.sentry = sentry
         self.janus_ws = None
-        self.janus_proc = None
         self.shutting_down = False
         #self.webcam_streamer = None
         self.use_camera_streamer_rtsp = False
@@ -49,21 +48,19 @@ class JanusConn:
                 janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
                 lib_path = ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')
                 _logger.debug('Popen: LD_LIBRARY_PATH={} {}'.format(lib_path, janus_cmd))
-                self.janus_proc = psutil.Popen(janus_cmd.split(), env={'LD_LIBRARY_PATH': lib_path}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                self.janus_proc.nice(20)
+                janus_proc = psutil.Popen(janus_cmd.split(), env={'LD_LIBRARY_PATH': lib_path}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                janus_proc.nice(20)
 
                 with open(self.janus_pid_file_path(), 'w') as pid_file:
-                    pid_file.write(str(self.janus_proc.pid))
+                    pid_file.write(str(janus_proc.pid))
 
                 while True:
-                    line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
+                    line = to_unicode(janus_proc.stdout.readline(), errors='replace')
                     if line:
                         _logger.debug('JANUS: ' + line.rstrip())
                     else:  # line == None means the process quits
-                        self.janus_proc.wait()
-                        if not self.shutting_down:
-                            raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
-
+                        _logger.warn('Janus quit with exit code {}'.format(janus_proc.wait()))
+                        return
             except Exception as ex:
                 self.sentry.captureException()
 
@@ -110,16 +107,13 @@ class JanusConn:
 
     def kill_janus_if_running(self):
         try:
-            if self.janus_proc:
-                self.janus_proc.terminate()
-            self.janus_proc = None
-
             # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
             # Ensure the process is killed before launching a new one
             with open(self.janus_pid_file_path(), 'r') as pid_file:
                 janus_pid = int(pid_file.read())
                 process_to_kill = psutil.Process(janus_pid)
                 process_to_kill.terminate()
+                process_to_kill.wait(5)
 
         except Exception:
             pass
