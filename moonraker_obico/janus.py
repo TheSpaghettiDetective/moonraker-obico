@@ -46,9 +46,11 @@ class JanusConn:
                 self.kill_janus_if_running()
 
                 janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
-                lib_path = ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')
-                _logger.debug('Popen: LD_LIBRARY_PATH={} {}'.format(lib_path, janus_cmd))
-                janus_proc = psutil.Popen(janus_cmd.split(), env={'LD_LIBRARY_PATH': lib_path}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                env = {}
+                if ld_lib_path:
+                    env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
+                _logger.debug('Popen: {} {}'.format(env, janus_cmd))
+                janus_proc = psutil.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 janus_proc.nice(20)
 
                 with open(self.janus_pid_file_path(), 'w') as pid_file:
