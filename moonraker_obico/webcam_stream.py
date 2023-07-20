@@ -336,16 +336,19 @@ class WebcamStreamer:
         for rtc_port in self.ffmpeg_out_rtp_ports:
             self.kill_ffmpeg_if_running(rtc_port)
 
-        self.map_rtp_port_ffmpeg_proc = {}
+        self.ffmpeg_out_rtp_ports = set()
 
     def kill_ffmpeg_if_running(self, rtc_port):
         # It is possible that some orphaned ffmpeg process is running (maybe previous python process was killed -9?).
         # Ensure all ffmpeg processes are killed
         with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
-            ffmpeg_pid = int(pid_file.read())
-            process_to_kill = psutil.Process(ffmpeg_pid)
-            process_to_kill.terminate()
-            process_to_kill.wait(5)
+            try:
+                ffmpeg_pid = int(pid_file.read())
+                process_to_kill = psutil.Process(ffmpeg_pid)
+                process_to_kill.terminate()
+                process_to_kill.wait(5)
+            except Exception as e:
+                _logger.warning('Failed to shutdown ffmpeg - ' + str(e))
 
     def shutdown(self):
         self.shutting_down = True

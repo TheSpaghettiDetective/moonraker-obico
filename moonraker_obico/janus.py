@@ -116,9 +116,8 @@ class JanusConn:
                 process_to_kill = psutil.Process(janus_pid)
                 process_to_kill.terminate()
                 process_to_kill.wait(5)
-
-        except Exception:
-            pass
+        except Exception as e:
+            _logger.warning('Failed to shutdown Janus - ' + str(e))
 
     def shutdown(self):
         self.shutting_down = True
