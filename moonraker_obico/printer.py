@@ -36,6 +36,7 @@ class PrinterState:
         self.transient_state = None
         self.thermal_presets = []
         self.current_file_metadata = None
+        self.webcams = None
 
     def has_active_job(self) -> bool:
         return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
@@ -73,6 +74,10 @@ class PrinterState:
         with self._mutex:
             return self.obico_g_code_file_id
 
+    def set_webcams(self, webcams):
+        with self._mutex:
+            self.webcams = webcams
+
     @classmethod
     def get_state_from_status(cls, data: Dict) -> str:
         klippy_state = data.get(
@@ -93,7 +98,7 @@ class PrinterState:
         }.get(data.get('print_stats', {}).get('state', 'unknown'), PrinterState.STATE_OFFLINE)
 
     def to_dict(
-        self, print_event: Optional[str] = None, with_config: Optional[bool] = False
+        self, print_event: Optional[str] = None, with_settings: Optional[bool] = False
     ) -> Dict:
         with self._mutex:
             data = {
@@ -104,15 +109,9 @@ class PrinterState:
             if print_event:
                 data['event'] = {'event_type': print_event}
 
-            if with_config:
-                config = self.app_config
+            if with_settings:
                 data["settings"] = dict(
-                    webcam=dict(
-                        flipV=config.webcam.flip_v,
-                        flipH=config.webcam.flip_h,
-                        rotation=config.webcam.rotation,
-                        streamRatio="16:9" if config.webcam.aspect_ratio_169 else "4:3",
-                    ),
+                    webcams=self.webcams,
                     temperature=dict(dict(profiles=self.thermal_presets)),
                     agent=dict(
                         name="moonraker_obico",
@@ -250,7 +249,7 @@ class PrinterState:
             total_layers = None
 
         return (current_z, max_z, total_layers, current_layer)
-    
+
     def get_time_info(self):
         print_stats = self.status.get('print_stats') or dict()
         completion = self.status.get('virtual_sdcard', {}).get('progress')

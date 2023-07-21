@@ -46,7 +46,7 @@ class ServerConn:
                 self.should_reconnect = False
 
         def on_server_ws_open(ws):
-            self.post_status_update_to_server(with_config=True) # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
+            self.post_status_update_to_server(with_settings=True) # Make sure an update is sent asap so that the server can rely on the availability of essential info such as agent.version
 
         def on_message(ws, msg):
             try:
@@ -93,8 +93,8 @@ class ServerConn:
         except queue.Full:
             _logger.warning("Server message queue is full, msg dropped")
 
-    def post_status_update_to_server(self, print_event: Optional[str] = None, with_config: Optional[bool] = False):
-        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_config=with_config))
+    def post_status_update_to_server(self, print_event: Optional[str] = None, with_settings: Optional[bool] = False):
+        self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_settings=with_settings))
         self.status_posted_to_server_ts = time.time()
 
 

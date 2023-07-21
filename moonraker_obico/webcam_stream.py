@@ -71,17 +71,20 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
 
 class WebcamStreamer:
 
-    def __init__(self, server_conn, moonrakerconn, app_config, linked_printer, sentry):
+    def __init__(self, server_conn, moonrakerconn, app_model, sentry):
         self.server_conn = server_conn
         self.moonrakerconn = moonrakerconn
-        self.app_config = app_config
-        self.linked_printer = linked_printer
+        self.printer_state = app_model.printer_state
+        self.app_config = app_model.config
+        self.is_pro = app_model.linked_printer.get('is_pro')
         self.sentry = sentry
         self.ffmpeg_out_rtp_ports = set()
         self.mjpeg_sock_list = []
 
         self.janus = None
         self.shutting_down = False
+
+    ## The methods that are available as passthru target
 
     def start(self, webcams):
 
@@ -105,7 +108,7 @@ class WebcamStreamer:
 
         self.assign_janus_params()
         (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT, self.sentry)
-        self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.linked_printer.get('is_pro'), self.sentry)
+        self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.is_pro, self.sentry)
         self.janus.start(janus_bin_path, ld_lib_path)
 
         if not self.wait_for_janus():
@@ -116,24 +119,39 @@ class WebcamStreamer:
             if webcam.get('error'):
                 continue    # Skip the one webcam that we have run into issues for
 
-            if webcam['config']['mode'] == 'h264_rtsp':
+            if webcam['streaming_params']['mode'] == 'h264_rtsp':
                 continue    # No extra process is needed when the mode is 'h264_rtsp'
-            elif webcam['config']['mode'] == 'h264_copy':
+            elif webcam['streaming_params']['mode'] == 'h264_copy':
                 self.h264_copy(webcam)
-            elif webcam['config']['mode'] == 'h264_recode':
+            elif webcam['streaming_params']['mode'] == 'h264_recode':
                 self.h264_recode(webcam)
-            elif webcam['config']['mode'] == 'mjpeg_webrtc':
+            elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
                 self.mjpeg_webrtc(webcam)
+
+        self.printer_state.set_webcams([self.normalized_webcam_dict(webcam) for webcam in self.webcams])
+        self.server_conn.post_status_update_to_server(with_settings=True)
 
         return (self.webcams, None)  # return value expected for a passthru target
 
+    def shutdown(self):
+        self.shutting_down = True
+        self.shutdown_subprocesses()
+        self.close_all_mjpeg_socks()
+        return ('ok', None)  # return value expected for a passthru target
+
+    def status(self):
+        return (self.webcams, None)
+
+    ## End of passthru target methods
+
+
     def assign_janus_params(self):
-        first_h264_webcam = next(filter(lambda item: 'h264' in item['config']['mode'], self.webcams), None)
+        first_h264_webcam = next(filter(lambda item: 'h264' in item['streaming_params']['mode'], self.webcams), None)
         if first_h264_webcam:
             first_h264_webcam.setdefault('runtime', {})
             first_h264_webcam['runtime']['stream_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
 
-        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item['config']['mode'], self.webcams), None)
+        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item['streaming_params']['mode'], self.webcams), None)
         if first_mjpeg_webcam:
             first_mjpeg_webcam.setdefault('runtime', {})
             first_mjpeg_webcam['runtime']['stream_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
@@ -146,17 +164,17 @@ class WebcamStreamer:
                 webcam['runtime']['stream_id'] = cur_stream_id
                 cur_stream_id += 1
 
-            if webcam['config']['mode'] == 'h264_rtsp':
+            if webcam['streaming_params']['mode'] == 'h264_rtsp':
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['config']['mode'] in ('h264_copy', 'h264_recode'):
+            elif webcam['streaming_params']['mode'] in ('h264_copy', 'h264_recode'):
                  webcam['runtime']['videoport'] = cur_port_num
                  cur_port_num += 1
                  webcam['runtime']['videortcpport'] = cur_port_num
                  cur_port_num += 1
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['config']['mode'] == 'mjpeg_webrtc':
+            elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
                  webcam['runtime']['mjpeg_dataport'] = cur_port_num
                  cur_port_num += 1
 
@@ -172,10 +190,10 @@ class WebcamStreamer:
 
     def h264_copy(self, webcam):
         try:
-            if not self.linked_printer.get('is_pro'):
+            if not self.is_pro:
                 raise Exception('Free user can not stream webcam in h264_copy mode')
 
-            h264_http_url =  webcam['config'].get('h264_http_url')
+            h264_http_url =  webcam['streaming_params'].get('h264_http_url')
             rtp_port = webcam['runtime']['videoport']
 
             # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
@@ -225,7 +243,7 @@ class WebcamStreamer:
 
         bitrate = bitrate_for_dim(img_w, img_h)
         fps = webcam_config.get('target_fps')
-        if not self.linked_printer.get('is_pro'):
+        if not self.is_pro:
             fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
             bitrate = int(bitrate/2)
 
@@ -350,12 +368,6 @@ class WebcamStreamer:
             except Exception as e:
                 _logger.warning('Failed to shutdown ffmpeg - ' + str(e))
 
-    def shutdown(self):
-        self.shutting_down = True
-        self.shutdown_subprocesses()
-        self.close_all_mjpeg_socks()
-        return ('ok', None)  # return value expected for a passthru target
-
     def shutdown_subprocesses(self):
         if self.janus:
             self.janus.shutdown()
@@ -389,6 +401,17 @@ class WebcamStreamer:
 
         return [dict(
                 name='legacy',
-                config={'mode': 'h264_recode'},
+                streaming_params={'mode': 'h264_recode'},
                 moonraker_config=moonraker_webcam,
             )]
+
+    def normalized_webcam_dict(self, webcam):
+        return dict(
+                name=webcam.get('name'),
+                stream_mode=webcam.get('streaming_params', {}).get('mode'),
+                stream_id=webcam.get('runtime', {}).get('stream_id'),
+                flipV=webcam['moonraker_config']['flip_vertical'],
+                flipH=webcam['moonraker_config']['flip_horizontal'],
+                rotation=webcam['moonraker_config']['rotation'],
+                streamRatio="16:9"  # TODO: get the actual aspect ratio
+                )
