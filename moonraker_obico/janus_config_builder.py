@@ -115,12 +115,12 @@ events: {
 
     return (janus_bin_path, ld_lib_path)
 
-def streaming_jcfg_rtsp_section(janus_section_id, rtsp_url, dataport):
+def streaming_jcfg_rtsp_section(stream_id, rtsp_url, dataport):
 
     return("""
-h264-{janus_section_id}: {{
+h264-{stream_id}: {{
         type = "rtsp"
-        id = {janus_section_id}
+        id = {stream_id}
         description = "h264-video"
         enabled = true
         audio = false
@@ -136,14 +136,14 @@ h264-{janus_section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(janus_section_id=janus_section_id, rtsp_url=rtsp_url, dataport=dataport))
+""".format(stream_id=stream_id, rtsp_url=rtsp_url, dataport=dataport))
 
 
-def streaming_jcfg_rtp_section(janus_section_id, videoport, videortcpport, dataport):
+def streaming_jcfg_rtp_section(stream_id, videoport, videortcpport, dataport):
     return("""
-h264-{janus_section_id}: {{
+h264-{stream_id}: {{
         type = "rtp"
-        id = {janus_section_id}
+        id = {stream_id}
         description = "h264-video"
         enabled = true
         audio = false
@@ -161,14 +161,14 @@ h264-{janus_section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(janus_section_id=janus_section_id, videoport=videoport, videortcpport=videortcpport, dataport=dataport))
+""".format(stream_id=stream_id, videoport=videoport, videortcpport=videortcpport, dataport=dataport))
 
 
-def streaming_jcfg_mjpeg_section(janus_section_id, mjpeg_dataport):
+def streaming_jcfg_mjpeg_section(stream_id, mjpeg_dataport):
     return("""
-mjpeg-{janus_section_id}: {{
+mjpeg-{stream_id}: {{
         type = "rtp"
-        id = {janus_section_id}
+        id = {stream_id}
         description = "mjpeg-data"
         audio = false
         video = false
@@ -178,7 +178,7 @@ mjpeg-{janus_section_id}: {{
         dataiface = "127.0.0.1"
         databuffermsg = false
 }}
-""".format(janus_section_id=janus_section_id, mjpeg_dataport=mjpeg_dataport))
+""".format(stream_id=stream_id, mjpeg_dataport=mjpeg_dataport))
 
 
 def build_janus_plugin_streaming_jcfg(webcams, sentry):
@@ -187,23 +187,23 @@ def build_janus_plugin_streaming_jcfg(webcams, sentry):
         for webcam in webcams:
 
             try:
-                if webcam['config']['mode'] == 'h264-rtsp':
+                if webcam['config']['mode'] == 'h264_rtsp':
                     if webcam['config'].get('rtsp_port'):
-                        f.write(streaming_jcfg_rtsp_section(webcam['runtime']['janus_section_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['config']['rtsp_port']), webcam['runtime']['dataport']))
+                        f.write(streaming_jcfg_rtsp_section(webcam['runtime']['stream_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['config']['rtsp_port']), webcam['runtime']['dataport']))
                     else:
-                        raise Exception('config.rtsp_port is required to do h264-rtsp streaming')
+                        raise Exception('config.rtsp_port is required to do h264_rtsp streaming')
 
-                elif webcam['config']['mode'] in ('h264-copy', 'h264-recode'):
+                elif webcam['config']['mode'] in ('h264_copy', 'h264_recode'):
                     if webcam['runtime'].get('videoport') and webcam['runtime'].get('videortcpport') and webcam['runtime'].get('dataport'):
-                        f.write(streaming_jcfg_rtp_section(webcam['runtime']['janus_section_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
+                        f.write(streaming_jcfg_rtp_section(webcam['runtime']['stream_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
                     else:
                         raise Exception('Missing runtime parameters required in building h264-xxx section')
 
-                elif webcam['config']['mode'] == 'mjpeg-webrtc':
+                elif webcam['config']['mode'] == 'mjpeg_webrtc':
                     if webcam['runtime'].get('mjpeg_dataport'):
-                        f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['janus_section_id'], webcam['runtime']['mjpeg_dataport']))
+                        f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['stream_id'], webcam['runtime']['mjpeg_dataport']))
                     else:
-                        raise Exception('Missing runtime parameters required in building mjpeg-webrtc section')
+                        raise Exception('Missing runtime parameters required in building mjpeg_webrtc section')
                 else:
                     raise Exception('Unknown streaming mode "{}"'.format(webcam['config']['mode']))
             except Exception as e:

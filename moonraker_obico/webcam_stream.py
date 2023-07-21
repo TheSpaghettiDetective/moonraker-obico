@@ -116,47 +116,47 @@ class WebcamStreamer:
             if webcam.get('error'):
                 continue    # Skip the one webcam that we have run into issues for
 
-            if webcam['config']['mode'] == 'h264-rtsp':
-                continue    # No extra process is needed when the mode is 'h264-rtsp'
-            elif webcam['config']['mode'] == 'h264-copy':
+            if webcam['config']['mode'] == 'h264_rtsp':
+                continue    # No extra process is needed when the mode is 'h264_rtsp'
+            elif webcam['config']['mode'] == 'h264_copy':
                 self.h264_copy(webcam)
-            elif webcam['config']['mode'] == 'h264-recode':
+            elif webcam['config']['mode'] == 'h264_recode':
                 self.h264_recode(webcam)
-            elif webcam['config']['mode'] == 'mjpeg-webrtc':
+            elif webcam['config']['mode'] == 'mjpeg_webrtc':
                 self.mjpeg_webrtc(webcam)
 
-        return ('ok', None)  # return value expected for a passthru target
+        return (self.webcams, None)  # return value expected for a passthru target
 
     def assign_janus_params(self):
         first_h264_webcam = next(filter(lambda item: 'h264' in item['config']['mode'], self.webcams), None)
         if first_h264_webcam:
             first_h264_webcam.setdefault('runtime', {})
-            first_h264_webcam['runtime']['janus_section_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
+            first_h264_webcam['runtime']['stream_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
 
         first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item['config']['mode'], self.webcams), None)
         if first_mjpeg_webcam:
             first_mjpeg_webcam.setdefault('runtime', {})
-            first_mjpeg_webcam['runtime']['janus_section_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
+            first_mjpeg_webcam['runtime']['stream_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
 
-        cur_janus_section_id = 3
+        cur_stream_id = 3
         cur_port_num = JANUS_ADMIN_WS_PORT + 1
         for webcam in self.webcams:
             webcam.setdefault('runtime', {})
-            if not webcam['runtime'].get('janus_section_id'):
-                webcam['runtime']['janus_section_id'] = cur_janus_section_id
-                cur_janus_section_id += 1
+            if not webcam['runtime'].get('stream_id'):
+                webcam['runtime']['stream_id'] = cur_stream_id
+                cur_stream_id += 1
 
-            if webcam['config']['mode'] == 'h264-rtsp':
+            if webcam['config']['mode'] == 'h264_rtsp':
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['config']['mode'] in ('h264-copy', 'h264-recode'):
+            elif webcam['config']['mode'] in ('h264_copy', 'h264_recode'):
                  webcam['runtime']['videoport'] = cur_port_num
                  cur_port_num += 1
                  webcam['runtime']['videortcpport'] = cur_port_num
                  cur_port_num += 1
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['config']['mode'] == 'mjpeg-webrtc':
+            elif webcam['config']['mode'] == 'mjpeg_webrtc':
                  webcam['runtime']['mjpeg_dataport'] = cur_port_num
                  cur_port_num += 1
 
@@ -173,7 +173,7 @@ class WebcamStreamer:
     def h264_copy(self, webcam):
         try:
             if not self.linked_printer.get('is_pro'):
-                raise Exception('Free user can not stream webcam in h264-copy mode')
+                raise Exception('Free user can not stream webcam in h264_copy mode')
 
             h264_http_url =  webcam['config'].get('h264_http_url')
             rtp_port = webcam['runtime']['videoport']
@@ -389,6 +389,6 @@ class WebcamStreamer:
 
         return [dict(
                 name='legacy',
-                config={'mode': 'h264-recode'},
+                config={'mode': 'h264_recode'},
                 moonraker_config=moonraker_webcam,
             )]
