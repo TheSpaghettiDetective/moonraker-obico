@@ -408,6 +408,7 @@ class WebcamStreamer:
     def normalized_webcam_dict(self, webcam):
         return dict(
                 name=webcam.get('name'),
+                error=webcam.get('error'),
                 stream_mode=webcam.get('streaming_params', {}).get('mode'),
                 stream_id=webcam.get('runtime', {}).get('stream_id'),
                 flipV=webcam['moonraker_config']['flip_vertical'],
