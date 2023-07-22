@@ -29,13 +29,6 @@ class PassthruExecutor:
         _logger.debug(f'Received passthru from server: {passthru_msg}')
 
         passthru = passthru_msg['passthru']
-        target = self.passthru_targets.get(passthru.get('target'))
-        func = getattr(target, passthru['func'], None)
-
-        if not func:
-            self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
-            return
-
         ack_ref = passthru.get('ref')
         if ack_ref is not None:
             # same msg may arrive through both ws and datachannel
@@ -46,7 +39,11 @@ class PassthruExecutor:
 
         error = None
         try:
+            target = self.passthru_targets.get(passthru.get('target'))
+            func = getattr(target, passthru['func'], None)
             ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
+        except (AttributeError, TypeError):
+            error = 'Request not supported. Please make sure moonraker-obico is updated to the latest version. If moonraker-obico is already up to date and you still see this error, please contact Obico support at support@obico.io'
         except Exception as e:
             error = str(e)
             self.sentry.captureException()
