@@ -381,13 +381,6 @@ class App(object):
             _logger.debug(f'Received passthru from server: {msg}')
 
             passthru = msg['passthru']
-            target = getattr(self, 'target_' + passthru.get('target'))
-            func = getattr(target, passthru['func'], None)
-
-            if not func:
-                self.sentry.captureMessage('Function "{} in target "{}" not found'.format(passthru['func'], passthru['target']))
-                return
-
             ack_ref = passthru.get('ref')
             if ack_ref is not None:
                 # same msg may arrive through both ws and datachannel
@@ -400,7 +393,11 @@ class App(object):
 
             error = None
             try:
+                target = getattr(self, 'target_' + passthru.get('target'))
+                func = getattr(target, passthru['func'], None)
                 ret_value, error = func(*(passthru.get("args", [])), **(passthru.get("kwargs", {})))
+            except AttributeError:
+                error = 'Request not supported. Please make sure moonraker-obico is updated to the latest version. If moonraker-obico is already up to date and you still see this error, please contact Obico support at support@obico.io'
             except Exception as e:
                 error = str(e)
                 self.sentry.captureException()
