@@ -128,10 +128,11 @@ class WebcamStreamer:
             elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
                 self.mjpeg_webrtc(webcam)
 
-        self.printer_state.set_webcams([self.normalized_webcam_dict(webcam) for webcam in self.webcams])
+        normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
+        self.printer_state.set_webcams(normalized_webcams)
         self.server_conn.post_status_update_to_server(with_settings=True)
 
-        return (self.webcams, None)  # return value expected for a passthru target
+        return (normalized_webcams, None)  # return value expected for a passthru target
 
     def shutdown(self):
         self.shutting_down = True
