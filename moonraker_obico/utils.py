@@ -322,5 +322,5 @@ def pi_version():
     except:
         return None
 
-def is_os_64bit():
-    return platform.machine().endswith('64')
+def os_bit():
+    return platform.architecture()[0]

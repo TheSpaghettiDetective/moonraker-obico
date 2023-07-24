@@ -8,7 +8,7 @@ import re
 import shutil
 
 
-from .utils import is_os_64bit, pi_version
+from .utils import os_bit, pi_version
 
 JANUS_ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 RUNTIME_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'runtime', 'etc', 'janus')
@@ -18,7 +18,7 @@ distro_id = distro.id()
 if distro_id == 'debian' and pi_version(): # On some Raspbian/RPi OS versions, distro.id() returns 'debian' instead of 'raspbian'.
     distro_id = 'raspbian'
 
-PRECOMPILED_DIR = '{root_dir}/precomplied/{os_id}.{os_version}.{os_bit}-bit'.format(root_dir=JANUS_ROOT_DIR, os_id=distro_id, os_version=distro.major_version(), os_bit='64' if is_os_64bit() else '32')
+PRECOMPILED_DIR = '{root_dir}/precomplied/{os_id}.{os_version}.{os_bit}'.format(root_dir=JANUS_ROOT_DIR, os_id=distro_id, os_version=distro.major_version(), os_bit=os_bit())
 
 _logger = logging.getLogger('obico.janus_config_builder')
 
