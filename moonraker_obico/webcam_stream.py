@@ -200,13 +200,12 @@ class WebcamStreamer:
             # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
             self.start_ffmpeg(rtp_port, '-re -i {} -c:v copy'.format(h264_http_url), retry_after_quit=True)
         except Exception as e:
-            self.sentry.captureException()
             webcam['error'] = str(e)
 
 
     def h264_recode(self, webcam):
 
-        @backoff.on_exception(backoff.expo, Exception, max_tries=20)  # Retry 20 times in case the webcam service starts later than Obico service
+        @backoff.on_exception(backoff.expo, Exception, max_tries=3)
         def get_webcam_resolution(webcam_config):
             return get_image_info(capture_jpeg(webcam_config, force_stream_url=True))
 
@@ -225,31 +224,34 @@ class WebcamStreamer:
 
             raise Exception('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
 
-        encoder = h264_encoder()
-
-        webcam_config = webcam['moonraker_config']
-        stream_url = webcam_full_url(webcam_config.get('stream_url'))
-        if not stream_url:
-            raise Exception('stream_url not configured. Unable to stream the webcam.')
-
-        (img_w, img_h) = (640, 480)
         try:
-            (_, img_w, img_h) = get_webcam_resolution(webcam_config)
-            _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
-        except (URLError, HTTPError, requests.exceptions.RequestException):
-            _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
-        except Exception:
-            self.sentry.captureException()
-            _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
+            encoder = h264_encoder()
 
-        bitrate = bitrate_for_dim(img_w, img_h)
-        fps = webcam_config.get('target_fps')
-        if not self.is_pro:
-            fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
-            bitrate = int(bitrate/2)
+            webcam_config = webcam['moonraker_config']
+            stream_url = webcam_full_url(webcam_config.get('stream_url'))
+            if not stream_url:
+                raise Exception('stream_url not configured. Unable to stream the webcam.')
 
-        rtp_port = webcam['runtime']['videoport']
-        self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
+            (img_w, img_h) = (640, 480)
+            try:
+                (_, img_w, img_h) = get_webcam_resolution(webcam_config)
+                _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
+            except (URLError, HTTPError, requests.exceptions.RequestException):
+                _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
+            except Exception:
+                self.sentry.captureException()
+                _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
+
+            bitrate = bitrate_for_dim(img_w, img_h)
+            fps = webcam_config.get('target_fps')
+            if not self.is_pro:
+                fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
+                bitrate = int(bitrate/2)
+
+            rtp_port = webcam['runtime']['videoport']
+            self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=encoder))
+        except Exception as e:
+            webcam['error'] = str(e)
 
 
     def start_ffmpeg(self, rtp_port, ffmpeg_args, retry_after_quit=False):
