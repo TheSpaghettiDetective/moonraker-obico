@@ -69,6 +69,18 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
     watch_thread.start()
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
+def get_webcam_resolution(webcam_config):
+    (img_w, img_h) = (640, 360)
+    try:
+        (_, img_w, img_h) = get_image_info(capture_jpeg(webcam_config, force_stream_url=True))
+        _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
+    except Exception:
+        _logger.exception('Failed to connect to webcam to retrieve resolution. Using default.')
+
+    return (img_w, img_h)
+
+
 class WebcamStreamer:
 
     def __init__(self, server_conn, moonrakerconn, app_model, sentry):
@@ -140,8 +152,16 @@ class WebcamStreamer:
         self.close_all_mjpeg_socks()
         return ('ok', None)  # return value expected for a passthru target
 
-    def status(self):
-        return (self.webcams, None)
+    def list_system_webcams(self):
+        moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
+        for mr_webcam_config in moonraker_webcams:
+            if 'mjpeg' in mr_webcam_config.get('service', '').lower():
+                (img_w, img_h) = get_webcam_resolution(mr_webcam_config)
+                mr_webcam_config['width'] = img_w
+                mr_webcam_config['height'] = img_h
+
+        return (moonraker_webcams, None)
+
 
     ## End of passthru target methods
 
@@ -204,10 +224,6 @@ class WebcamStreamer:
 
 
     def h264_recode(self, webcam):
-
-        @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-        def get_webcam_resolution(webcam_config):
-            return get_image_info(capture_jpeg(webcam_config, force_stream_url=True))
 
         def h264_encoder():
             test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
