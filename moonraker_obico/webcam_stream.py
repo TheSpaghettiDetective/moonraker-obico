@@ -14,7 +14,7 @@ import requests
 import base64
 import socket
 
-from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
+from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff, parse_integer_or_none
 from .webcam_capture import capture_jpeg, webcam_full_url
 from .janus import JanusConn
 from .janus_config_builder import build_janus_config
@@ -248,18 +248,18 @@ class WebcamStreamer:
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 
-            (img_w, img_h) = (640, 480)
-            try:
+
+            (img_w, img_h) = (parse_integer_or_none(webcam['streaming_params'].get('recode_width')), parse_integer_or_none(webcam['streaming_params'].get('recode_height')))
+            if not img_w or not img_h:
+                _logger.warn('width and/or height not specified or invalid in streaming parameters. Getting the values from the source.')
                 (img_w, img_h) = get_webcam_resolution(webcam_config)
-                _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
-            except (URLError, HTTPError, requests.exceptions.RequestException):
-                _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
-            except Exception:
-                self.sentry.captureException()
-                _logger.warn(f'Failed to detect webcam resolution due to unexpected error. Using default.')
+
+            fps = parse_integer_or_none(webcam['streaming_params'].get('recode_fps'))
+            if not fps:
+                _logger.warn('FPS not specified or invalid in streaming parameters. Getting the values from the source.')
+                fps = webcam_config.get('target_fps')
 
             bitrate = bitrate_for_dim(img_w, img_h)
-            fps = webcam_config.get('target_fps')
             if not self.is_pro:
                 fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
                 bitrate = int(bitrate/2)
@@ -408,6 +408,7 @@ class WebcamStreamer:
         if not self.app_config.webcam.stream_url:
             return []
 
+        # In legacy streaming, server gives no streaming parameters. Hence they will all be retrieved from moonraker_webcam. Make sure they are compatibile with the old behavior
         moonraker_webcam.update(dict(
             stream_url=self.app_config.webcam.stream_url,
             snapshot_url=self.app_config.webcam.snapshot_url,

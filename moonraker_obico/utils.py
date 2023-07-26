@@ -324,3 +324,10 @@ def pi_version():
 
 def os_bit():
     return platform.architecture()[0]
+
+def parse_integer_or_none(s):
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
