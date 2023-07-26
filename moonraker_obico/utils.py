@@ -328,6 +328,6 @@ def os_bit():
 def parse_integer_or_none(s):
     try:
         return int(s)
-    except ValueError:
+    except:
         return None
 

@@ -135,8 +135,8 @@ class WebcamStreamer:
                 continue    # No extra process is needed when the mode is 'h264_rtsp'
             elif webcam['streaming_params']['mode'] == 'h264_copy':
                 self.h264_copy(webcam)
-            elif webcam['streaming_params']['mode'] == 'h264_recode':
-                self.h264_recode(webcam)
+            elif webcam['streaming_params']['mode'] == 'h264_transcode':
+                self.h264_transcode(webcam)
             elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
                 self.mjpeg_webrtc(webcam)
 
@@ -188,7 +188,7 @@ class WebcamStreamer:
             if webcam['streaming_params']['mode'] == 'h264_rtsp':
                  webcam['runtime']['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam['streaming_params']['mode'] in ('h264_copy', 'h264_recode'):
+            elif webcam['streaming_params']['mode'] in ('h264_copy', 'h264_transcode'):
                  webcam['runtime']['videoport'] = cur_port_num
                  cur_port_num += 1
                  webcam['runtime']['videortcpport'] = cur_port_num
@@ -223,7 +223,7 @@ class WebcamStreamer:
             webcam['error'] = str(e)
 
 
-    def h264_recode(self, webcam):
+    def h264_transcode(self, webcam):
 
         def h264_encoder():
             test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
@@ -421,7 +421,7 @@ class WebcamStreamer:
 
         return [dict(
                 name='legacy',
-                streaming_params={'mode': 'h264_recode'},
+                streaming_params={'mode': 'h264_transcode'},
                 moonraker_config=moonraker_webcam,
             )]
 
