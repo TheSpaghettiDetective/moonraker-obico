@@ -250,7 +250,7 @@ class WebcamStreamer:
 
             (img_w, img_h) = (640, 480)
             try:
-                (_, img_w, img_h) = get_webcam_resolution(webcam_config)
+                (img_w, img_h) = get_webcam_resolution(webcam_config)
                 _logger.debug(f'Detected webcam resolution - w:{img_w} / h:{img_h}')
             except (URLError, HTTPError, requests.exceptions.RequestException):
                 _logger.warn(f'Failed to connect to webcam to retrieve resolution. Using default.')
