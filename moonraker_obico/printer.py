@@ -1,4 +1,5 @@
 import math
+import platform
 from typing import Optional, Dict, Any
 import threading
 import time
@@ -118,7 +119,14 @@ class PrinterState:
                         name="moonraker_obico",
                         version=VERSION,
                     ),
+                    platform_uname=list(platform.uname())
                 )
+                try:
+                    with open('/proc/device-tree/model', 'r') as file:
+                        model = file.read().strip()
+                    data['settings']['platform_uname'].append(model)
+                except:
+                    data['settings']['platform_uname'].append('No SBC Found')
             return data
 
     def to_status(self) -> Dict:
