@@ -126,7 +126,7 @@ class PrinterState:
                         model = file.read().strip()
                     data['settings']['platform_uname'].append(model)
                 except:
-                    data['settings']['platform_uname'].append('No SBC Found')
+                    data['settings']['platform_uname'].append('')
             return data
 
     def to_status(self) -> Dict:
@@ -258,7 +258,7 @@ class PrinterState:
             total_layers = None
 
         return (current_z, max_z, total_layers, current_layer)
-    
+
     def get_time_info(self):
         print_stats = self.status.get('print_stats') or dict()
         completion = self.status.get('virtual_sdcard', {}).get('progress')
