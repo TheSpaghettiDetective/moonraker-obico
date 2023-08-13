@@ -134,6 +134,7 @@ class App(object):
 
         self.moonrakerconn.update_webcam_config_from_moonraker()
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
+        self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
         thread = threading.Thread(target=self.server_conn.start)
         thread.daemon = True

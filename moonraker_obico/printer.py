@@ -36,6 +36,7 @@ class PrinterState:
         self.obico_g_code_file_id = None
         self.transient_state = None
         self.thermal_presets = []
+        self.installed_plugins = []
         self.current_file_metadata = None
 
     def has_active_job(self) -> bool:
@@ -119,7 +120,8 @@ class PrinterState:
                         name="moonraker_obico",
                         version=VERSION,
                     ),
-                    platform_uname=list(platform.uname())
+                    platform_uname=list(platform.uname()),
+                    installed_plugins=self.installed_plugins,
                 )
                 try:
                     with open('/proc/device-tree/model', 'r') as file:

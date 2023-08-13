@@ -118,6 +118,10 @@ class MoonrakerConn:
 
         return presets
 
+    def find_all_installed_plugins(self):
+        data = self.api_get('machine/update/status', raise_for_status=True, refresh='false')
+        return list(set(data.get("version_info", {}).keys()) - set(['system', 'moonraker', 'klipper']))
+
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def find_most_recent_job(self):
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
