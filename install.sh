@@ -17,7 +17,6 @@ OBICO_REPO="https://github.com/TheSpaghettiDetective/moonraker-obico.git"
 CURRENT_USER=${USER}
 OVERWRITE_CONFIG="n"
 SKIP_LINKING="n"
-MOONRAKER_COMPONENT_DIR="${HOME}/moonraker/moonraker/components"
 
 usage() {
   if [ -n "$1" ]; then

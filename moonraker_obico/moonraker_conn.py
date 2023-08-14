@@ -15,7 +15,6 @@ from random import randrange
 from collections import deque, OrderedDict
 from functools import reduce
 from operator import concat
-from .version import VERSION
 
 from .utils import DEBUG
 from .ws import WebSocketClient, WebSocketConnectionException
