@@ -119,7 +119,9 @@ class MoonrakerConn:
         return presets
 
     def find_all_installed_plugins(self):
-        data = self.api_get('machine/update/status', raise_for_status=True, refresh='false')
+        data = self.api_get('machine/update/status', raise_for_status=False, refresh='false')
+        if not data:
+            return []
         return list(set(data.get("version_info", {}).keys()) - set(['system', 'moonraker', 'klipper']))
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
