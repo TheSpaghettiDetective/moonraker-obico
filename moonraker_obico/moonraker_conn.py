@@ -224,13 +224,6 @@ class MoonrakerConn:
             _logger.info('connection is open')
 
             self.wait_for_klippy_ready()
-            identity_params = {
-                "client_name": "Obico",
-                "version": VERSION,
-                "type": "agent",
-                "url": "https://app.obico.io"
-            }
-            self.jsonrpc_request('server.connection.identify', identity_params)
             self.app_config.update_heater_mapping(self.find_all_heaters())  # We need to find all heaters as their names have to be specified in the objects query request
             self.klippy_ready.set()
 
