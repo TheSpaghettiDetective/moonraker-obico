@@ -1,4 +1,4 @@
-class Example:
+class Celestrius:
     def __init__(self, config):
         self.server = config.get_server()
         self.name = config.get_name()
@@ -25,4 +25,4 @@ class Example:
         return {"example_return_value": state}
 
 def load_component(config):
-    return Example(config)
+    return Celestrius(config)
