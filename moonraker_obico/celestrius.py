@@ -21,6 +21,7 @@ class Celestrius:
         
 
     def start(self):
+        #TODO block users with no nozzle cam config
         while True:
             if self.on_first_layer == True:
                 try:
@@ -54,8 +55,9 @@ class Celestrius:
         with ZipFile(zip_file_path, 'w') as zipf:
             for root, _, files in os.walk(self.celestrius_imgs_dir_path):
                 for file in files:
-                    file_path = os.path.join(root, file)
-                    zipf.write(file_path, os.path.relpath(file_path, self.celestrius_imgs_dir_path))
+                    if not file.endswith('.zip'):
+                        file_path = os.path.join(root, file)
+                        zipf.write(file_path, os.path.relpath(file_path, self.celestrius_imgs_dir_path))
         return zip_file_path
     
     def remove_files_in_directory(self):
