@@ -101,7 +101,7 @@ class App(object):
             config=config,
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
-            printer_state=PrinterState(config),
+            printer_state=PrinterState(config, self),
             seen_refs=collections.deque(maxlen=100),
         )
         self.sentry = SentryWrapper(config=config)
