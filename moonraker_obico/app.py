@@ -14,7 +14,7 @@ import signal
 import backoff
 import pathlib
 
-import requests
+import requests # type: ignore
 
 from moonraker_obico.celestrius import Celestrius
 from .version import VERSION
