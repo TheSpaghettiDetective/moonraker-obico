@@ -14,8 +14,9 @@ import signal
 import backoff
 import pathlib
 
-import requests  # type: ignore
+import requests
 
+from moonraker_obico.celestrius import Celestrius
 from .version import VERSION
 from .utils import SentryWrapper
 from .webcam_capture import JpegPoster
@@ -63,6 +64,7 @@ class App(object):
         self.target_moonraker_api = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
         self.target_file_operations = None
+        self.celestrius = None
 
     def push_event(self, event):
         if self.shutdown:
@@ -125,6 +127,7 @@ class App(object):
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
         self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+        self.celestrius = Celestrius(self.model, self.server_conn)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -156,6 +159,10 @@ class App(object):
         janus_thread = threading.Thread(target=self.janus.start)
         janus_thread.daemon = True
         janus_thread.start()
+
+        celestrius_thread = threading.Thread(target=self.celestrius.start)
+        celestrius_thread.daemon = True
+        celestrius_thread.start()
 
         try:
             thread.join()

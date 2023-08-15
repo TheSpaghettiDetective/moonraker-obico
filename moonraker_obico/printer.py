@@ -5,12 +5,9 @@ import threading
 import time
 import pathlib
 
-from moonraker_obico.webcam_capture import capture_jpeg
 from .config import Config
 from .version import VERSION
 from .utils import  sanitize_filename
-import logging
-_logger = logging.getLogger('obico.app')
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -41,8 +38,6 @@ class PrinterState:
         self.thermal_presets = []
         self.installed_plugins = []
         self.current_file_metadata = None
-        self.celestrius_active = False
-        self.celestrius_images = []
         self.plugin = plugin
 
     def has_active_job(self) -> bool:
@@ -236,11 +231,10 @@ class PrinterState:
         total_layers = print_info.get('total_layer')
         current_layer = print_info.get('current_layer')
         if current_layer is not None:
-            if current_layer == 0:
-                self.run_celestrius()
-            elif current_layer > 1 and self.celestrius_active == True: # turn celestrius off after 1st layer
-                self.celestrius_active == False
-                self.celestrius_dump_to_server()
+            if current_layer == 1:
+                self.plugin.celestrius.on_first_layer = False
+            elif current_layer > 1 and self.plugin.celestrius.on_first_layer == True: # turn celestrius off after 1st layer
+                self.plugin.celestrius.dump_to_server()
 
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None
@@ -287,27 +281,3 @@ class PrinterState:
             print_time_left = slicer_time_left if slicer_time_left > 0 else 1
 
         return (completion, print_time, print_time_left)
-    
-    def run_celestrius(self):
-        if self.celestrius_active == True:
-            return
-        self.celestrius_active == True
-        while self.celestrius_active == True:
-            try:
-                # replace webcam config with nozzle cam config
-                # create new catpure_celestris_jpeg func ?
-                # self.celestrius_images.append(capture_jpeg(self.config.webcam))
-                _logger.debug('Celestrius Jpeg captured')
-            except Exception as e:
-                _logger.warn('Failed to capture jpeg - ' + str(e))
-            time.sleep(0.2) # how many photos do we want?
-        
-
-    def celestrius_dump_to_server(self):
-        try:
-            # replace below with new post call when server ready
-            # self.plugin.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=self.celestrius_images, data=None, raise_exception=True, skip_debug_logging=True)
-            _logger.debug('Celestrius images sent')
-        except Exception as e:
-            _logger.warn('Failed to send images - ' + str(e) )
-
