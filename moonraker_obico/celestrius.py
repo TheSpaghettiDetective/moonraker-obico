@@ -1,19 +1,6 @@
-import io
-import re
 import os
 import logging
-import subprocess
 import time
-import sys
-from collections import deque
-from threading import Thread
-import psutil
-import backoff
-from urllib.error import URLError, HTTPError
-import requests
-
-from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff
-from .webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.webcam_stream')
 
