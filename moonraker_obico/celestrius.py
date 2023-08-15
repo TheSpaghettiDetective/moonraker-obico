@@ -2,6 +2,7 @@ import os
 import logging
 import time
 from zipfile import ZipFile
+from moonraker_obico.webcam_capture import capture_jpeg
 
 _logger = logging.getLogger('obico.celestrius')
 
@@ -11,6 +12,7 @@ class Celestrius:
         self.config = app_model.config
         self.server_conn = server_conn
         self.on_first_layer = False
+        self.snapshot_count = 0 # index  / key attribute to give image a unique filename
 
         parent_directory = os.path.dirname(self.config._config_path)
         self.celestrius_imgs_dir_path = os.path.join(parent_directory, 'celestrius_imgs')
@@ -22,14 +24,19 @@ class Celestrius:
         while True:
             if self.on_first_layer == True:
                 try:
-                    # os.makedirs(self.celestrius_imgs_dir_path, exist_ok=True)
-                    # replace webcam config with nozzle cam config
-                    # create new catpure_celestris_jpeg func ?
-                    # self.celestrius_images.append(capture_jpeg(self.config.webcam))
+                    #TODO replace webcam config with nozzle cam config
+                    self.save_snapshot_as_jpeg(capture_jpeg(self.config.webcam))
                     _logger.debug('Celestrius Jpeg captured')
                 except Exception as e:
-                    _logger.warn('Failed to capture jpeg - ' + str(e))
-            time.sleep(0.2) # how many photos do we want?
+                    _logger.warning('Failed to capture jpeg - ' + str(e))
+            time.sleep(0.2) #TODO how many photos do we want?
+
+    def save_snapshot_as_jpeg(self, snapshot):
+        if snapshot:
+            self.snapshot_count += 1
+            image_path = os.path.join(self.celestrius_imgs_dir_path, f'celestrius_{self.snapshot_count}.jpg')
+            with open(image_path, 'wb') as image_file:
+                image_file.write(snapshot)
 
     def dump_to_server(self):
         self.on_first_layer = False
@@ -39,7 +46,7 @@ class Celestrius:
             self.remove_files_in_directory()
             _logger.debug('Celestrius images sent and files removed')
         except Exception as e:
-            _logger.warn('Failed to send images - ' + str(e))
+            _logger.warning('Failed to send images - ' + str(e))
             self.remove_files_in_directory()
     
     def create_zip(self):
