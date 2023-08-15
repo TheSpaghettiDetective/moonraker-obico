@@ -68,6 +68,9 @@ class Celestrius:
         _logger.debug('Files removed from directory')
 
     def send_post_request(self, zip_file_path):
-        files = {'zip_file': open(zip_file_path, 'rb')}
-        # response = requests.post(url, files=files) TODO use actual post request
-        _logger.debug('POST request sent successfully')
+        try:
+            files = {'celestrius': open(zip_file_path, 'rb')}
+            self.server_conn.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=None)
+            _logger.debug('POST request sent successfully')
+        except Exception as e:
+            _logger.warn('Failed to post zip file' + str(e))

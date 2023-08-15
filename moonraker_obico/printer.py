@@ -232,7 +232,7 @@ class PrinterState:
         current_layer = print_info.get('current_layer')
         if current_layer is not None:
             if current_layer == 1:
-                self.plugin.celestrius.on_first_layer = False
+                self.plugin.celestrius.on_first_layer = True
             elif current_layer > 1 and self.plugin.celestrius.on_first_layer == True: # turn celestrius off after 1st layer
                 self.plugin.celestrius.dump_to_server()
 
