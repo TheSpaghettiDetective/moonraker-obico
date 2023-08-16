@@ -1,7 +1,6 @@
 import logging
 import time
 from moonraker_obico.webcam_capture import capture_jpeg
-
 _logger = logging.getLogger('obico.celestrius')
 
 class Celestrius:
@@ -24,7 +23,7 @@ class Celestrius:
             time.sleep(0.2) #TODO how many photos do we want?
 
     def send_celestrius_jpeg(self, snapshot):
-        if snapshot: #TODO update with new endpoint & 
+        if snapshot: #TODO update with new endpoint & data
             try:
                 files = {'pic': snapshot}
                 self.server_conn.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=None)
@@ -33,7 +32,7 @@ class Celestrius:
 
     def notify_server_celestrius_complete(self):
         self.on_first_layer = False
-        try:
+        try: #TODO update with new endpoint & data
             data = {'celestrius_status': 'complete'}
             self.server_conn.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=None, data=data)
             _logger.debug('server notified celestrius is done')
