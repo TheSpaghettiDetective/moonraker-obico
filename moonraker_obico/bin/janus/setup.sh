@@ -59,12 +59,7 @@ fi
         admin_secret = "janusoverlord"  # String that all Janus requests must contain
 }
 nat: {
-        turn_server = "turn.obico.io"
-        turn_port = 80
-        turn_type = "tcp"
 EOT
-
-  janus_jcfg_turns_cred_section >>"${janus_jcfg_path}"
 
   cat <<EOT >>"${janus_jcfg_path}"
         ice_ignore_list = "vmnet"
