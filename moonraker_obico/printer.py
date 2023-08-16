@@ -234,7 +234,7 @@ class PrinterState:
             if current_layer == 1:
                 self.plugin.celestrius.on_first_layer = True
             elif current_layer > 1 and self.plugin.celestrius.on_first_layer == True: # turn celestrius off after 1st layer
-                self.plugin.celestrius.dump_to_server()
+                self.plugin.notify_server_celestrius_complete()
 
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None
