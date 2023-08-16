@@ -20,6 +20,7 @@ precompiled_janus_jcfg_folders_section() {
         transports_folder = "${lib_janus_dir}/transports"       # Transports folder
         events_folder = "${lib_janus_dir}/events"                       # Event handlers folder
         loggers_folder = "${lib_janus_dir}/loggers"
+        debug_level = 6
 EOT
 }
 
