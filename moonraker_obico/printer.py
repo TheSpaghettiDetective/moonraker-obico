@@ -164,6 +164,12 @@ class PrinterState:
 
             completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
+            if current_layer is not None:
+                if current_layer == 1:
+                    self.plugin.nozzlecam.on_first_layer = True
+                elif current_layer > 1 and self.plugin.nozzlecam.on_first_layer == True: # turn nozzlecam off after 1st layer
+                    self.plugin.notify_server_nozzlecam_complete()
+
             return {
                 '_ts': time.time(),
                 'state': {
@@ -230,12 +236,6 @@ class PrinterState:
         max_z = None
         total_layers = print_info.get('total_layer')
         current_layer = print_info.get('current_layer')
-        if current_layer is not None:
-            if current_layer == 1:
-                self.plugin.nozzlecam.on_first_layer = True
-            elif current_layer > 1 and self.plugin.nozzlecam.on_first_layer == True: # turn nozzlecam off after 1st layer
-                self.plugin.notify_server_nozzlecam_complete()
-
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None
 
