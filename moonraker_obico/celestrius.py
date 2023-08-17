@@ -35,7 +35,7 @@ class Celestrius:
         self.on_first_layer = False
         try:
             data = {'celestrius_status': 'complete'}
-            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, raise_exception=True, files={}, data=data)
+            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, files={}, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('server notified celestrius is done')
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
