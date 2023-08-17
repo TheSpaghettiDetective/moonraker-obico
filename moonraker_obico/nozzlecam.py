@@ -3,6 +3,10 @@ import time
 from moonraker_obico.webcam_capture import capture_jpeg
 _logger = logging.getLogger('obico.nozzlecam')
 
+class NozzleCamConfig:
+    def __init__(self, snapshot_url):
+        self.snapshot_url = snapshot_url
+
 class NozzleCam:
 
     def __init__(self, app_model, server_conn):
@@ -10,7 +14,7 @@ class NozzleCam:
         self.server_conn = server_conn
         self.on_first_layer = False
         self.printer_id = app_model.linked_printer['id']
-        self.nozzle_config = self.get_nozzlecam_config()
+        self.nozzle_config = self.create_nozzlecam_config()
 
     def start(self):
         if self.nozzle_config is None:
@@ -40,16 +44,14 @@ class NozzleCam:
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
 
-    def get_nozzlecam_config(self):
+    def create_nozzlecam_config(self):
         try:
             ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, files={}, data={}, raise_exception=True, skip_debug_logging=True)
             nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
             else:
-                return {
-                    "snapshot_url": nozzle_url
-                }
+                return NozzleCamConfig(nozzle_url)
         except Exception as e:
             _logger.warning('Failed to build nozzle config - ' + str(e))
             return None
