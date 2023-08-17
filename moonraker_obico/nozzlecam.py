@@ -42,7 +42,7 @@ class NozzleCam:
 
     def get_nozzlecam_config(self):
         try:
-            ext_info = self.server_conn.send_http_request('GET', f'/api/printers/{self.printer_id}/ext/', timeout=60, files={}, data={}, raise_exception=True, skip_debug_logging=True)
+            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, files={}, data={}, raise_exception=True, skip_debug_logging=True)
             nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
