@@ -9,39 +9,47 @@ class NozzleCam:
         self.config = app_model.config
         self.server_conn = server_conn
         self.on_first_layer = False
-        self.linked_printer = app_model.linked_printer
+        self.printer_id = app_model.linked_printer['id']
+        self.nozzle_config = self.get_nozzlecam_config()
 
     def start(self):
-        #TODO block users with no nozzle cam config
+        if self.nozzle_config is None:
+            return
         while True:
             if self.on_first_layer == True:
                 try:
-                    #TODO replace webcam config with nozzle cam config
-                    nozzleConfig = self.get_nozzlecam_config()
-                    self.send_nozzlecam_jpeg(capture_jpeg(self.config.webcam))
-                    _logger.debug('Nozzle cam Jpeg captured & sent')
+                    self.send_nozzlecam_jpeg(capture_jpeg(self.nozzle_config))
                 except Exception as e:
                     _logger.warning('Failed to capture jpeg - ' + str(e))
             time.sleep(0.2) #TODO how many photos do we want?
 
     def send_nozzlecam_jpeg(self, snapshot):
-        if snapshot:
-            try:
-                files = {'pic': snapshot}
-                data = {'viewing_boost': 'true'} # do we want viewing boost or {} ?
-                self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
-            except Exception as e:
-                _logger.warning('Failed to post jpeg - ' + str(e))
+        try:
+            files = {'pic': snapshot}
+            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data={}, raise_exception=True, skip_debug_logging=True)
+        except Exception as e:
+            _logger.warning('Failed to post jpeg - ' + str(e))
 
     def notify_server_nozzlecam_complete(self):
         self.on_first_layer = False
+        if self.nozzle_config is None:
+            return
         try:
             data = {'nozzlecam_status': 'complete'}
             self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, files={}, data=data, raise_exception=True, skip_debug_logging=True)
-            _logger.debug('server notified nozzlecam is done')
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
 
     def get_nozzlecam_config(self):
-        # self.nozzlecam_url = self.server_conn.send_http_request('GET', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
-        print(self.linked_printer, '*****')
+        try:
+            ext_info = self.server_conn.send_http_request('GET', f'/api/printers/{self.printer_id}/ext/', timeout=60, files={}, data={}, raise_exception=True, skip_debug_logging=True)
+            nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
+            if nozzle_url is None or len(nozzle_url) == 0:
+                return None
+            else:
+                return {
+                    "snapshot_url": nozzle_url
+                }
+        except Exception as e:
+            _logger.warning('Failed to build nozzle config - ' + str(e))
+            return None
