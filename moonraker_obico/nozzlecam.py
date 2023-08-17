@@ -5,10 +5,11 @@ _logger = logging.getLogger('obico.nozzlecam')
 
 class NozzleCam:
 
-    def __init__(self, app_model, server_conn ):
+    def __init__(self, app_model, server_conn):
         self.config = app_model.config
         self.server_conn = server_conn
         self.on_first_layer = False
+        self.linked_printer = app_model.linked_printer
 
     def start(self):
         #TODO block users with no nozzle cam config
@@ -16,6 +17,7 @@ class NozzleCam:
             if self.on_first_layer == True:
                 try:
                     #TODO replace webcam config with nozzle cam config
+                    nozzleConfig = self.get_nozzlecam_config()
                     self.send_nozzlecam_jpeg(capture_jpeg(self.config.webcam))
                     _logger.debug('Nozzle cam Jpeg captured & sent')
                 except Exception as e:
@@ -39,3 +41,7 @@ class NozzleCam:
             _logger.debug('server notified nozzlecam is done')
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
+
+    def get_nozzlecam_config(self):
+        # self.nozzlecam_url = self.server_conn.send_http_request('GET', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
+        print(self.linked_printer, '*****')
