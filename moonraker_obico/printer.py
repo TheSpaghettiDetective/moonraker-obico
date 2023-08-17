@@ -232,9 +232,9 @@ class PrinterState:
         current_layer = print_info.get('current_layer')
         if current_layer is not None:
             if current_layer == 1:
-                self.plugin.celestrius.on_first_layer = True
-            elif current_layer > 1 and self.plugin.celestrius.on_first_layer == True: # turn celestrius off after 1st layer
-                self.plugin.notify_server_celestrius_complete()
+                self.plugin.nozzlecam.on_first_layer = True
+            elif current_layer > 1 and self.plugin.nozzlecam.on_first_layer == True: # turn nozzlecam off after 1st layer
+                self.plugin.notify_server_nozzlecam_complete()
 
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None

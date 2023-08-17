@@ -1,9 +1,9 @@
 import logging
 import time
 from moonraker_obico.webcam_capture import capture_jpeg
-_logger = logging.getLogger('obico.celestrius')
+_logger = logging.getLogger('obico.nozzlecam')
 
-class Celestrius:
+class NozzleCam:
 
     def __init__(self, app_model, server_conn ):
         self.config = app_model.config
@@ -16,13 +16,13 @@ class Celestrius:
             if self.on_first_layer == True:
                 try:
                     #TODO replace webcam config with nozzle cam config
-                    self.send_celestrius_jpeg(capture_jpeg(self.config.webcam))
-                    _logger.debug('Celestrius Jpeg captured & sent')
+                    self.send_nozzlecam_jpeg(capture_jpeg(self.config.webcam))
+                    _logger.debug('Nozzle cam Jpeg captured & sent')
                 except Exception as e:
                     _logger.warning('Failed to capture jpeg - ' + str(e))
             time.sleep(0.2) #TODO how many photos do we want?
 
-    def send_celestrius_jpeg(self, snapshot):
+    def send_nozzlecam_jpeg(self, snapshot):
         if snapshot:
             try:
                 files = {'pic': snapshot}
@@ -31,11 +31,11 @@ class Celestrius:
             except Exception as e:
                 _logger.warning('Failed to post jpeg - ' + str(e))
 
-    def notify_server_celestrius_complete(self):
+    def notify_server_nozzlecam_complete(self):
         self.on_first_layer = False
         try:
-            data = {'celestrius_status': 'complete'}
+            data = {'nozzlecam_status': 'complete'}
             self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, files={}, data=data, raise_exception=True, skip_debug_logging=True)
-            _logger.debug('server notified celestrius is done')
+            _logger.debug('server notified nozzlecam is done')
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
