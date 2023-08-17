@@ -26,7 +26,8 @@ class Celestrius:
         if snapshot: #TODO update with new endpoint & data
             try:
                 files = {'pic': snapshot}
-                self.server_conn.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=None)
+                data = {'viewing_boost': 'true'} # do we want viewing boost or {} ?
+                self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
             except Exception as e:
                 _logger.warning('Failed to post jpeg - ' + str(e))
 
@@ -34,7 +35,7 @@ class Celestrius:
         self.on_first_layer = False
         try: #TODO update with new endpoint & data
             data = {'celestrius_status': 'complete'}
-            self.server_conn.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=None, data=data)
+            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, raise_exception=True, files={}, data=data)
             _logger.debug('server notified celestrius is done')
         except Exception as e:
             _logger.warning('Failed to send images - ' + str(e))
