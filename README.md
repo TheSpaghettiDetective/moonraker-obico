@@ -26,6 +26,10 @@ This is a Moonraker plugin that enables the Klipper-based 3D printers to connect
     rm -rf ~/moonraker-obico-env
 
 
+# Use the container Image
+
+See [run_as_container.md](run_as_container.md)
+
 # Set up a dev environment
 
     cd ~
