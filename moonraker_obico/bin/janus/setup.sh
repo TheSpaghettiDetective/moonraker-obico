@@ -60,7 +60,7 @@ fi
 nat: {
         turn_server = "turn.obico.io"
         turn_port = 80
-        turn_type = "tcp"
+        turn_type = "udp"
 EOT
 
   janus_jcfg_turns_cred_section >>"${janus_jcfg_path}"
