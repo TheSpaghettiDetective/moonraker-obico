@@ -16,6 +16,7 @@ import pathlib
 
 import requests  # type: ignore
 
+from moonraker_obico.nozzlecam import NozzleCam
 from .version import VERSION
 from .utils import SentryWrapper
 from .webcam_capture import JpegPoster
@@ -63,6 +64,7 @@ class App(object):
         self.target_moonraker_api = None
         self.q: queue.Queue = queue.Queue(maxsize=1000)
         self.target_file_operations = None
+        self.nozzlecam = None
 
     def push_event(self, event):
         if self.shutdown:
@@ -101,7 +103,7 @@ class App(object):
             config=config,
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
-            printer_state=PrinterState(config),
+            printer_state=PrinterState(config, self),
             seen_refs=collections.deque(maxlen=100),
         )
         self.sentry = SentryWrapper(config=config)
@@ -125,6 +127,7 @@ class App(object):
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
         self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+        self.nozzlecam = NozzleCam(self.model, self.server_conn)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -156,6 +159,10 @@ class App(object):
         janus_thread = threading.Thread(target=self.janus.start)
         janus_thread.daemon = True
         janus_thread.start()
+
+        nozzlecam_thread = threading.Thread(target=self.nozzlecam.start)
+        nozzlecam_thread.daemon = True
+        nozzlecam_thread.start()
 
         try:
             thread.join()
