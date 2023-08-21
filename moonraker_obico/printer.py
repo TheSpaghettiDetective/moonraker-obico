@@ -168,7 +168,7 @@ class PrinterState:
                 if current_layer == 1:
                     self.plugin.nozzlecam.on_first_layer = True
                 elif current_layer > 1 and self.plugin.nozzlecam.on_first_layer == True: # turn nozzlecam off after 1st layer
-                    self.plugin.notify_server_nozzlecam_complete()
+                    self.plugin.nozzlecam.notify_server_nozzlecam_complete()
 
             return {
                 '_ts': time.time(),
