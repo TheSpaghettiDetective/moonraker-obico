@@ -12,7 +12,6 @@ class NozzleCam:
 
     def __init__(self, app_model, server_conn):
         self.model = app_model
-        self.config = app_model.config
         self.server_conn = server_conn
         self.on_first_layer = False
         self.printer_id = app_model.linked_printer['id']
