@@ -11,6 +11,7 @@ class NozzleCamConfig:
 class NozzleCam:
 
     def __init__(self, app_model, server_conn):
+        self.model = app_model
         self.config = app_model.config
         self.server_conn = server_conn
         self.on_first_layer = False
@@ -22,10 +23,13 @@ class NozzleCam:
             return
         while True:
             if self.on_first_layer == True:
-                try:
-                    self.send_nozzlecam_jpeg(capture_jpeg(self.nozzle_config))
-                except Exception as e:
-                    _logger.warning('Failed to capture jpeg - ' + str(e))
+                if self.model.printer_state.is_printing():
+                    try:
+                        self.send_nozzlecam_jpeg(capture_jpeg(self.nozzle_config))
+                    except Exception as e:
+                        _logger.warning('Failed to capture jpeg - ' + str(e))
+                else:
+                    self.notify_server_nozzlecam_complete() # edge case of single layer print or no 2nd layer to stop snapshots
             time.sleep(0.2) #TODO how many photos do we want?
 
     def send_nozzlecam_jpeg(self, snapshot):
