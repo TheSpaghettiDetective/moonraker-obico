@@ -26,18 +26,19 @@ class NozzleCam:
                 if self.model.printer_state.is_printing():
                     try:
                         self.send_nozzlecam_jpeg(capture_jpeg(self.nozzle_config))
-                    except Exception as e:
-                        _logger.warning('Failed to capture jpeg - ' + str(e))
+                    except Exception:
+                        _logger.error('Failed to capture jpeg', exc_info=True)
                 else:
                     self.notify_server_nozzlecam_complete() # edge case of single layer print or no 2nd layer to stop snapshots
-            time.sleep(0.2) #TODO how many photos do we want?
+            time.sleep(0.2)
 
     def send_nozzlecam_jpeg(self, snapshot):
-        try:
-            files = {'pic': snapshot}
-            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, data={}, raise_exception=True, skip_debug_logging=True)
-        except Exception as e:
-            _logger.warning('Failed to post jpeg - ' + str(e))
+        if snapshot:
+            try:
+                files = {'pic': snapshot}
+                self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, raise_exception=True, skip_debug_logging=True)
+            except Exception:
+                _logger.error('Failed to post jpeg', exc_info=True)
 
     def notify_server_nozzlecam_complete(self):
         self.on_first_layer = False
@@ -45,18 +46,19 @@ class NozzleCam:
             return
         try:
             data = {'nozzlecam_status': 'complete'}
-            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, files={}, data=data, raise_exception=True, skip_debug_logging=True)
-        except Exception as e:
-            _logger.warning('Failed to send images - ' + str(e))
+            self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, data=data, raise_exception=True, skip_debug_logging=True)
+            _logger.debug('server notified 1st layer is done')
+        except Exception:
+            _logger.error('Failed to send images', exc_info=True)
 
     def create_nozzlecam_config(self):
         try:
-            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, files={}, data={}, raise_exception=True, skip_debug_logging=True)
+            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, raise_exception=True, skip_debug_logging=True)
             nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
             else:
                 return NozzleCamConfig(nozzle_url)
-        except Exception as e:
-            _logger.warning('Failed to build nozzle config - ' + str(e))
+        except Exception:
+            _logger.error('Failed to build nozzle config', exc_info=True)
             return None
