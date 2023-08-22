@@ -26,18 +26,16 @@ class NozzleCam:
                     try:
                         self.send_nozzlecam_jpeg(capture_jpeg(self.nozzle_config))
                     except Exception:
-                        _logger.error('Failed to capture jpeg', exc_info=True)
+                        _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
                 else:
                     self.notify_server_nozzlecam_complete() # edge case of single layer print or no 2nd layer to stop snapshots
             time.sleep(5)
 
     def send_nozzlecam_jpeg(self, snapshot):
         if snapshot:
-            try:
                 files = {'pic': snapshot}
-                self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, raise_exception=True, skip_debug_logging=True)
-            except Exception:
-                _logger.error('Failed to post jpeg', exc_info=True)
+                resp = self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, raise_exception=True, skip_debug_logging=True)
+                _logger.debug('nozzle cam jpeg posted to server - {0}'.format(resp))
 
     def notify_server_nozzlecam_complete(self):
         self.on_first_layer = False
@@ -52,7 +50,7 @@ class NozzleCam:
 
     def create_nozzlecam_config(self):
         try:
-            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, raise_exception=True, skip_debug_logging=True)
+            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, raise_exception=True)
             nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
