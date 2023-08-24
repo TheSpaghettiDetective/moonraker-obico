@@ -161,4 +161,4 @@ class JpegPoster:
                 
         snapshot = capture_jpeg(SnapshotConfig(webcam_full_url(url)))
         base64_image = base64.b64encode(snapshot).decode('utf-8')
-        return {'pic': base64_image}
+        return {'pic': base64_image}, None
