@@ -56,7 +56,7 @@ class App(object):
         self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
-        self.jpeg_poster = None
+        self.target_jpeg_poster = None
         self.janus = None
         self.local_tunnel = None
         self.target_file_downloader = None
@@ -122,7 +122,7 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.janus = JanusConn(self.model, self.server_conn, self.sentry)
-        self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.target_jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
@@ -147,7 +147,7 @@ class App(object):
         thread.daemon = True
         thread.start()
 
-        jpeg_post_thread = threading.Thread(target=self.jpeg_poster.pic_post_loop)
+        jpeg_post_thread = threading.Thread(target=self.target_jpeg_poster.pic_post_loop)
         jpeg_post_thread.daemon = True
         jpeg_post_thread.start()
 
@@ -372,7 +372,7 @@ class App(object):
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
-                self.jpeg_poster.need_viewing_boost.set()
+                self.target_jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
             _logger.debug(f'Received commands from server: {msg}')
