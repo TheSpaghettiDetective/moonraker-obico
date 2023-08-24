@@ -1,7 +1,20 @@
 import logging
+import re
 import time
+from urllib.parse import urlparse
 from moonraker_obico.webcam_capture import capture_jpeg
 _logger = logging.getLogger('obico.nozzlecam')
+
+
+def webcam_full_url(url):
+    if not url or not url.strip():
+        return ''
+
+    full_url = url.strip()
+    if not urlparse(full_url).scheme:
+        full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+
+    return full_url
 
 class NozzleCamConfig:
     def __init__(self, snapshot_url):
@@ -55,6 +68,7 @@ class NozzleCam:
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
             else:
+                nozzle_url = webcam_full_url(nozzle_url)
                 return NozzleCamConfig(nozzle_url)
         except Exception:
             _logger.error('Failed to build nozzle config', exc_info=True)

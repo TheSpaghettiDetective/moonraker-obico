@@ -13,6 +13,8 @@ import logging
 import time
 import threading
 
+from moonraker_obico.nozzlecam import webcam_full_url
+
 POST_PIC_INTERVAL_SECONDS = 10.0
 if os.environ.get('DEBUG'):
     POST_PIC_INTERVAL_SECONDS = 3.0
@@ -148,7 +150,7 @@ class JpegPoster:
             def __init__(self, snapshot_url):
                 self.snapshot_url = snapshot_url
                 self.snapshot_ssl_validation = False
-
-        snapshot = capture_jpeg(SnapshotConfig(url))
+                
+        snapshot = capture_jpeg(SnapshotConfig(webcam_full_url(url)))
         base64_image = base64.b64encode(snapshot).decode('utf-8')
         return {'pic': base64_image}
