@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import base64
 import io
 import re
 import os
@@ -141,3 +142,13 @@ class JpegPoster:
                 self.post_pic_to_server(viewing_boost=False)
             except:
                 self.sentry.captureException()
+
+    def web_snapshot_request(self, url):
+        class SnapshotConfig:
+            def __init__(self, snapshot_url):
+                self.snapshot_url = snapshot_url
+                self.snapshot_ssl_validation = False
+
+        snapshot = capture_jpeg(SnapshotConfig(url))
+        base64_image = base64.b64encode(snapshot).decode('utf-8')
+        return {'pic': base64_image}
