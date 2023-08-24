@@ -13,13 +13,21 @@ import logging
 import time
 import threading
 
-from moonraker_obico.nozzlecam import webcam_full_url
-
 POST_PIC_INTERVAL_SECONDS = 10.0
 if os.environ.get('DEBUG'):
     POST_PIC_INTERVAL_SECONDS = 3.0
 
 _logger = logging.getLogger('obico.webcam_capture')
+
+def webcam_full_url(url):
+    if not url or not url.strip():
+        return ''
+
+    full_url = url.strip()
+    if not urlparse(full_url).scheme:
+        full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+
+    return full_url
 
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
