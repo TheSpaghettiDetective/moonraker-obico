@@ -170,6 +170,8 @@ class App(object):
         nozzlecam_thread.start()
 
         try:
+            # Save printer_id in the database so that the app can use it to send user to the correct tunnel authorization page
+            self.moonrakerconn.api_post('server/database/item', namespace='obico', key='printer_id', value=self.model.linked_printer.get('id'))
             thread.join()
         except Exception:
             self.sentry.captureException()
