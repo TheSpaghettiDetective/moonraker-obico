@@ -135,10 +135,6 @@ class App(object):
             on_ws_message=self.server_conn.send_ws_msg_to_server,
             sentry=self.sentry)
 
-        self.moonrakerconn.update_webcam_config_from_moonraker()
-        self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
-        self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
-
         thread = threading.Thread(target=self.server_conn.start)
         thread.daemon = True
         thread.start()
@@ -146,6 +142,15 @@ class App(object):
         thread = threading.Thread(target=self.moonrakerconn.start)
         thread.daemon = True
         thread.start()
+
+        # If one of the connection is not ready, the init state won't be correctly set up in the obico server
+        while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):
+            _logger.warning('Connections not ready. Trying again in 1s...')
+            time.sleep(1)
+
+        self.moonrakerconn.update_webcam_config_from_moonraker()
+        self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
+        self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
         jpeg_post_thread = threading.Thread(target=self.target_jpeg_poster.pic_post_loop)
         jpeg_post_thread.daemon = True
