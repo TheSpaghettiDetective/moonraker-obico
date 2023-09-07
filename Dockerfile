@@ -11,7 +11,7 @@ RUN python -m venv venv \
 FROM python:3-slim-bookworm
 
 RUN apt update \
- && apt install -y ffmpeg \
+ && apt install -y janus ffmpeg \
  && apt clean
 
 WORKDIR /opt
