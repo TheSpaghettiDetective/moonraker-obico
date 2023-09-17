@@ -73,7 +73,8 @@ need_help() {
 Need help? Stop by:
 
 - The Obico's help docs: https://obico.io/help/
-- The Obico community: https://obico.io/discord/
+- The Obico for Klipper support channel: https://obico.io/discord-obico-klipper
+- The Obico discord community: https://obico.io/discord/
 
 EOF
 }
