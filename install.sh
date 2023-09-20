@@ -86,7 +86,7 @@ ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
   PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
-  sudo apt-get update --allow-releaseinfo-change
+  sudo apt-get --allow-releaseinfo-change -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update
   sudo apt-get install --yes ${PKGLIST}
   ensure_venv
   debug Running... "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
