@@ -26,11 +26,12 @@ docker run --rm -it \
 
 ## Run the application
 
-Given, that your moonraker-obico.cfg now contains a valid `[server].auth_token`, a container may be started using the following command:
+Given that your moonraker-obico.cfg now contains a valid `[server].auth_token`, a container may be started using the following command:
 
 ```bash
 docker run -d \
   --name moonraker-obico \
+  --privileged \
   -v /opt/mydir/moonraker-obico.cfg:/opt/printer_data/config/moonraker-obico.cfg \
   ghcr.io/thespaghettidetective/moonraker-obico:latest
 ```
