@@ -50,7 +50,7 @@ class JanusConn:
         def run_janus_forever():
 
             def setup_janus_config():
-                video_enabled = 'false' if self.config.webcam.disable_video_streaming else 'true'
+                video_enabled = 'true' if pi_version() and self.config.webcam.disable_video_streaming is not True else 'false'
                 auth_token = self.config.server.auth_token
 
                 cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
@@ -97,7 +97,7 @@ class JanusConn:
         self.use_camera_streamer_rtsp = self.app_model.linked_printer.get('is_pro') and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
         _logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
 
-        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
+        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry, self)
         if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
             _logger.info('Starting webcam streamer')
             stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
@@ -111,8 +111,11 @@ class JanusConn:
         self.wait_for_janus()
         self.start_janus_ws()
 
+    def connected(self):
+        return self.janus_ws and self.janus_ws.connected()
+
     def pass_to_janus(self, msg):
-        if self.janus_ws and self.janus_ws.connected():
+        if self.connected():
             self.janus_ws.send(msg)
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=10)

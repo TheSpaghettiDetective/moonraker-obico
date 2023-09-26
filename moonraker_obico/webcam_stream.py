@@ -5,6 +5,8 @@ import logging
 import subprocess
 import time
 import sys
+import socket
+import base64
 from collections import deque
 from threading import Thread
 import psutil
@@ -18,6 +20,7 @@ from .webcam_capture import capture_jpeg
 _logger = logging.getLogger('obico.webcam_stream')
 
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
+JANUS_MJPEG_DATA_PORT = 17740
 FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 
@@ -64,19 +67,56 @@ def cpu_watch_dog(watched_process, max, interval, server_conn):
 
 class WebcamStreamer:
 
-    def __init__(self, app_model, server_conn, sentry):
+    def __init__(self, app_model, server_conn, sentry, janus):
         self.config = app_model.config
         self.app_model = app_model
         self.server_conn = server_conn
         self.sentry = sentry
+        self.janus = janus
 
         self.ffmpeg_proc = None
+        self.mjpeg_sock = None
         self.shutting_down = False
 
 
+    @backoff.on_exception(backoff.expo, Exception)
+    def mjpeg_loop(self):
+        bandwidth_throttle = 0.002
+
+        self.mjpeg_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        last_frame_sent = 0
+
+        while True:
+            if self.shutting_down:
+                return
+
+            if not self.janus.connected():
+                time.sleep(1)
+                continue
+
+            time.sleep( max(last_frame_sent+0.5-time.time(), 0) )  # No more than 1 frame per 0.5 second
+
+            jpg = None
+            try:
+                jpg = capture_jpeg(self.config.webcam)
+            except Exception as e:
+                _logger.warning('Failed to capture jpeg - ' + str(e))
+
+            if not jpg:
+                continue
+
+            encoded = base64.b64encode(jpg)
+            self.mjpeg_sock.sendto(bytes('\r\n{}:{}\r\n'.format(len(encoded), len(jpg)), 'utf-8'), (JANUS_SERVER, JANUS_MJPEG_DATA_PORT)) # simple header format for client to recognize
+            for chunk in [encoded[i:i+1400] for i in range(0, len(encoded), 1400)]:
+                self.mjpeg_sock.sendto(chunk, (JANUS_SERVER, JANUS_MJPEG_DATA_PORT))
+                time.sleep(bandwidth_throttle)
+
+        last_frame_sent = time.time()
+
     def video_pipeline(self):
         if not pi_version():
-            _logger.warning('Not running on a Pi. Quitting video_pipeline.')
+            self.mjpeg_loop()
             return
 
         try:
@@ -212,4 +252,8 @@ class WebcamStreamer:
             except Exception:
                 pass
 
+        if self.mjpeg_sock:
+            self.mjpeg_sock.close()
+
         self.ffmpeg_proc = None
+        self.mjpeg_sock = None
