@@ -139,6 +139,8 @@ class ServerConn:
         try:
             resp = requests.request(
                 method, endpoint, timeout=timeout, headers=headers, **_kwargs)
+            _logger.debug(f'{resp.request.method} {resp.url} - {resp.status_code}')
+
             if not skip_debug_logging:
                 _logger.debug(curlify.to_curl(resp.request))
         except Exception:
