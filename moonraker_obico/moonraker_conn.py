@@ -183,7 +183,7 @@ class MoonrakerConn:
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
                             rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
-                        ) for cfg in result.get('value', {}).get('cameras', []) if not cfg.get('enabled', False) ]
+                        ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
 
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             return []

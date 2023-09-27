@@ -70,7 +70,10 @@ class WebcamConfig:
 
     @property
     def snapshot_url(self):
-        return self.webcam_full_url(self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url'))
+        return self.webcam_full_url( \
+                self.webcam_config_section.get('snapshot_url') or \
+                self.moonraker_webcam_config.get('snapshot_url') or \
+                (self.moonraker_webcam_config.get('stream_url').replace("stream", "snapshot") if self.moonraker_webcam_config.get('stream_url') else None)) # Fluidd flavor webcam settings doesn't have snapshot_url. Derive from stream_url instead
 
     @property
     def disable_video_streaming(self):
