@@ -16,7 +16,8 @@ RUN apt update \
 
 WORKDIR /opt
 RUN groupadd obico --gid 1000 \
- && useradd obico --uid 1000 --gid obico
+ && useradd obico --uid 1000 --gid obico \
+ && usermod obico --append --groups video
 RUN mkdir -p printer_data/config printer_data/logs \
  && chown -R obico:obico /opt/*
 
