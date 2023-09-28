@@ -52,7 +52,7 @@ success() {
   echo -e "\n"
   print_header "="
   echo -n "${cyan}"
-  array=("" "SUCCESS!!!" "Now enjoy Obico for Klipper!" "")
+  array=("" "SUCCESS!!!" "Now enjoy Moonraker-Obico!" "")
   print_centered_lines "${array[@]}"
   print_header "="
 
@@ -66,7 +66,7 @@ The changes we have made to your system:
 - Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
 - Log file: ${OBICO_LOG_FILE}
 
-To remove Obico for Klipper, run:
+To remove Moonraker-Obico, run:
 
 cd ~/moonraker-obico
 ./install.sh -u

@@ -1,4 +1,4 @@
-# Obico for Klipper
+# Obico for Klipper (Moonraker-Obico)
 
 This is a Moonraker plugin that enables the Klipper-based 3D printers to connect to Obico.
 

@@ -182,7 +182,7 @@ recreate_service() {
   sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
-Description=Obico for Moonraker
+Description=Moonraker-Obico
 After=network-online.target moonraker.service
 
 [Install]
@@ -255,7 +255,7 @@ unknown_error() {
 uninstall() {
   cat <<EOF
 
-To uninstall Obico for Klipper, please run:
+To uninstall Moonraker-Obico, please run:
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}"
 sudo systemctl disable "${OBICO_SERVICE_NAME}"

@@ -43,7 +43,7 @@ brand() {
 welcome() {
   brand
   echo ""
-  print_header "> Obico for Klipper <"
+  print_header "> Obico for Klipper (Moonraker-Obico) <"
   echo -n "${cyan}"
   array=("" "* AI-Powered Failure Detection" "* Free Remote Monitoring and Access " "* 25FPS High-Def Webcam Streaming " "* Free 4.9-Star Mobile App" "")
   print_centered_lines "${array[@]}"
@@ -73,7 +73,7 @@ need_help() {
 Need help? Stop by:
 
 - The Obico's help docs: https://obico.io/help/
-- The Obico for Klipper support channel: https://obico.io/discord-obico-klipper
+- The Moonraker-Obico support channel: https://obico.io/discord-obico-klipper
 - The Obico discord community: https://obico.io/discord/
 
 EOF
