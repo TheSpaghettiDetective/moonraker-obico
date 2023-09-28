@@ -7,7 +7,7 @@ RUNTIME_JANUS_ETC_DIR="${JANUS_ROOT_DIR}/runtime/etc/janus"
 
 . "${JANUS_ROOT_DIR}/../utils.sh"
 
-PRECOMPILED_DIR="${JANUS_ROOT_DIR}/precomplied/debian.$( debian_variant )"
+PRECOMPILED_DIR="${JANUS_ROOT_DIR}/precomplied/$( debian_variant )"
 
 if [ -d "${PRECOMPILED_DIR}" ]; then
   lib_janus_dir="${PRECOMPILED_DIR}/lib/janus"
