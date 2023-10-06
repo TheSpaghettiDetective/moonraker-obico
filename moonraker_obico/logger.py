@@ -30,7 +30,7 @@ def setup_logging(logging_config, log_path=None, debug=False):
 
     if logging_config.path:
         fh = logging.handlers.RotatingFileHandler(
-            logging_config.path, maxBytes=10000000, backupCount=5)
+            logging_config.path, maxBytes=10000000, backupCount=2)
         fh.setFormatter(formatter)
         handlers.append(fh)
 
