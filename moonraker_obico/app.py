@@ -165,10 +165,6 @@ class App(object):
         janus_thread.daemon = True
         janus_thread.start()
 
-        nozzlecam_thread = threading.Thread(target=self.nozzlecam.start)
-        nozzlecam_thread.daemon = True
-        nozzlecam_thread.start()
-
         try:
             # Save printer_id in the database so that the app can use it to send user to the correct tunnel authorization page
             self.moonrakerconn.api_post('server/database/item', namespace='obico', key='printer_id', value=self.model.linked_printer.get('id'))
