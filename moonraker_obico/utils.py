@@ -321,3 +321,10 @@ def pi_version():
                 return None
     except:
         return None
+
+
+def run_in_thread(long_running_func, *args, **kwargs):
+    daemon_thread = threading.Thread(target=long_running_func,  args=args, kwargs=kwargs)
+    daemon_thread.daemon = True  # Setting the thread as daemon
+    daemon_thread.start()
+    return daemon_thread

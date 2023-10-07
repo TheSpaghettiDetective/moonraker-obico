@@ -7,7 +7,7 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
-from .utils import  sanitize_filename
+from .utils import sanitize_filename, run_in_thread
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -164,11 +164,14 @@ class PrinterState:
 
             completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
-            if current_layer is not None:
-                if current_layer == 1:
+
+            # Obico first layer AI
+            if current_layer == 1:
+                if not self.plugin.nozzlecam.on_first_layer:
                     self.plugin.nozzlecam.on_first_layer = True
-                elif current_layer > 1 and self.plugin.nozzlecam.on_first_layer == True: # turn nozzlecam off after 1st layer
-                    self.plugin.nozzlecam.notify_server_nozzlecam_complete()
+                    run_in_thread(self.plugin.nozzlecam.start)
+            else:
+                self.plugin.nozzlecam.on_first_layer = False
 
             return {
                 '_ts': time.time(),
