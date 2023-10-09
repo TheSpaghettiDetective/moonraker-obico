@@ -112,6 +112,8 @@ class WebcamStreamer:
                 self.mjpeg_sock.sendto(chunk, (JANUS_SERVER, JANUS_MJPEG_DATA_PORT))
                 time.sleep(bandwidth_throttle)
 
+            _logger.debug('mjpeg frame sent')
+
         last_frame_sent = time.time()
 
     def video_pipeline(self):
