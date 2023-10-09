@@ -81,7 +81,7 @@ class WebcamStreamer:
 
     @backoff.on_exception(backoff.expo, Exception)
     def mjpeg_loop(self):
-        bandwidth_throttle = 0.002
+        bandwidth_throttle = 0.004
 
         self.mjpeg_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
