@@ -29,14 +29,6 @@ EOF
 link_to_server() {
   if [ ! $KEEP_QUIET = "y" ]; then
     print_header " Link Printer to Obico Server "
-    cat <<EOF
-
-To link to your Obico Server account, you need to obtain the 6-digit verification code
-in the Obico mobile or web app, and enter the code below.
-
-If you need help, head to https://obico.io/docs/user-guides/klipper-setup
-
-EOF
   fi
 
   export OBICO_ENV # Expose OBICO_ENV to link.py so that it can print out the debugging command.
@@ -131,6 +123,7 @@ fi
 
 ensure_venv
 
+sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
 link_to_server
 link_exit_code=$?
 debug link_to_server exited with $link_exit_code

@@ -4,9 +4,11 @@ import requests
 import signal
 import sys
 import os
+import time
 
-from .utils import raise_for_status
+from .utils import raise_for_status, run_in_thread, verify_link_code, SentryWrapper
 from .config import Config
+from .printer_discovery import PrinterDiscovery
 
 logging.basicConfig()
 
@@ -29,13 +31,16 @@ if __name__ == '__main__':
         help='Path to config file (ini)'
     )
     parser.add_argument(
-        '-d', '--debug', default=False, action="store_true",
+        '-d', '--debug', dest='debug', default=False, action="store_true",
         help='Print debugging info'
     )
-    args = parser.parse_args()
-    config = Config(args.config_path)
-    debug = args.debug
+    params = parser.parse_args()
+    config = Config(params.config_path)
+    config.load_from_config_file()
+    sentry = SentryWrapper(config=config)
+    debug = params.debug
 
+    skip_printer_discovery = False
     if config.server.auth_token:
         print(RED+"""
 !!!WARNING: Moonraker-obico already linked!
@@ -46,6 +51,50 @@ https://obico.io/docs/user-guides/relink-klipper
 To abort, simply press 'Enter'.
 
 """+NC)
+        skip_printer_discovery = True
+
+    if not skip_printer_discovery:
+        discoverable = True
+        def spin():
+            spinner = ["|", "/", "-", "\\"]
+            spinner_idx = 0
+
+            while discoverable:
+                sys.stdout.write(spinner[spinner_idx] + "\r")
+                sys.stdout.flush()
+                spinner_idx = (spinner_idx + 1) % 4
+                time.sleep(0.1)
+
+        print("""
+Waiting for Obico app to link this printer automatically...
+
+Press 'Enter' if you want to link your printer using a 6-digit code.
+
+If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+""")
+        logging.getLogger('werkzeug').setLevel(logging.ERROR)
+        discovery = PrinterDiscovery(config, sentry)
+        discovery_thread = run_in_thread(discovery.start_and_block)
+        spinner_thread = run_in_thread(spin)
+
+        input('')
+        # confirmed = input('\nSwitch to 6-digit code to link your printer? [Y/n]: ')
+
+        discoverable = False
+        discovery.stop()
+        spinner_thread.join()
+        discovery_thread.join()
+
+        config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
+        print("\n###Switched to using 6-digit code to link printer.###")
+
+    print("""
+To link to your Obico Server account, you need to obtain the 6-digit verification code
+in the Obico mobile or web app, and enter the code below.
+
+If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+
+""")
 
     endpoint_prefix = config.server.canonical_endpoint_prefix()
 
