@@ -164,8 +164,10 @@ class Config:
         self._heater_mapping = {}
 
         self._config_path = config_path
+
+    def load_from_config_file(self):
         config = ConfigParser()
-        config.read([config_path, ])
+        config.read([self._config_path, ])
 
         self.moonraker = MoonrakerConfig(
             host=config.get(
@@ -236,7 +238,7 @@ class Config:
 
         self.sentry_opt = config.get(
             'misc', 'sentry_opt',
-            fallback='out'
+            fallback='in'
         )
 
         self._config = config
