@@ -2,7 +2,7 @@
 
 set -e
 
-set PIP_DEFAULT_TIMEOUT=1200 # For slow network connection
+export PIP_DEFAULT_TIMEOUT=1200 # For slow network connection
 
 OBICO_DIR=$(realpath $(dirname "$0"))
 
