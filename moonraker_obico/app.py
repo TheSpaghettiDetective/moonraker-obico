@@ -28,6 +28,7 @@ from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
 from .passthru_targets import FileDownloader, Printer, MoonrakerApi, FileOperations
+from .printer_discovery import PrinterDiscovery
 
 
 _logger = logging.getLogger('obico.app')
@@ -79,24 +80,37 @@ class App(object):
             return False
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
-    def wait_for_auth_token(self, args):
+    def wait_for_auth_token(self, config):
         while True:
-            config = Config(args.config_path)
-            if args.log_path:
-                config.logging.path = args.log_path
-            if args.debug:
-                config.logging.level = 'DEBUG'
-            setup_logging(config.logging)
-
             if config.server.auth_token:
                 break
 
             _logger.warning('auth_token not configured. Retry after 2s')
             time.sleep(2)
 
-        _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.info('Fetching linked printer...')
-        linked_printer = ServerConn(config, None, None, None).get_linked_printer()
+        return ServerConn(config, None, None, None).get_linked_printer()
+
+    def start(self, args):
+        _logger.info(f'starting moonraker-obico (v{VERSION})')
+
+        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
+        # global _default_int_handler, _default_term_handler
+        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
+        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
+
+        config = Config(args.config_path)
+        config.load_from_config_file()
+        self.sentry = SentryWrapper(config=config)
+        setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
+
+        if not config.server.auth_token:
+            discovery = PrinterDiscovery(config, self.sentry)
+            discovery.start_and_block()
+            config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
+
+        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
+        linked_printer = self.wait_for_auth_token(config)
         _logger.info('Linked printer: {}'.format(linked_printer))
 
         self.model = App.Model(
@@ -106,16 +120,6 @@ class App(object):
             printer_state=PrinterState(config, self),
             seen_refs=collections.deque(maxlen=100),
         )
-        self.sentry = SentryWrapper(config=config)
-
-    def start(self, args):
-        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
-        # global _default_int_handler, _default_term_handler
-        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
-        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
-
-        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
-        self.wait_for_auth_token(args)
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')

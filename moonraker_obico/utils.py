@@ -328,3 +328,17 @@ def run_in_thread(long_running_func, *args, **kwargs):
     daemon_thread.daemon = True  # Setting the thread as daemon
     daemon_thread.start()
     return daemon_thread
+
+def verify_link_code(config, code):
+    endpoint_prefix = config.server.canonical_endpoint_prefix()
+    url = f'{endpoint_prefix}/api/v1/octo/verify/'
+    resp = requests.post(url, params={'code': code.strip()})
+    _logger.debug(f'/api/v1/octo/verify/ responded: {resp}')
+
+    if resp and resp.ok:
+        data = resp.json()
+        _logger.debug(f'/api/v1/octo/verify/ response payload: {data}. Updating the auth_token in the config file')
+        auth_token = data['printer']['auth_token']
+        config.update_server_auth_token(auth_token)
+
+    return resp

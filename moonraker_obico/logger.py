@@ -2,7 +2,12 @@ import logging
 import logging.handlers
 import sys
 
-def setup_logging(logging_config):
+def setup_logging(logging_config, log_path=None, debug=False):
+    if log_path:
+        logging_config.path = log_path
+    if debug:
+        logging_config.level = 'DEBUG'
+
     handlers = []
     log_level_info = {'DEBUG': logging.DEBUG,
                       'INFO': logging.INFO,
