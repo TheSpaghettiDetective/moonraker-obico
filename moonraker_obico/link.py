@@ -5,6 +5,7 @@ import signal
 import sys
 import os
 import time
+import select
 
 from .utils import raise_for_status, run_in_thread, verify_link_code, SentryWrapper
 from .config import Config
@@ -54,8 +55,12 @@ To abort, simply press 'Enter'.
         skip_printer_discovery = True
 
     if not skip_printer_discovery:
+        discovery = PrinterDiscovery(config, sentry)
         discoverable = True
+
         def spin():
+            global discoverable
+
             sys.stdout.write("\033[?25l") # Hide cursor
             sys.stdout.flush()
 
@@ -66,11 +71,22 @@ To abort, simply press 'Enter'.
                 sys.stdout.write(spinner[spinner_idx] + "\r")
                 sys.stdout.flush()
                 spinner_idx = (spinner_idx + 1) % 4
-                time.sleep(0.1)
+
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)  # Poll with a timeout of 0.1 seconds
+                if sys.stdin in rlist:
+                    sys.stdin.readline()
+                    break
 
             sys.stdout.write("\033[?25h") # Show cursor
             sys.stdout.flush()
 
+        def run_discovery():
+            global discoverable
+            global discovery
+            try:
+                discovery.start_and_block(120) # waiting for 5*120 seconds = 10 minutes
+            finally:
+                discoverable = False
 
         print("""
 Now open the Obico mobile or web app. If your phone or computer is connected to the
@@ -83,19 +99,24 @@ Waiting for Obico app to link this printer automatically...  press 'Enter' if yo
 want to link your printer using a 6-digit verification code instead.
 """)
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        discovery = PrinterDiscovery(config, sentry)
-        discovery_thread = run_in_thread(discovery.start_and_block)
-        spinner_thread = run_in_thread(spin)
+        discovery_thread = run_in_thread(run_discovery)
+        while discoverable:
+            spin()
+            if discoverable:
+                confirmed = input('\nSwitch to using 6-digit verification code to link printer? [Y/n] ').strip()
+                if confirmed not in ('N', 'n'):
+                    discoverable = False
+                else:
+                    print('Continue waiting...')
 
-        input('')
-
-        discoverable = False
         discovery.stop()
-        spinner_thread.join()
         discovery_thread.join()
 
         config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
-        print("\n### Switched to using 6-digit verification code to link printer. ###")
+        if config.server.auth_token: # linked successfully
+            sys.exit(0)
+        else:
+            print("\n### Switched to using 6-digit verification code to link printer. ###")
 
     print("""
 To link to your Obico Server account, you need to obtain the 6-digit verification code
@@ -104,9 +125,6 @@ in the Obico mobile or web app, and enter the code below.
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 """)
 
-    endpoint_prefix = config.server.canonical_endpoint_prefix()
-
-    url = f'{config.server.url}/api/v1/octo/verify/'
     while True:
         code = input('\nEnter verification code (or leave it empty to abort): ')
         if not code.strip():
@@ -114,17 +132,14 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 
         try:
             if debug:
-                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{url}"')
+                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{self.config.server.canonical_endpoint_prefix()}"')
 
-            resp = requests.post(url, params={'code': code.strip()})
+            resp = verify_link_code(config, code)
 
             if debug:
                 print(f'## DEBUG: Server response code "{resp}"')
 
-            raise_for_status(resp, with_content=True)
-            data = resp.json()
-            auth_token = data['printer']['auth_token']
-            config.update_server_auth_token(auth_token)
+            resp.raise_for_status()
             print('\n###### Successfully linked to your Obico Server account!')
             break
         except Exception:
