@@ -56,6 +56,9 @@ To abort, simply press 'Enter'.
     if not skip_printer_discovery:
         discoverable = True
         def spin():
+            sys.stdout.write("\033[?25l") # Hide cursor
+            sys.stdout.flush()
+
             spinner = ["|", "/", "-", "\\"]
             spinner_idx = 0
 
@@ -65,12 +68,19 @@ To abort, simply press 'Enter'.
                 spinner_idx = (spinner_idx + 1) % 4
                 time.sleep(0.1)
 
-        print("""
-Waiting for Obico app to link this printer automatically...
+            sys.stdout.write("\033[?25h") # Show cursor
+            sys.stdout.flush()
 
-Press 'Enter' if you want to link your printer using a 6-digit code.
+
+        print("""
+Now open the Obico mobile or web app. If your phone or computer is connected to the
+same network as your printer, you will see this printer listed in the app. Click
+"Link Now" and you will be all set!
 
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+
+Waiting for Obico app to link this printer automatically...  press 'Enter' if you
+want to link your printer using a 6-digit verification code instead.
 """)
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
         discovery = PrinterDiscovery(config, sentry)
@@ -78,7 +88,6 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
         spinner_thread = run_in_thread(spin)
 
         input('')
-        # confirmed = input('\nSwitch to 6-digit code to link your printer? [Y/n]: ')
 
         discoverable = False
         discovery.stop()
@@ -86,14 +95,13 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
         discovery_thread.join()
 
         config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
-        print("\n###Switched to using 6-digit code to link printer.###")
+        print("\n### Switched to using 6-digit verification code to link printer. ###")
 
     print("""
 To link to your Obico Server account, you need to obtain the 6-digit verification code
 in the Obico mobile or web app, and enter the code below.
 
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
-
 """)
 
     endpoint_prefix = config.server.canonical_endpoint_prefix()
