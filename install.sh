@@ -199,8 +199,6 @@ EOF
 
   sudo systemctl enable "${OBICO_SERVICE_NAME}"
   sudo systemctl daemon-reload
-  report_status "Launching ${OBICO_SERVICE_NAME} service..."
-  sudo systemctl start "${OBICO_SERVICE_NAME}"
 }
 
 recreate_update_file() {
@@ -356,4 +354,8 @@ trap - INT
 if [ $SKIP_LINKING != "y" ]; then
   debug Running... "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n \"${SUFFIX:1}\"
   "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"
+else
+  report_status "Launching ${OBICO_SERVICE_NAME} service..."
+  sudo systemctl restart "${OBICO_SERVICE_NAME}"
 fi
+

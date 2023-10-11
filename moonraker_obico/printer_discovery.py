@@ -32,10 +32,7 @@ _logger = logging.getLogger('obico.printer_discovery')
 
 # we count steps instead of tracking timestamps;
 # timestamps happened to be unreliable on rpi-s (NTP issue?)
-# printer remains discoverable for about 100 minutes, give or take.
 POLL_PERIOD = 5
-MAX_POLLS = 1200
-TOTAL_STEPS = POLL_PERIOD * MAX_POLLS
 
 MAX_BACKOFF_SECS = 30
 
@@ -52,21 +49,22 @@ class PrinterDiscovery(object):
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
 
-    def start_and_block(self):
+    def start_and_block(self, max_polls=1200):
+        # printer remains discoverable for about 100 minutes, give or take.
+        total_steps = POLL_PERIOD * max_polls
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
 
         try:
-            self._start()
+            self._start(total_steps)
         except Exception:
             self.stop()
             self.sentry.captureException()
 
         _logger.debug('printer_discovery quits')
 
-    def _start(self):
+    def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
-        steps_remaining = TOTAL_STEPS
 
         host_or_ip = get_local_ip()
 
@@ -103,12 +101,6 @@ class PrinterDiscovery(object):
                 self.stop()
                 break
 
-            steps_remaining -= 1
-            if steps_remaining < 0:
-                _logger.info('printer_discovery got deadline reached')
-                self.stop()
-                break
-
             try:
                 if steps_remaining % POLL_PERIOD == 0:
                     self._call()
@@ -122,13 +114,18 @@ class PrinterDiscovery(object):
                     if 400 <= status_code < 500:
                         raise
 
+            steps_remaining -= 1
+            if steps_remaining < 0:
+                _logger.info('printer_discovery got deadline reached')
+                self.stop()
+                break
+
             time.sleep(1)
 
     def stop(self):
         self.stopped = True
         _logger.info('printer_discovery is stopping')
         try:
-            wait_for_port('127.0.0.1', get_port())  # Wait for Flask to start running. Otherwise we will get connection refused when trying to post to '/shutdown'
             requests.post(f'http://127.0.0.1:{get_port()}/shutdown')
         except Exception:
             pass
