@@ -117,7 +117,7 @@ class SentryWrapper:
         (os, _, ver, _, arch, _) = platform.uname()
         tags = dict(os=os, os_ver=ver, arch=arch)
         try:
-            v4l2 = run('v4l2-ctl --list-devices', stdout=Capture())
+            v4l2 = run('v4l2-ctl --list-devices 2>/dev/null', stdout=Capture())
             v4l2_out = ''.join(re.compile(r"^([^\t]+)", re.MULTILINE).findall(v4l2.stdout.text)).replace('\n', '')
             if v4l2_out:
                 tags['v4l2'] = v4l2_out
