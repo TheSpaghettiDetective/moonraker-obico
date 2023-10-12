@@ -39,15 +39,15 @@ link_to_server() {
 }
 
 success() {
-  echo -e "\n\n"
-  banner
   echo -e "\n"
   print_header "="
   echo -n "${cyan}"
   array=("" "SUCCESS!!!" "Now enjoy Moonraker-Obico!" "")
   print_centered_lines "${array[@]}"
   print_header "="
+}
 
+uninstall_instructions() {
   cat <<EOF
 
 The changes we have made to your system:
@@ -121,6 +121,9 @@ if [ -z "${OBICO_CFG_FILE}" ]; then
   usage && exit 1
 fi
 
+success
+exit
+
 ensure_venv
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
@@ -134,7 +137,10 @@ if [ ! $KEEP_QUIET = "y" ]; then
   case $link_exit_code in
     0)
       prompt_for_sentry
+      echo -e "\n\n"
+      banner
       success
+      uninstall_instructions
       ;;
     255)
       did_not_finish
@@ -142,6 +148,16 @@ if [ ! $KEEP_QUIET = "y" ]; then
       ;;
     *)
       oops
+      did_not_finish
+      need_help
+      ;;
+  esac
+else
+  case $link_exit_code in
+    0)
+      success
+      ;;
+    *)
       did_not_finish
       need_help
       ;;
