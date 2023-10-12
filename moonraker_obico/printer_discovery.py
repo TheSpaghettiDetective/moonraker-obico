@@ -33,9 +33,9 @@ _logger = logging.getLogger('obico.printer_discovery')
 # we count steps instead of tracking timestamps;
 # timestamps happened to be unreliable on rpi-s (NTP issue?)
 POLL_PERIOD = 5
-
 MAX_BACKOFF_SECS = 30
 
+HANDSHAKE_PORT = random.randint(45000, 48000)
 
 class PrinterDiscovery(object):
 
@@ -78,7 +78,7 @@ class PrinterDiscovery(object):
             device_id=self.device_id,
             hostname=platform.uname()[1][:253],
             host_or_ip=host_or_ip,
-            port=get_port(),
+            port=HANDSHAKE_PORT,
             os=get_os()[:253],
             arch=platform.uname()[4][:253],
             rpi_model=sbc_model,
@@ -126,7 +126,7 @@ class PrinterDiscovery(object):
         self.stopped = True
         _logger.info('printer_discovery is stopping')
         try:
-            requests.post(f'http://127.0.0.1:{get_port()}/shutdown')
+            requests.post(f'http://127.0.0.1:{HANDSHAKE_PORT}/shutdown')
         except Exception:
             pass
 
@@ -248,7 +248,7 @@ class PrinterDiscovery(object):
 
         # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
         q = Queue()
-        handshake_server = make_server('0.0.0.0', get_port(), handshake_app)
+        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
         t = run_in_thread(handshake_server.serve_forever)
         q.get(block=True)
         handshake_server.shutdown()
@@ -285,10 +285,6 @@ def _get_ip_addr():  # type () -> str
             pass
 
     return primary_ip
-
-
-def get_port():
-    return 8623
 
 
 def get_local_ip():
