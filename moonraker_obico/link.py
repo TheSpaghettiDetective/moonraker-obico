@@ -85,7 +85,7 @@ To abort, simply press 'Enter'.
             global discoverable
             global discovery
             try:
-                discovery.start_and_block(120) # waiting for 5*120 seconds = 10 minutes
+                discovery.start_and_block(300) # waiting for 2*300 seconds = 10 minutes
             finally:
                 discoverable = False
 

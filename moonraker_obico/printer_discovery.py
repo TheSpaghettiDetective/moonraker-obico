@@ -32,7 +32,7 @@ _logger = logging.getLogger('obico.printer_discovery')
 
 # we count steps instead of tracking timestamps;
 # timestamps happened to be unreliable on rpi-s (NTP issue?)
-POLL_PERIOD = 5
+POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
 HANDSHAKE_PORT = random.randint(45000, 48000)
@@ -49,8 +49,8 @@ class PrinterDiscovery(object):
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
 
-    def start_and_block(self, max_polls=1200):
-        # printer remains discoverable for about 100 minutes, give or take.
+    def start_and_block(self, max_polls=3600):
+        # printer remains discoverable for about 2 hours, give or take.
         total_steps = POLL_PERIOD * max_polls
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
