@@ -121,9 +121,6 @@ if [ -z "${OBICO_CFG_FILE}" ]; then
   usage && exit 1
 fi
 
-success
-exit
-
 ensure_venv
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
