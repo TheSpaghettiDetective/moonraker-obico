@@ -6,7 +6,6 @@ from threading import Thread
 import backoff
 import json
 import socket
-import psutil
 
 from .utils import ExpoBackoff, pi_version, to_unicode, is_port_open
 from .ws import WebSocketClient
@@ -59,7 +58,7 @@ class JanusConn:
                     setup_cmd += ' -r'
 
                 _logger.debug('Popen: {}'.format(setup_cmd))
-                setup_proc = psutil.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                setup_proc = subprocess.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
                 returncode = setup_proc.wait()
                 (stdoutdata, stderrdata) = setup_proc.communicate()
