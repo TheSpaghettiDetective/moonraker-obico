@@ -4,7 +4,7 @@ set -e
 
 export PIP_DEFAULT_TIMEOUT=1200 # For slow network connection
 
-OBICO_DIR=$(realpath $(dirname "$0"))
+OBICO_DIR=$(readlink -f $(dirname "$0"))
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
