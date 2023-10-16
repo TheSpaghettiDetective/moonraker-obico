@@ -1,0 +1,21 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+START=67
+STOP=1
+DEPEND=moonraker_service
+USE_PROCD=1
+PROG=/usr/share/moonraker-obico-env/bin/python
+USERDATA=/mnt/UDISK/
+PRINTER_CONFIG_DIR=$USERDATA/printer_config
+PRINTER_CUSTOM_CFG=$PRINTER_CONFIG_DIR/moonraker-obico.cfg
+OOM_ADJ=-17
+
+start_service() {
+    procd_open_instance
+    procd_set_param env HOME=/root
+    procd_set_param env PYTHONPATH=/usr/share/moonraker-obico
+    procd_set_param oom_adj $OOM_ADJ
+    procd_set_param command $PROG -m moonraker_obico.app -c $PRINTER_CUSTOM_CFG
+    procd_close_instance
+}
