@@ -24,7 +24,7 @@ class LocalTunnel(object):
     def __init__(self, tunnel_config, on_http_response, on_ws_message, sentry):
         self.base_url = ('https://' if tunnel_config.dest_is_ssl else 'http://') + \
                 tunnel_config.dest_host + \
-                '' if tunnel_config.dest_port == '80' else tunnel_config.dest_port
+                ('' if tunnel_config.dest_port == '80' else f':{tunnel_config.dest_port}')
         self.config = tunnel_config
         self.on_http_response = on_http_response
         self.on_ws_message = on_ws_message
