@@ -115,6 +115,31 @@ report_status() {
   echo -e "${magenta}###### $*\n${default}"
 }
 
+exit_on_error() {
+  oops
+  cat <<EOF
+
+The installation has run into an error:
+
+${red}${1}${default}
+
+Please fix the error above and re-run this setup script:
+
+-------------------------------------------------------------------------------------------------
+cd ~/moonraker-obico
+./install.sh
+-------------------------------------------------------------------------------------------------
+
+EOF
+  need_help
+  exit 1
+}
+
+unknown_error() {
+  exit_on_error "Installation interrupted by user or for unknown error."
+}
+
+
 debug() {
   if [ $DEBUG = "y" ]; then
     echo -e "DEBUG: ${magenta}###### $*${default}"
