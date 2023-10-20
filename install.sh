@@ -4,7 +4,7 @@ set -e
 
 export PIP_DEFAULT_TIMEOUT=1200 # For slow network connection
 
-OBICO_DIR=$(readlink -f $(dirname "$0"))
+export OBICO_DIR=$(readlink -f $(dirname "$0"))
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
@@ -333,7 +333,6 @@ ensure_writtable "${MOONRAKER_LOG_DIR}"
 
 [ -z "${OBICO_CFG_FILE}" ] && OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
-OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
 OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico${SUFFIX}.log"
 

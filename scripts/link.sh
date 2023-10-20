@@ -1,11 +1,12 @@
 #!/bin/bash
 
-OBICO_DIR=$(realpath $(dirname "$0")/..)
+export OBICO_DIR=$(readlink -f $(dirname "$0"))/..
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
 SUFFIX=""
 KEEP_QUIET="n"
+STOP_SYSTEM_SERVICE="y"
 
 usage() {
   if [ -n "$1" ]; then
@@ -20,6 +21,7 @@ Link or re-link a printer to the Obico Server
 Global options:
           -c   The path to the moonraker-obico.cfg file
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
+          -S   Do NOT try to stop system service using systemctl during linking. Use this option only on platforms that don't use systemctl service to start moonraker-obico.
           -q   Keep quiet
           -d   Show debugging info
 EOF
@@ -100,13 +102,14 @@ EOF
   fi
 }
 
-while getopts "hqc:n:d" arg; do
+while getopts "hqc:n:dS" arg; do
     case $arg in
         h) usage && exit 0;;
         c) OBICO_CFG_FILE=${OPTARG};;
         n) SUFFIX="-${OPTARG}";;
         q) KEEP_QUIET="y";;
         d) DEBUG="y";;
+        S) STOP_SYSTEM_SERVICE="n";;
         *) usage && exit 1;;
     esac
 done
@@ -123,12 +126,17 @@ fi
 
 ensure_venv
 
-sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
+if [ $STOP_SYSTEM_SERVICE == "y" ]; then
+  sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
+fi
+
 link_to_server
 link_exit_code=$?
 debug link_to_server exited with $link_exit_code
 
-sudo systemctl restart "${OBICO_SERVICE_NAME}"
+if [ $STOP_SYSTEM_SERVICE == "y" ]; then
+  sudo systemctl restart "${OBICO_SERVICE_NAME}"
+fi
 
 if [ ! $KEEP_QUIET = "y" ]; then
   case $link_exit_code in
