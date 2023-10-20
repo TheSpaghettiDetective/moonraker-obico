@@ -37,6 +37,8 @@ if ! cfg_existed ; then
   create_config
 fi
 
+recreate_update_file
+
 trap - ERR
 trap - INT
 

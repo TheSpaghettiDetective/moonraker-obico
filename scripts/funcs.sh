@@ -82,6 +82,25 @@ path = ${OBICO_LOG_FILE}
 EOF
 }
 
+recreate_update_file() {
+  cat <<EOF > "${OBICO_UPDATE_FILE}"
+[update_manager ${OBICO_SERVICE_NAME}]
+type: git_repo
+path: ~/moonraker-obico
+origin: ${OBICO_REPO}
+env: ${OBICO_ENV}/bin/python
+requirements: requirements.txt
+install_script: install.sh
+managed_services:
+  ${OBICO_SERVICE_NAME}
+EOF
+
+  if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
+    echo "" >> "${MOONRAKER_CONFIG_FILE}"
+    echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
+	fi
+}
+
 
 ensure_venv() {
   OBICO_ENV="${OBICO_DIR}/../moonraker-obico-env"

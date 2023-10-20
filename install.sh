@@ -103,78 +103,6 @@ ensure_writtable() {
   fi
 }
 
-cfg_existed() {
-  if [ -f "${OBICO_CFG_FILE}" ] ; then
-    if [ $OVERWRITE_CONFIG = "y" ]; then
-      backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
-      echo -e "${yellow}\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
-      cp  ${OBICO_CFG_FILE} ${backup_config_file}
-      echo -e "Old file moved to ${backup_config_file}\n${default}"
-      return 1
-    else
-      return 0
-    fi
-  else
-    return 1
-  fi
-}
-
-create_config() {
-  if [ -z "${OBICO_SERVER}" ]; then
-    print_header " Obico Server URL "
-    cat <<EOF
-
-Now tell us what Obico Server you want to link your printer to.
-You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
-For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
-
-EOF
-    read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
-    echo ""
-    OBICO_SERVER="${user_input%/}"
-  fi
-
-  debug OBICO_SERVER: ${OBICO_SERVER}
-
-  report_status "Creating config file ${OBICO_CFG_FILE} ..."
-  cat <<EOF > "${OBICO_CFG_FILE}"
-[server]
-url = ${OBICO_SERVER}
-
-[moonraker]
-host = ${MOONRAKER_HOST}
-port = ${MOONRAKER_PORT}
-# api_key = <grab one or set trusted hosts in moonraker>
-
-[webcam]
-disable_video_streaming = False
-
-# CAUTION: Don't modify the settings below unless you know what you are doing
-#   In most cases webcam configuration will be automatically retrived from moonraker
-#
-# Lower target_fps if ffmpeg is using too much CPU. Capped at 25 for Pro users (including self-hosted) and 5 for Free users
-# target_fps = 25
-#
-# snapshot_url = http://127.0.0.1:8080/?action=snapshot
-# stream_url = http://127.0.0.1:8080/?action=stream
-# flip_h = False
-# flip_v = False
-# rotation = 0
-# aspect_ratio_169 = False
-
-[logging]
-path = ${OBICO_LOG_FILE}
-# level = INFO
-
-[tunnel]
-# CAUTION: Don't modify the settings below unless you know what you are doing
-# dest_host = 127.0.0.1
-# dest_port = 80
-# dest_is_ssl = False
-
-EOF
-}
-
 recreate_service() {
   sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
 
@@ -199,25 +127,6 @@ EOF
 
   sudo systemctl enable "${OBICO_SERVICE_NAME}"
   sudo systemctl daemon-reload
-}
-
-recreate_update_file() {
-  cat <<EOF > "${OBICO_UPDATE_FILE}"
-[update_manager ${OBICO_SERVICE_NAME}]
-type: git_repo
-path: ~/moonraker-obico
-origin: ${OBICO_REPO}
-env: ${OBICO_ENV}/bin/python
-requirements: requirements.txt
-install_script: install.sh
-managed_services:
-  ${OBICO_SERVICE_NAME}
-EOF
-
-  if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
-    echo "" >> "${MOONRAKER_CONFIG_FILE}"
-    echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
-	fi
 }
 
 update() {
