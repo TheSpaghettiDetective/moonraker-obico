@@ -1,0 +1,37 @@
+#!/bin/sh
+# System startup script for moonraker-obico
+
+### BEGIN INIT INFO
+# Provides:          moonraker-obico
+# Required-Start:    $local_fs S56moonraker
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: moonraker-obico daemon
+# Description:       Starts the moonraker-obico daemon.
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+DESC="moonraker-obico daemon"
+NAME="moonraker-obico"
+PIDFILE=/var/run/moonraker-obico.pid
+
+case "$1" in
+start)  echo "Starting moonraker-obico"
+        start-stop-daemon --start --quiet --exec /usr/data/moonraker-obico/scripts/start_on_creality_k1.sh \
+                          --background --pidfile $PIDFILE --make-pidfile \
+                          --chuid root --user root
+        ;;
+stop)   echo "Not implemented"
+        ;;
+restart) log_daemon_msg "Restarting" $NAME
+        $0 stop
+        $0 start
+        ;;
+reload|force-reload)
+        echo "Reloading configuration not supported"
+        ;;
+*)      echo "Usage: /etc/init.d/S99moonraker_obico {start|stop|status|restart|reload|force-reload}"
+        exit 2
+        ;;
+esac
