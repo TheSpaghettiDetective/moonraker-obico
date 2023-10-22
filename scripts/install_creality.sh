@@ -61,7 +61,6 @@ EOF
   exit 0
 }
 
-trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
@@ -91,7 +90,6 @@ fi
 recreate_service
 recreate_update_file
 
-trap - ERR
 trap - INT
 
 if [ $SKIP_LINKING != "y" ]; then
