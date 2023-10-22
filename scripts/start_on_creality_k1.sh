@@ -1,6 +1,4 @@
-#!/bin/bash
-
-set -e
+#!/bin/sh
 
 CONF_FILE=/usr/data/printer_data/config/moonraker-obico.cfg
 
