@@ -24,6 +24,8 @@ usage() {
 Usage: $0 <[global_options]>   # Interactive installation to get moonraker-obico set up. Recommended if you have only 1 printer
 
 Global options:
+          -C   Moonraker config folder path
+          -l   The directory for moonraker-obico log files, which are rotated based on size.
           -u   Show uninstallation instructions
 EOF
 }
