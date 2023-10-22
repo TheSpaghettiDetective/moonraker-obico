@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 export OBICO_DIR=$(readlink -f $(dirname "$0"))/..
 

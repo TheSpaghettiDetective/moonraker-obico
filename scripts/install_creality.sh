@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -12,9 +12,6 @@ MOONRAKER_CONFIG_FILE="${MOONRAKER_CONF_DIR}/moonraker.conf"
 MOONRAKER_LOG_DIR="/mnt/UDISK/printer_logs"
 MOONRAKER_HOST="127.0.0.1"
 MOONRAKER_PORT="7125"
-OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
-OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
-OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 OVERWRITE_CONFIG="n"
 SKIP_LINKING="n"
 
@@ -68,12 +65,21 @@ trap 'unknown_error' ERR
 trap 'unknown_error' INT
 
 # Parse command line arguments
-while getopts "u" arg; do
+while getopts "C:l:u" arg; do
     case $arg in
+        C) mr_config=${OPTARG};;
+        l) log_path=${OPTARG};;
         u) uninstall ;;
         *) usage && exit 1;;
     esac
 done
+
+MOONRAKER_CONFIG="$mr_config"
+MOONRAKER_LOG_DIR="$log_path"
+
+OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
+OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
+OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 
 welcome
 ensure_deps
