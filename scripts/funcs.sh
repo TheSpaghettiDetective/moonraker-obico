@@ -36,7 +36,12 @@ You can use a self-hosted Obico Server or the Obico Cloud. For more information,
 For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
 
 EOF
-    read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
+    if [ -n "$CREALITY_VARIANT" ] && [ "$CREALITY_VARIANT" = "k1" ]; then
+        print "The Obico Server (Default https://app.obico.io. Don't change unless you are linking to a self-hosted Obico Server): "
+        read user_input
+    else
+        read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
+    fi
     echo ""
     OBICO_SERVER="${user_input%/}"
   fi
