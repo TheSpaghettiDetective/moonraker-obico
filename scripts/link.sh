@@ -44,8 +44,10 @@ success() {
   echo -e "\n"
   print_header "="
   echo -n "${cyan}"
-  array=("" "SUCCESS!!!" "Now enjoy Moonraker-Obico!" "")
-  print_centered_lines "${array[@]}"
+  print_centered_line ""
+  print_centered_line "SUCCESS!!!"
+  print_centered_line "Now enjoy Moonraker-Obico!"
+  print_centered_line ""
   print_header "="
 }
 

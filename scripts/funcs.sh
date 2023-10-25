@@ -170,12 +170,12 @@ welcome() {
   echo ""
   print_header "> Obico for Klipper (Moonraker-Obico) <"
   echo -n "${cyan}"
-  print_centered_lines ""
-  print_centered_lines "* AI-Powered Failure Detection"
-  print_centered_lines "* Free Remote Monitoring and Access "
-  print_centered_lines "* 25FPS High-Def Webcam Streaming "
-  print_centered_lines "* Free 4.9-Star Mobile App"
-  print_centered_lines ""
+  print_centered_line ""
+  print_centered_line "* AI-Powered Failure Detection"
+  print_centered_line "* Free Remote Monitoring and Access "
+  print_centered_line "* 25FPS High-Def Webcam Streaming "
+  print_centered_line "* Free 4.9-Star Mobile App"
+  print_centered_line ""
 
   print_header "="
   echo ""
@@ -208,7 +208,7 @@ Need help? Stop by:
 EOF
 }
 
-print_centered_lines() {
+print_centered_line() {
   local line="$@"
     local line_length=${#line}
     local padding_length=$(( (65 - line_length) / 2 ))
