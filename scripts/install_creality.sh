@@ -39,6 +39,8 @@ ensure_deps() {
 recreate_service() {
   if [ $CREALITY_VARIANT = "sonic_pad" ]; then
     cp "${OBICO_DIR}"/scripts/openwrt_init.d/moonraker_obico_service /etc/init.d/
+    rm -f /etc/rc.d/S67moonraker_obico_service
+    rm -f /etc/rc.d/K1moonraker_obico_service
     ln -s ../init.d/moonraker_obico_service /etc/rc.d/S67moonraker_obico_service
     ln -s ../init.d/moonraker_obico_service /etc/rc.d/K1moonraker_obico_service
   elif [ $CREALITY_VARIANT = "k1" ]; then
@@ -75,17 +77,16 @@ EOF
 trap 'unknown_error' INT
 
 echo "What Creality system are you installing Obico on right now?"
-echo "A) Sonic Pad"
-echo "B) K1/K1 Max"
-echo "C) Other\n"
+echo "1) Sonic Pad"
+echo "2) K1/K1 Max"
+echo "3) Other\n"
 
 read user_input
-user_input_upper=$(echo "$user_input" | tr 'a-z' 'A-Z')
-if [ "$user_input_upper" = "A" ]; then
+if [ "$user_input" = "1" ]; then
     CREALITY_VARIANT="sonic_pad"
     MOONRAKER_CONF_DIR="/mnt/UDISK/printer_config"
     MOONRAKER_LOG_DIR="/mnt/UDISK/printer_logs"
-elif [ "$user_input_upper" = "B" ]; then
+elif [ "$user_input" = "2" ]; then
     CREALITY_VARIANT="k1"
     MOONRAKER_CONF_DIR="/usr/data/printer_data/config"
     MOONRAKER_LOG_DIR="/usr/data/printer_data/logs"
