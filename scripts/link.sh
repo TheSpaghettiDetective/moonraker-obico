@@ -93,7 +93,14 @@ prompt_for_sentry() {
   fi
   echo -e "\nOne last thing: Do you want to opt in bug reporting to help us make Obico better?"
   echo -e "The debugging info included in the report will be anonymized.\n"
-  read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
+  if [ -n "$CREALITY_VARIANT" ] && [ "$CREALITY_VARIANT" = "k1" ]; then
+      printf "Opt in bug reporting? [Y/n]:"
+      read opt_in
+      # If user_input is empty, assign the default value
+      : ${opt_in:="Y"}
+  else
+      read -p "Opt in bug reporting? [Y/n]: " -e -i "Y" opt_in
+  fi
   echo ""
   if [ "${opt_in^^}" == "Y" ] ; then
 		cat <<EOF >> "${OBICO_CFG_FILE}"

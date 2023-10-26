@@ -37,7 +37,7 @@ For self-hosted server, specify "http://server_ip:port". For instance, http://19
 
 EOF
     if [ -n "$CREALITY_VARIANT" ] && [ "$CREALITY_VARIANT" = "k1" ]; then
-        printf "The Obico Server. Press 'enter' to accept the default server https://app.obico.io: "
+        printf "The Obico Server. Press 'enter' to accept the default [https://app.obico.io]: "
         read user_input
         # If user_input is empty, assign the default value
         : ${user_input:="https://app.obico.io"}
