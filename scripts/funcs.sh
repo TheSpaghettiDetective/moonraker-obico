@@ -93,7 +93,7 @@ recreate_update_file() {
   cat <<EOF > "${OBICO_UPDATE_FILE}"
 [update_manager ${OBICO_SERVICE_NAME}]
 type: git_repo
-path: ~/moonraker-obico
+path: ${OBICO_DIR}
 origin: ${OBICO_REPO}
 env: ${OBICO_ENV}/bin/python
 requirements: requirements.txt
