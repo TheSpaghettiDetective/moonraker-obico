@@ -9,6 +9,7 @@ class NozzleCamConfig:
     def __init__(self, snapshot_url):
         self.snapshot_url = snapshot_url
         self.snapshot_ssl_validation = False
+        self.first_layer_scan_enabled = True
 
 class NozzleCam:
 
@@ -54,9 +55,10 @@ class NozzleCam:
 
     def create_nozzlecam_config(self):
         try:
-            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, raise_exception=True)
-            _logger.debug(ext_info.json())
-            nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
+            raw_ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.printer_id}/ext/', timeout=60, raise_exception=True)
+            ext_info = raw_ext_info.json().get('ext')
+            nozzle_url = ext_info.get('nozzlecam_url', None)
+            self.first_layer_scan_enabled = ext_info.get('first_layer_scan_enabled', True)
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
             else:
