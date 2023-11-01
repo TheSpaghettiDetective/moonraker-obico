@@ -36,7 +36,7 @@ You can use a self-hosted Obico Server or the Obico Cloud. For more information,
 For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
 
 EOF
-    if [ -n "$CREALITY_VARIANT" ] && [ "$CREALITY_VARIANT" = "k1" ]; then
+    if [ -n "$CREALITY_VARIANT" ]; then
         printf "The Obico Server. Press 'enter' to accept the default [https://app.obico.io]: "
         read user_input
         # If user_input is empty, assign the default value
