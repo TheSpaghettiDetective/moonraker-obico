@@ -7,7 +7,7 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
-from .utils import sanitize_filename, run_in_thread
+from .utils import sanitize_filename
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -165,14 +165,6 @@ class PrinterState:
             completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
 
-            # Obico first layer AI
-            if current_layer == 1:
-                if not self.plugin.nozzlecam.on_first_layer:
-                    self.plugin.nozzlecam.on_first_layer = True
-                    run_in_thread(self.plugin.nozzlecam.start)
-            else:
-                self.plugin.nozzlecam.on_first_layer = False
-
             return {
                 '_ts': time.time(),
                 'state': {
@@ -239,6 +231,12 @@ class PrinterState:
         max_z = None
         total_layers = print_info.get('total_layer')
         current_layer = print_info.get('current_layer')
+
+        if not current_layer:
+            first_layer_macro_status = self.status.get('gcode_macro _OBICO_LAYER_CHANGE', {})
+            if first_layer_macro_status.get('current_layer', -1) > 0: # current_layer > 0 means macros is embedded in gcode
+                current_layer = first_layer_macro_status['current_layer']
+
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None
 

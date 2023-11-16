@@ -18,7 +18,7 @@ import requests  # type: ignore
 
 from moonraker_obico.nozzlecam import NozzleCam
 from .version import VERSION
-from .utils import SentryWrapper
+from .utils import SentryWrapper, run_in_thread
 from .webcam_capture import JpegPoster
 from .logger import setup_logging
 from .printer import PrinterState
@@ -138,13 +138,8 @@ class App(object):
             on_ws_message=self.server_conn.send_ws_msg_to_server,
             sentry=self.sentry)
 
-        thread = threading.Thread(target=self.server_conn.start)
-        thread.daemon = True
-        thread.start()
-
-        thread = threading.Thread(target=self.moonrakerconn.start)
-        thread.daemon = True
-        thread.start()
+        run_in_thread(self.server_conn.start)
+        run_in_thread(self.moonrakerconn.start)
 
         # If one of the connection is not ready, the init state won't be correctly set up in the obico server
         while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):
@@ -156,24 +151,18 @@ class App(object):
         self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
         self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
+        run_in_thread(self.nozzlecam.start)
 
-        jpeg_post_thread = threading.Thread(target=self.target_jpeg_poster.pic_post_loop)
-        jpeg_post_thread.daemon = True
-        jpeg_post_thread.start()
-
-        thread = threading.Thread(target=self.event_loop)
-        thread.daemon = True
-        thread.start()
+        run_in_thread(self.target_jpeg_poster.pic_post_loop)
+        even_loop_thread = run_in_thread(self.event_loop)
 
         # Janus may take a while to start, or fail to start. Put it in thread to make sure it does not block
-        janus_thread = threading.Thread(target=self.janus.start)
-        janus_thread.daemon = True
-        janus_thread.start()
+        run_in_thread(self.janus.start)
 
         try:
             # Save printer_id in the database so that the app can use it to send user to the correct tunnel authorization page
             self.moonrakerconn.api_post('server/database/item', namespace='obico', key='printer_id', value=self.model.linked_printer.get('id'))
-            thread.join()
+            even_loop_thread.join()
         except Exception:
             self.sentry.captureException()
 

@@ -45,6 +45,7 @@ class MoonrakerConn:
         self.moonraker_state_requested_ts = 0
         self.request_callbacks = OrderedDict()
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
+        self.subscribed_objects = []
 
     ## REST API part
 
@@ -208,14 +209,11 @@ class MoonrakerConn:
                 raise_for_status=True,
                 script=script
             )
-            resp.raise_for_status()
         except:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
     def initialize_layer_change_macro(self, **kwargs):
-
-        data = self.api_get('printer/objects/list', raise_for_status=False)
-        macro_is_configured = data and any('gcode_macro _obico_layer_change' in item.lower() for item in data['objects'])
+        macro_is_configured = any('gcode_macro _obico_layer_change' in item.lower() for item in self.subscribed_objects)
         if not macro_is_configured:
             return
 
@@ -351,15 +349,16 @@ class MoonrakerConn:
             'webhooks': ('state', 'state_message'),
             'gcode_move': ('speed_factor', 'extrude_factor'),
             'history': None,
+            'gcode_macro _OBICO_LAYER_CHANGE': None,
             'fan': ('speed'),
         }
         available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
-        subscribe_objects = {
+        self.subscribed_objects = {
             key: value for key, value in subscribe_objects.items() if key in available_printer_objects
         }
 
-        _logger.debug(f'Subscribing to objects {subscribe_objects}')
-        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribe_objects))
+        _logger.debug(f'Subscribing to objects {self.subscribed_objects}')
+        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=self.subscribed_objects))
 
     def request_status_update(self, objects=None):
         def status_update_callback(data):
@@ -379,6 +378,7 @@ class MoonrakerConn:
                 "toolhead": None,
                 "extruder": None,
                 "gcode_move": None,
+                'gcode_macro _OBICO_LAYER_CHANGE': None,
                 "fan": None,
             }
 
