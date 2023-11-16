@@ -93,13 +93,16 @@ class NozzleCam:
 
     def create_nozzlecam_config(self):
         try:
-            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.model.linked_printer["id"]}/ext/', timeout=60, raise_exception=True)
-            _logger.debug(ext_info.json())
-            nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
+            ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.model.linked_printer["id"]}/ext/', timeout=60, raise_exception=True).json().get('ext', {})
+            nozzle_url = ext_info.get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
 
-            self.moonrakerconn.initialize_layer_change_macro(first_layer_scan_feedrate=600, first_layer_scan_enabled=True)
+            self.moonrakerconn.initialize_layer_change_macro(
+                first_layer_scan_enabled=ext_info.get('first_layer_scan_opted_in', True),
+                first_layer_scan_retract=ext_info.get('first_layer_scan_retract', 6.5),
+                first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
+                )
 
             return NozzleCamConfig(nozzle_url)
         except Exception:
