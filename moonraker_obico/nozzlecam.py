@@ -12,9 +12,10 @@ class NozzleCamConfig:
 
 class NozzleCam:
 
-    def __init__(self, app_model, server_conn):
+    def __init__(self, app_model, server_conn, moonrakerconn):
         self.model = app_model
         self.server_conn = server_conn
+        self.moonrakerconn = moonrakerconn
         self.on_first_layer = False
         self.printer_id = app_model.linked_printer['id']
         self.nozzle_config = self.create_nozzlecam_config()
@@ -59,8 +60,10 @@ class NozzleCam:
             nozzle_url = ext_info.json()['ext'].get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
-            else:
-                return NozzleCamConfig(nozzle_url)
+
+            self.moonrakerconn.initialize_layer_change_macro(scan_feedrate=600, enabled=True)
+
+            return NozzleCamConfig(nozzle_url)
         except Exception:
             _logger.error('Failed to build nozzle config', exc_info=True)
             return None

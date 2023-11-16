@@ -131,7 +131,6 @@ class App(object):
         self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
         self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
-        self.nozzlecam = NozzleCam(self.model, self.server_conn)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -155,6 +154,8 @@ class App(object):
         self.moonrakerconn.update_webcam_config_from_moonraker()
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
         self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
+
+        self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
 
         jpeg_post_thread = threading.Thread(target=self.target_jpeg_poster.pic_post_loop)
         jpeg_post_thread.daemon = True

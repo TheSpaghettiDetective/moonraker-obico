@@ -200,6 +200,27 @@ class MoonrakerConn:
             #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             pass
 
+    def set_macro_variable(self, macro_name, var_name, var_value):
+        script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
+        try:
+            resp = self.api_post(
+                'printer/gcode/script',
+                raise_for_status=True,
+                script=script
+            )
+            resp.raise_for_status()
+        except:
+            _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
+
+    def initialize_layer_change_macro(self, **kwargs):
+
+        data = self.api_get('printer/objects/list', raise_for_status=False)
+        macro_is_configured = data and any('gcode_macro _obico_layer_change' in item.lower() for item in data['objects'])
+        if not macro_is_configured:
+            return
+
+        for key, value in kwargs.items():
+            self.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)
 
     ## WebSocket part
 
