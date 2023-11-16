@@ -27,6 +27,7 @@ class NozzleCam:
 
         capturing = False
         capturing_interval = 1 # 1s
+        first_layer_scanning = False
         while True:
             time.sleep(capturing_interval)
 
@@ -36,11 +37,15 @@ class NozzleCam:
 
                 capturing = False
                 capturing_interval = 1
+                first_layer_scanning = False
                 continue
 
             capturing = True
+            first_layer_scanning = self.first_layer_macro_status().get('first_layer_scanning', False)
+            if first_layer_scanning:
+                capturing_interval = 0.1
             try:
-                self.send_nozzlecam_jpeg(capture_jpeg(nozzle_config))
+                self.send_nozzlecam_jpeg(capture_jpeg(nozzle_config), first_layer_scanning)
             except Exception:
                 _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
 
@@ -59,8 +64,8 @@ class NozzleCam:
             elif macro_status_current_layer == 2:
                 if macro_status.get('first_layer_scanning', False):
                     return True
-                # 30s buffer for initiating scanning to avoid race condition: current_layer = 2 and first_layer_scanning = False
-                return (time.time() - self.last_on_first_layer < 30)
+                # 10s buffer for initiating scanning to avoid race condition: current_layer = 2 and first_layer_scanning = False
+                return (time.time() - self.last_on_first_layer < 10)
             else:
                 return False
 
@@ -71,10 +76,11 @@ class NozzleCam:
     def first_layer_macro_status(self):
         return self.model.printer_state.status.get('gcode_macro _OBICO_LAYER_CHANGE', {})
 
-    def send_nozzlecam_jpeg(self, snapshot):
+    def send_nozzlecam_jpeg(self, snapshot, first_layer_scanning):
         if snapshot:
                 files = {'pic': snapshot}
-                resp = self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, files=files, raise_exception=True, skip_debug_logging=True)
+                data = {'first_layer_scanning': first_layer_scanning}
+                resp = self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/pic/', timeout=60, data=data, files=files, raise_exception=True, skip_debug_logging=True)
                 _logger.debug('nozzle cam jpeg posted to server - {0}'.format(resp))
 
     def notify_server_nozzlecam_complete(self):
