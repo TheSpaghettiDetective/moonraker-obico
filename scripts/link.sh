@@ -59,7 +59,9 @@ The changes we have made to your system:
 - System service: /etc/systemd/system/${OBICO_SERVICE_NAME}
 - Config file: ${OBICO_CFG_FILE}
 - Update file: ${OBICO_UPDATE_FILE}
+- Macro file: "${MOONRAKER_CONF_DIR}/moonraker_obico_macros.cfg"
 - Inserted "[include moonraker-obico-update.cfg]" in the "moonraker.conf" file
+- Inserted "[include moonraker_obico_macros.cfg]" in the "printer.conf" file
 - Log file: ${OBICO_LOG_FILE}
 
 To remove Moonraker-Obico, run:

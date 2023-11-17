@@ -106,6 +106,8 @@ EOF
     echo "" >> "${MOONRAKER_CONFIG_FILE}"
     echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
 	fi
+
+  "${OBICO_DIR}/scripts/ensure_include_cfgs.sh" "${MOONRAKER_CONF_DIR}/printer.cfg"
 }
 
 
