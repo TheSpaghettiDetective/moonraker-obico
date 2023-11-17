@@ -15,8 +15,10 @@ from random import randrange
 from collections import deque, OrderedDict
 from functools import reduce
 from operator import concat
+import subprocess
+import os
 
-from .utils import DEBUG
+from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
 
 
@@ -360,6 +362,9 @@ class MoonrakerConn:
         _logger.debug(f'Subscribing to objects {self.subscribed_objects}')
         self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=self.subscribed_objects))
 
+        if not 'gcode_macro _OBICO_LAYER_CHANGE' in self.subscribed_objects:
+            run_in_thread(self._setup_include_cfgs)
+
     def request_status_update(self, objects=None):
         def status_update_callback(data):
             self.push_event(
@@ -417,6 +422,25 @@ class MoonrakerConn:
         script = f'SET_HEATER_TEMPERATURE HEATER={heater} TARGET={target_temp}'
         return self.jsonrpc_request('printer.gcode.script', params=dict(script=script))
 
+    def _setup_include_cfgs(self):
+        data = self.api_get('printer.info', raise_for_status=False)
+        if not data:
+            _logger.warning('Aborted ensuring include_cfgs because moonraker printer/info call failed')
+            return
+
+        printer_cfg = data.get('config_file')
+        if not printer_cfg:
+            _logger.warning('Aborted ensuring include_cfgs because moonraker printer/info call failed')
+            return
+
+        ensure_include_cfgs_sh = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts', 'ensure_include_cfgs.sh')
+        FNULL = open(os.devnull, 'w')
+        cmd = f'{ensure_include_cfgs_sh} {printer_cfg}'
+        _logger.debug('Popen: {}'.format(cmd))
+        proc = subprocess.Popen(cmd.split(' '), stdout=FNULL, stderr=FNULL)
+        proc_exit_code = proc.wait()
+        if proc_exit_code != 0:
+            _logger.warning(f'{cmd} exited with {proc_exit_code}')
 
 @dataclasses.dataclass
 class Event:
