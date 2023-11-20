@@ -26,6 +26,14 @@ cfg_existed() {
   fi
 }
 
+is_k1() {
+  if [ -n "$CREALITY_VARIANT" -a $CREALITY_VARIANT = "k1" ]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
 create_config() {
   if [ -z "${OBICO_SERVER}" ]; then
     print_header " Obico Server URL "
@@ -116,7 +124,11 @@ ensure_venv() {
   if [ ! -f "${OBICO_ENV}/bin/activate" ] ; then
     report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
-    virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
+    if is_k1; then
+      python3 /usr/lib/python3.8/site-packages/virtualenv.py -p /usr/bin/python3  --system-site-packages "${OBICO_ENV}"
+    else
+      virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
+    fi
   fi
 }
 

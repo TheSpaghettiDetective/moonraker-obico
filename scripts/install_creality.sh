@@ -18,9 +18,11 @@ usage() {
     echo ""
   fi
   cat <<EOF
-Usage: $0 <[global_options]>   # Interactive installation to get moonraker-obico set up. Recommended if you have only 1 printer
+Usage: $0 <[options]>   # Interactive installation to get moonraker-obico set up. Recommended if you have only 1 printer
 
-Global options:
+Options:
+          -s   Install moonraker-obico on a Sonic Pad
+          -k   Install moonraker-obico on a K1/K1 Max
           -u   Show uninstallation instructions
 EOF
 }
@@ -76,24 +78,28 @@ EOF
 
 trap 'unknown_error' INT
 
-echo "What Creality system are you installing Obico on right now?"
-echo "1) Sonic Pad"
-echo "2) K1/K1 Max"
-echo "3) Other\n"
+prompt_for_variant_if_needed() {
 
-read user_input
-if [ "$user_input" = "1" ]; then
-    CREALITY_VARIANT="sonic_pad"
-    MOONRAKER_CONF_DIR="/mnt/UDISK/printer_config"
-    MOONRAKER_LOG_DIR="/mnt/UDISK/printer_logs"
-elif [ "$user_input" = "2" ]; then
-    CREALITY_VARIANT="k1"
-    MOONRAKER_CONF_DIR="/usr/data/printer_data/config"
-    MOONRAKER_LOG_DIR="/usr/data/printer_data/logs"
-else
-    echo "Obico doesn't currently support this board"
-    exit 0
-fi
+  if [ -n "${CREALITY_VARIANT}" ]; then
+    return
+  fi
+
+  echo "What Creality system are you installing Obico on right now?"
+  echo "1) Sonic Pad"
+  echo "2) K1/K1 Max"
+  echo "3) Other"
+  echo ""
+
+  read user_input
+  if [ "$user_input" = "1" ]; then
+      CREALITY_VARIANT="sonic_pad"
+  elif [ "$user_input" = "2" ]; then
+      CREALITY_VARIANT="k1"
+  else
+      echo "Obico doesn't currently support this model."
+      exit 0
+  fi
+}
 
 MOONRAKER_CONFIG_FILE="${MOONRAKER_CONF_DIR}/moonraker.conf"
 OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
@@ -101,13 +107,24 @@ OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
 OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 
 # Parse command line arguments
-while getopts "C:l:u" arg; do
+while getopts "sku" arg; do
     case $arg in
+        s) CREALITY_VARIANT="sonic_pad" ;;
+        k) CREALITY_VARIANT="k1" ;;
         u) uninstall ;;
         *) usage && exit 1;;
     esac
 done
 
+prompt_for_variant_if_needed
+
+if is_k1; then
+  MOONRAKER_CONF_DIR="/usr/data/printer_data/config"
+  MOONRAKER_LOG_DIR="/usr/data/printer_data/logs"
+else
+  MOONRAKER_CONF_DIR="/mnt/UDISK/printer_config"
+  MOONRAKER_LOG_DIR="/mnt/UDISK/printer_logs"
+fi
 
 welcome
 ensure_deps
