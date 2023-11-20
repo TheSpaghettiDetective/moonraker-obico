@@ -58,18 +58,18 @@ rm -rf $OBICO_DIR
 rm -rf $OBICO_DIR/../moonraker-obico-env
 EOF
 
-  if [ $CREALITY_VARIANT = "sonic_pad" ]; then
+  if is_k1; then
+
+    cat <<EOF
+rm -f /etc/init.d/S99moonraker_obico
+EOF
+
+  else
 
     cat <<EOF
 rm -f /etc/init.d/moonraker_obico_service
 rm -f /etc/rc.d/S67moonraker_obico_service
 rm -f /etc/rc.d/K1moonraker_obico_service
-EOF
-
-  elif [ $CREALITY_VARIANT = "k1" ]; then
-
-    cat <<EOF
-rm -f /etc/init.d/S99moonraker_obico
 EOF
 
   fi
@@ -101,17 +101,12 @@ prompt_for_variant_if_needed() {
   fi
 }
 
-MOONRAKER_CONFIG_FILE="${MOONRAKER_CONF_DIR}/moonraker.conf"
-OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
-OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
-OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
-
 # Parse command line arguments
 while getopts "sku" arg; do
     case $arg in
         s) CREALITY_VARIANT="sonic_pad" ;;
         k) CREALITY_VARIANT="k1" ;;
-        u) uninstall ;;
+        u) prompt_for_variant_if_needed && uninstall ;;
         *) usage && exit 1;;
     esac
 done
@@ -125,6 +120,11 @@ else
   MOONRAKER_CONF_DIR="/mnt/UDISK/printer_config"
   MOONRAKER_LOG_DIR="/mnt/UDISK/printer_logs"
 fi
+
+MOONRAKER_CONFIG_FILE="${MOONRAKER_CONF_DIR}/moonraker.conf"
+OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
+OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
+OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 
 welcome
 ensure_deps

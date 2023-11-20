@@ -27,10 +27,10 @@ cfg_existed() {
 }
 
 is_k1() {
-  if [ -n "$CREALITY_VARIANT" -a $CREALITY_VARIANT = "k1" ]; then
-    return 1
-  else
+  if [ -n "$CREALITY_VARIANT" -a "$CREALITY_VARIANT" = "k1" ]; then
     return 0
+  else
+    return 1
   fi
 }
 
