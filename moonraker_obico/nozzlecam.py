@@ -101,7 +101,7 @@ class NozzleCam:
             self.moonrakerconn.initialize_layer_change_macro(
                 first_layer_scan_enabled=ext_info.get('first_layer_scan_opted_in', True),
                 first_layer_scan_retract_length=ext_info.get('first_layer_scan_retract', 6),
-                first_layer_scan_unretract_length=ext_info.get('first_layer_scan_retract' + 0.5, 6.5),
+                first_layer_scan_unretract_length=ext_info.get('first_layer_scan_retract', 6) + 0.5,
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
