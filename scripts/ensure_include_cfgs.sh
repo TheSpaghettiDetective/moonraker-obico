@@ -14,5 +14,6 @@ if [ ! -f ${KLIPPER_CONF_DIR}/moonraker_obico_macros.cfg ]; then
 fi
 
 if ! grep -q "include moonraker_obico_macros.cfg" "${PRINTER_CONF_FILE}" ; then
-  sed -i "1 i [include moonraker_obico_macros.cfg]" "${PRINTER_CONF_FILE}"
+  awk '/-- SAVE_CONFIG --/ && !f {print "[include moonraker_obico_macros.cfg]"; f++} 1; END{if(!f)print "[include moonraker_obico_macros.cfg]"}' "${PRINTER_CONF_FILE}" > /tmp/printer.tmp
+  mv /tmp/printer.tmp "${PRINTER_CONF_FILE}"
 fi
