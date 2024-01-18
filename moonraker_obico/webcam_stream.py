@@ -201,7 +201,6 @@ class WebcamStreamer:
                     returncode = self.ffmpeg_proc.wait()
                     msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
                     _logger.debug(msg)
-                    self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
 
                     if retry_after_quit:
                         ffmpeg_backoff.more('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
@@ -209,6 +208,7 @@ class WebcamStreamer:
                         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
                         self.ffmpeg_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
                     else:
+                        self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
                         return
                 else:
                     ring_buffer.append(err)
