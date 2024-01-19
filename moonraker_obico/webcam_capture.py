@@ -25,7 +25,7 @@ def webcam_full_url(url):
 
     full_url = url.strip()
     if not urlparse(full_url).scheme:
-        full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+        full_url = "http://127.0.0.1/" + re.sub(r"^\/", "", full_url)
 
     return full_url
 
@@ -158,7 +158,7 @@ class JpegPoster:
             def __init__(self, snapshot_url):
                 self.snapshot_url = snapshot_url
                 self.snapshot_ssl_validation = False
-                
+
         snapshot = capture_jpeg(SnapshotConfig(url))
         base64_image = base64.b64encode(snapshot).decode('utf-8')
         return {'pic': base64_image}, None

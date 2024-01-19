@@ -147,7 +147,7 @@ class WebcamConfig:
 
         full_url = url.strip()
         if not urlparse(full_url).scheme:
-            full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+            full_url = "http://127.0.0.1/" + re.sub(r"^\/", "", full_url)
 
         return full_url
 
