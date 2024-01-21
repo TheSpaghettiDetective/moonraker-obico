@@ -138,7 +138,11 @@ update() {
 uninstall() {
   cat <<EOF
 
-To uninstall Moonraker-Obico, please run:
+To uninstall Moonraker-Obico, please
+
+1. Run these commands:
+
+--------------------------
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}"
 sudo systemctl disable "${OBICO_SERVICE_NAME}"
@@ -147,6 +151,19 @@ sudo systemctl daemon-reload
 sudo systemctl reset-failed
 rm -rf ~/moonraker-obico
 rm -rf ~/moonraker-obico-env
+
+-------------------------
+
+
+2. Remove this line in "printer.cfg":
+
+[include moonraker_obico_macros.cfg]
+
+
+3. Remove this line in "moonraker.conf":
+
+[include moonraker-obico-update.cfg]
+
 
 EOF
 
