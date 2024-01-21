@@ -52,7 +52,11 @@ recreate_service() {
 
 uninstall() {
   cat <<EOF
-To uninstall Moonraker-Obico, please run:
+To uninstall Moonraker-Obico, please
+
+1. Run these commands:
+
+-------------------------
 
 rm -rf $OBICO_DIR
 rm -rf $OBICO_DIR/../moonraker-obico-env
@@ -73,6 +77,23 @@ rm -f /etc/rc.d/K1moonraker_obico_service
 EOF
 
   fi
+
+  cat <<EOF
+
+-------------------------
+
+
+2. Remove this line in "printer.cfg":
+
+[include moonraker_obico_macros.cfg]
+
+
+3. Remove this line in "moonraker.conf":
+
+[include moonraker-obico-update.cfg]
+
+EOF
+
   exit 0
 }
 
