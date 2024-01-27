@@ -30,7 +30,11 @@ EOF
 ensure_deps() {
   report_status "Installing required system packages..."
   PKGLIST="python3 python3-pip"
-  /opt/bin/opkg install ${PKGLIST}
+  if [ $CREALITY_VARIANT = "sonic_pad" ]; then
+    opkg install ${PKGLIST}
+  elif [ $CREALITY_VARIANT = "k1" ]; then
+    /opt/bin/opkg install ${PKGLIST}
+  fi
   pip3 install -q --no-cache-dir virtualenv
   ensure_venv
   debug Running... "${OBICO_ENV}"/bin/pip3 install -q --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
