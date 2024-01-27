@@ -30,7 +30,7 @@ EOF
 ensure_deps() {
   report_status "Installing required system packages..."
   PKGLIST="python3 python3-pip"
-  opkg install ${PKGLIST}
+  /opt/bin/opkg install ${PKGLIST}
   pip3 install -q --no-cache-dir virtualenv
   ensure_venv
   debug Running... "${OBICO_ENV}"/bin/pip3 install -q --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
