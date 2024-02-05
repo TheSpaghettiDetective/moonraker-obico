@@ -74,6 +74,7 @@ class WebcamStreamer:
                 continue
 
             time.sleep( max(last_frame_sent + min_interval_btw_frames - time.time(), 0) )
+            last_frame_sent = time.time()
 
             jpg = None
             try:
@@ -89,8 +90,6 @@ class WebcamStreamer:
             for chunk in [encoded[i:i+1400] for i in range(0, len(encoded), 1400)]:
                 self.mjpeg_sock.sendto(chunk, (JANUS_SERVER, JANUS_MJPEG_DATA_PORT))
                 time.sleep(bandwidth_throttle)
-
-        last_frame_sent = time.time()
 
     def video_pipeline(self):
         if not pi_version():
