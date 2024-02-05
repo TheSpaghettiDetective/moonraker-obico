@@ -88,6 +88,8 @@ ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
   PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
+  # https://forum.openmediavault.org/index.php?thread/51664-http-apt-armbian-com-buster-release-does-not-have-a-release-file/
+  sudo sed -i '/^deb http:\/\/apt.armbian.com buster main buster-utils buster-desktop/s/^/# /' /etc/apt/sources.list.d/armbian.list 2>/dev/null || true
   sudo apt-get --allow-releaseinfo-change -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update
   sudo apt-get install --yes ${PKGLIST}
   ensure_venv
