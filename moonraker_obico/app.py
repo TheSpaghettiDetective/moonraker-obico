@@ -57,14 +57,11 @@ class App(object):
         self.server_conn = None
         self.moonrakerconn = None
         self.webcam_streamer = None
-        self.target_jpeg_poster = None
+        self.jpeg_poster = None
         self.local_tunnel = None
         self.printer = None
         self.passthru_executor = None
-        self.target_file_downloader = None
-        self.target_moonraker_api = None
         self.q = queue.Queue(maxsize=1000)
-        self.target_file_operations = None
         self.nozzlecam = None
 
     def push_event(self, event):
@@ -124,22 +121,19 @@ class App(object):
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
+        self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model, self.sentry)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
                 webcam_streamer = self.webcam_streamer,
+                jpeg_poster = self.jpeg_poster,
                 file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
                 moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
-                target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+                file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
             ),
             self.server_conn,
             self.sentry)
-
-        self.target_jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
-        self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
-        self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
-        self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
 
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
@@ -163,7 +157,7 @@ class App(object):
         self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
         run_in_thread(self.nozzlecam.start)
 
-        run_in_thread(self.target_jpeg_poster.pic_post_loop)
+        run_in_thread(self.jpeg_poster.pic_post_loop)
         even_loop_thread = run_in_thread(self.event_loop)
 
         try:
@@ -374,7 +368,7 @@ class App(object):
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
-                self.target_jpeg_poster.need_viewing_boost.set()
+                self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
             _logger.debug(f'Received commands from server: {msg}')
