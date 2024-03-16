@@ -7,7 +7,7 @@ import backoff
 import json
 import socket
 
-from .utils import pi_version, to_unicode, is_port_open
+from .utils import pi_version, to_unicode, is_port_open, run_in_thread
 from .ws import WebSocketClient
 from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
 #from .webcam_stream import WebcamStreamer
@@ -50,27 +50,12 @@ class JanusConn:
                     env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
                 _logger.debug('Popen: {} {}'.format(env, janus_cmd))
                 janus_proc = subprocess.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                janus_proc.nice(20)
 
                 with open(self.janus_pid_file_path(), 'w') as pid_file:
                     pid_file.write(str(janus_proc.pid))
 
-                _logger.debug('Popen: {}'.format(setup_cmd))
-                setup_proc = subprocess.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                returncode = setup_proc.wait()
-                (stdoutdata, stderrdata) = setup_proc.communicate()
-                if returncode != 0:
-                    raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
-
-            @backoff.on_exception(backoff.expo, Exception, max_tries=5)
-            def run_janus():
-                janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
-                _logger.debug('Popen: {}'.format(janus_cmd))
-                self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                while not self.shutting_down:
-                    line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
+                while True:
+                    line = to_unicode(janus_proc.stdout.readline(), errors='replace')
                     if line:
                         _logger.debug('JANUS: ' + line.rstrip())
                     else:  # line == None means the process quits
@@ -89,9 +74,7 @@ class JanusConn:
 #            stream_thread.daemon = True
 #            stream_thread.start()
 
-        janus_proc_thread = Thread(target=run_janus_forever)
-        janus_proc_thread.daemon = True
-        janus_proc_thread.start()
+        run_in_thread(run_janus_forever)
 
         self.wait_for_janus()
         self.start_janus_ws()
@@ -128,10 +111,7 @@ class JanusConn:
             # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
             # Ensure the process is killed before launching a new one
             with open(self.janus_pid_file_path(), 'r') as pid_file:
-                janus_pid = int(pid_file.read())
-                process_to_kill = subprocess.Process(janus_pid)
-                process_to_kill.terminate()
-                process_to_kill.wait(5)
+                subprocess.run(['kill', '-9', pid_file.read()], check=True)
         except Exception as e:
             _logger.warning('Failed to shutdown Janus - ' + str(e))
 
