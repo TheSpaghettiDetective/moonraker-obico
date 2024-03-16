@@ -222,7 +222,7 @@ class WebcamStreamer:
             encoder = h264_encoder()
 
             webcam_config = webcam['moonraker_config']
-            stream_url = webcam_full_url(webcam_config.get('stream_url'))
+            stream_url = webcam_full_url(webcam_configstream_url)
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 
@@ -235,7 +235,7 @@ class WebcamStreamer:
             fps = parse_integer_or_none(webcam['streaming_params'].get('recode_fps'))
             if not fps:
                 _logger.warn('FPS not specified or invalid in streaming parameters. Getting the values from the source.')
-                fps = webcam_config.get('target_fps')
+                fps = webcam_config.target_fps
 
             bitrate = bitrate_for_dim(img_w, img_h)
             if not self.is_pro:
