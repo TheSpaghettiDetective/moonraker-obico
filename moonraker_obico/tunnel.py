@@ -5,6 +5,7 @@ import threading
 import time
 import os
 import zlib
+import json
 from urllib.parse import urljoin
 
 from .ws import WebSocketClient
@@ -23,7 +24,7 @@ class LocalTunnel(object):
     def __init__(self, tunnel_config, on_http_response, on_ws_message, sentry):
         self.base_url = ('https://' if tunnel_config.dest_is_ssl else 'http://') + \
                 tunnel_config.dest_host + \
-                '' if tunnel_config.dest_port == '80' else tunnel_config.dest_port
+                ('' if tunnel_config.dest_port == '80' else f':{tunnel_config.dest_port}')
         self.config = tunnel_config
         self.on_http_response = on_http_response
         self.on_ws_message = on_ws_message
@@ -82,7 +83,6 @@ class LocalTunnel(object):
     def send_http_to_local_v2(
             self, ref, method, path,
             params=None, data=None, headers=None, timeout=30):
-
         url = urljoin(self.base_url, path)
         headers['Accept-Encoding'] = 'identity'
 
@@ -108,14 +108,15 @@ class LocalTunnel(object):
 
                 cookies = resp.raw._original_response.msg.get_all('Set-Cookie')
 
-                compress = len(resp.content) >= COMPRESS_THRESHOLD
+                resp_content = self.post_process_response_content(path, resp.content)
+                compress = len(resp_content) >= COMPRESS_THRESHOLD
                 resp_data = {
                     'status': resp.status_code,
                     'compressed': compress,
                     'content': (
-                        zlib.compress(resp.content)
+                        zlib.compress(resp_content)
                         if compress
-                        else resp.content
+                        else resp_content
                     ),
                     'cookies': cookies,
                     'headers': {k: v for k, v in resp.headers.items()},
@@ -131,3 +132,14 @@ class LocalTunnel(object):
             {'http.tunnelv2': {'ref': ref, 'response': resp_data}},
             as_binary=True)
         return
+
+    def post_process_response_content(self, path, resp_content):
+        if path == '/config.json':
+            config_json = json.loads(resp_content.decode("utf8"))
+            if "instancesDB" in config_json:
+                # Mainsail uses instancesDB to decide if it should prompts users to select a non-default moonraker, which will almost certainly fail for Obico tunnel.
+                config_json["instancesDB"] = "moonraker"
+                config_json["instances"] = []
+                return json.dumps(config_json, indent=4).encode("utf8")
+
+        return resp_content

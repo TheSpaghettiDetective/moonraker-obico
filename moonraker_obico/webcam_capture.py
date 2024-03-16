@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import base64
 import io
 import re
 import os
@@ -24,7 +25,7 @@ def webcam_full_url(url):
 
     full_url = url.strip()
     if not urlparse(full_url).scheme:
-        full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+        full_url = "http://127.0.0.1/" + re.sub(r"^\/", "", full_url)
 
     return full_url
 
@@ -34,7 +35,7 @@ def webcam_full_url(url):
 def capture_jpeg(webcam_config, force_stream_url=False):
     MAX_JPEG_SIZE = 5000000
 
-    snapshot_url = webcam_full_url(webcam_config.get('snapshot_url'))
+    snapshot_url = webcam_full_url(webcam_config.snapshot_url)
     if snapshot_url and not force_stream_url:
         r = requests.get(snapshot_url, stream=True, timeout=5, verify=False)
         r.raise_for_status()
@@ -149,3 +150,13 @@ class JpegPoster:
                 self.post_pic_to_server(viewing_boost=False)
             except:
                 self.sentry.captureException()
+
+    def web_snapshot_request(self, url):
+        class SnapshotConfig:
+            def __init__(self, snapshot_url):
+                self.snapshot_url = snapshot_url
+                self.snapshot_ssl_validation = False
+
+        snapshot = capture_jpeg(SnapshotConfig(url))
+        base64_image = base64.b64encode(snapshot).decode('utf-8')
+        return {'pic': base64_image}, None

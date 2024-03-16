@@ -1,4 +1,5 @@
 import math
+import platform
 from typing import Optional, Dict, Any
 import threading
 import time
@@ -6,7 +7,7 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
-from .utils import  sanitize_filename
+from .utils import sanitize_filename
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -35,6 +36,7 @@ class PrinterState:
         self.obico_g_code_file_id = None
         self.transient_state = None
         self.thermal_presets = []
+        self.installed_plugins = []
         self.current_file_metadata = None
         self.webcams = None
 
@@ -117,7 +119,15 @@ class PrinterState:
                         name="moonraker_obico",
                         version=VERSION,
                     ),
+                    platform_uname=list(platform.uname()),
+                    installed_plugins=self.installed_plugins,
                 )
+                try:
+                    with open('/proc/device-tree/model', 'r') as file:
+                        model = file.read().strip()
+                    data['settings']['platform_uname'].append(model)
+                except:
+                    data['settings']['platform_uname'].append('')
             return data
 
     def to_status(self) -> Dict:
@@ -152,6 +162,7 @@ class PrinterState:
 
             completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
+
             return {
                 '_ts': time.time(),
                 'state': {
@@ -219,6 +230,11 @@ class PrinterState:
         total_layers = print_info.get('total_layer')
         current_layer = print_info.get('current_layer')
 
+        if not current_layer:
+            first_layer_macro_status = self.status.get('gcode_macro _OBICO_LAYER_CHANGE', {})
+            if first_layer_macro_status.get('current_layer', -1) > 0: # current_layer > 0 means macros is embedded in gcode
+                current_layer = first_layer_macro_status['current_layer']
+
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None
 
@@ -234,11 +250,11 @@ class PrinterState:
             layer_height = file_metadata.get('layer_height')
             layer_heights_in_metadata = layer_height is not None and first_layer_height is not None
 
-            if total_layers is None and layer_heights_in_metadata:
+            if total_layers is None and layer_heights_in_metadata and max_z:
                 total_layers = math.ceil(((max_z - first_layer_height) / layer_height + 1))
                 total_layers = max(total_layers, 0) # Apparently the previous calculation can result in negative number in some cases...
 
-            if current_layer is None and layer_heights_in_metadata and current_z is not None:
+            if current_layer is None and layer_heights_in_metadata and current_z and total_layers:
                 current_layer = math.ceil((current_z - first_layer_height) / layer_height + 1)
                 current_layer = min(total_layers, current_layer) # Apparently the previous calculation can result in current_layer > total_layers in some cases...
                 current_layer = max(current_layer, 0) # Apparently the previous calculation can result in negative number in some cases...

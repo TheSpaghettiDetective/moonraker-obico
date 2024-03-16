@@ -70,7 +70,20 @@ class WebcamConfig:
 
     @property
     def snapshot_url(self):
-        return self.webcam_full_url(self.webcam_config_section.get('snapshot_url') or self.moonraker_webcam_config.get('snapshot_url'))
+
+        def guess_snapshot_url_from_stream_url(stream_url):
+            if stream_url and '?action=stream' in stream_url:
+                return stream_url.replace('?action=stream', '?action=snapshot')
+            else:
+                return None
+
+        return self.webcam_full_url( \
+                self.webcam_config_section.get('snapshot_url') or \
+                self.moonraker_webcam_config.get('snapshot_url') or \
+                guess_snapshot_url_from_stream_url(
+                    self.webcam_config_section.get('stream_url') or self.moonraker_webcam_config.get('stream_url') # Fluidd flavor webcam settings doesn't have snapshot_url. Derive from stream_url instead
+                )
+            )
 
     @property
     def disable_video_streaming(self):
@@ -144,7 +157,7 @@ class WebcamConfig:
 
         full_url = url.strip()
         if not urlparse(full_url).scheme:
-            full_url = "http://localhost/" + re.sub(r"^\/", "", full_url)
+            full_url = "http://127.0.0.1/" + re.sub(r"^\/", "", full_url)
 
         return full_url
 
@@ -161,8 +174,10 @@ class Config:
         self._heater_mapping = {}
 
         self._config_path = config_path
+
+    def load_from_config_file(self):
         config = ConfigParser()
-        config.read([config_path, ])
+        config.read([self._config_path, ])
 
         self.moonraker = MoonrakerConfig(
             host=config.get(
@@ -233,7 +248,7 @@ class Config:
 
         self.sentry_opt = config.get(
             'misc', 'sentry_opt',
-            fallback='out'
+            fallback='in'
         )
 
         self._config = config

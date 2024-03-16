@@ -2,7 +2,9 @@
 
 set -e
 
-OBICO_DIR=$(realpath $(dirname "$0"))
+export PIP_DEFAULT_TIMEOUT=1200 # For slow network connection
+
+export OBICO_DIR=$(readlink -f $(dirname "$0"))
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
@@ -85,8 +87,10 @@ EOF
 ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
-  PKGLIST="python3 python3-pip python3-virtualenv ffmpeg janus"
-  sudo apt-get update --allow-releaseinfo-change
+  PKGLIST="python3 python3-pip python3-virtualenv ffmpeg"
+  # https://forum.openmediavault.org/index.php?thread/51664-http-apt-armbian-com-buster-release-does-not-have-a-release-file/
+  sudo sed -i '/^deb http:\/\/apt.armbian.com buster main buster-utils buster-desktop/s/^/# /' /etc/apt/sources.list.d/armbian.list 2>/dev/null || true
+  sudo apt-get --allow-releaseinfo-change -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update
   sudo apt-get install --yes ${PKGLIST}
   ensure_venv
   debug Running... "${OBICO_ENV}"/bin/pip3 install -q -r "${OBICO_DIR}"/requirements.txt
@@ -101,78 +105,6 @@ ensure_writtable() {
   fi
 }
 
-cfg_existed() {
-  if [ -f "${OBICO_CFG_FILE}" ] ; then
-    if [ $OVERWRITE_CONFIG = "y" ]; then
-      backup_config_file="${OBICO_CFG_FILE}-$(date '+%Y-%m-%d')"
-      echo -e "${yellow}\n!!!WARNING: Overwriting ${OBICO_CFG_FILE}..."
-      cp  ${OBICO_CFG_FILE} ${backup_config_file}
-      echo -e "Old file moved to ${backup_config_file}\n${default}"
-      return 1
-    else
-      return 0
-    fi
-  else
-    return 1
-  fi
-}
-
-create_config() {
-  if [ -z "${OBICO_SERVER}" ]; then
-    print_header " Obico Server URL "
-    cat <<EOF
-
-Now tell us what Obico Server you want to link your printer to.
-You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
-For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
-
-EOF
-    read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
-    echo ""
-    OBICO_SERVER="${user_input%/}"
-  fi
-
-  debug OBICO_SERVER: ${OBICO_SERVER}
-
-  report_status "Creating config file ${OBICO_CFG_FILE} ..."
-  cat <<EOF > "${OBICO_CFG_FILE}"
-[server]
-url = ${OBICO_SERVER}
-
-[moonraker]
-host = ${MOONRAKER_HOST}
-port = ${MOONRAKER_PORT}
-# api_key = <grab one or set trusted hosts in moonraker>
-
-[webcam]
-disable_video_streaming = False
-
-# CAUTION: Don't modify the settings below unless you know what you are doing
-#   In most cases webcam configuration will be automatically retrived from moonraker
-#
-# Lower target_fps if ffmpeg is using too much CPU. Capped at 25 for Pro users (including self-hosted) and 5 for Free users
-# target_fps = 25
-#
-# snapshot_url = http://127.0.0.1:8080/?action=snapshot
-# stream_url = http://127.0.0.1:8080/?action=stream
-# flip_h = False
-# flip_v = False
-# rotation = 0
-# aspect_ratio_169 = False
-
-[logging]
-path = ${OBICO_LOG_FILE}
-# level = INFO
-
-[tunnel]
-# CAUTION: Don't modify the settings below unless you know what you are doing
-# dest_host = 127.0.0.1
-# dest_port = 80
-# dest_is_ssl = False
-
-EOF
-}
-
 recreate_service() {
   sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
 
@@ -180,7 +112,7 @@ recreate_service() {
   sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
-Description=Obico for Moonraker
+Description=Moonraker-Obico
 After=network-online.target moonraker.service
 
 [Install]
@@ -197,27 +129,6 @@ EOF
 
   sudo systemctl enable "${OBICO_SERVICE_NAME}"
   sudo systemctl daemon-reload
-  report_status "Launching ${OBICO_SERVICE_NAME} service..."
-  sudo systemctl start "${OBICO_SERVICE_NAME}"
-}
-
-recreate_update_file() {
-  cat <<EOF > "${OBICO_UPDATE_FILE}"
-[update_manager ${OBICO_SERVICE_NAME}]
-type: git_repo
-path: ~/moonraker-obico
-origin: ${OBICO_REPO}
-env: ${OBICO_ENV}/bin/python
-requirements: requirements.txt
-install_script: install.sh
-managed_services:
-  ${OBICO_SERVICE_NAME}
-EOF
-
-  if ! grep -q "include moonraker-obico-update.cfg" "${MOONRAKER_CONFIG_FILE}" ; then
-    echo "" >> "${MOONRAKER_CONFIG_FILE}"
-    echo "[include moonraker-obico-update.cfg]" >> "${MOONRAKER_CONFIG_FILE}"
-	fi
 }
 
 update() {
@@ -226,34 +137,14 @@ update() {
 
 # Helper functions
 
-exit_on_error() {
-  oops
-  cat <<EOF
-
-The installation has run into an error:
-
-${red}${1}${default}
-
-Please fix the error above and re-run this setup script:
-
--------------------------------------------------------------------------------------------------
-cd ~/moonraker-obico
-./install.sh
--------------------------------------------------------------------------------------------------
-
-EOF
-  need_help
-  exit 1
-}
-
-unknown_error() {
-  exit_on_error "Installation interrupted by user or for unknown error."
-}
-
 uninstall() {
   cat <<EOF
 
-To uninstall Obico for Klipper, please run:
+To uninstall Moonraker-Obico, please
+
+1. Run these commands:
+
+--------------------------
 
 sudo systemctl stop "${OBICO_SERVICE_NAME}"
 sudo systemctl disable "${OBICO_SERVICE_NAME}"
@@ -262,6 +153,19 @@ sudo systemctl daemon-reload
 sudo systemctl reset-failed
 rm -rf ~/moonraker-obico
 rm -rf ~/moonraker-obico-env
+
+-------------------------
+
+
+2. Remove this line in "printer.cfg":
+
+[include moonraker_obico_macros.cfg]
+
+
+3. Remove this line in "moonraker.conf":
+
+[include moonraker-obico-update.cfg]
+
 
 EOF
 
@@ -333,7 +237,6 @@ ensure_writtable "${MOONRAKER_LOG_DIR}"
 
 [ -z "${OBICO_CFG_FILE}" ] && OBICO_CFG_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico.cfg"
 OBICO_UPDATE_FILE="${MOONRAKER_CONF_DIR}/moonraker-obico-update.cfg"
-OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico.log"
 OBICO_SERVICE_NAME="moonraker-obico${SUFFIX}"
 OBICO_LOG_FILE="${MOONRAKER_LOG_DIR}/moonraker-obico${SUFFIX}.log"
 
@@ -354,4 +257,8 @@ trap - INT
 if [ $SKIP_LINKING != "y" ]; then
   debug Running... "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n \"${SUFFIX:1}\"
   "${OBICO_DIR}/scripts/link.sh" -c "${OBICO_CFG_FILE}" -n "${SUFFIX:1}"
+else
+  report_status "Launching ${OBICO_SERVICE_NAME} service..."
+  sudo systemctl restart "${OBICO_SERVICE_NAME}"
 fi
+

@@ -15,8 +15,9 @@ import pathlib
 
 import requests  # type: ignore
 
+from moonraker_obico.nozzlecam import NozzleCam
 from .version import VERSION
-from .utils import SentryWrapper
+from .utils import SentryWrapper, run_in_thread
 from .webcam_capture import JpegPoster
 from .webcam_stream import WebcamStreamer
 from .logger import setup_logging
@@ -27,6 +28,7 @@ from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
 from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
+from .printer_discovery import PrinterDiscovery
 
 
 _logger = logging.getLogger('obico.app')
@@ -54,8 +56,8 @@ class App(object):
         self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
-        self.jpeg_poster = None
         self.webcam_streamer = None
+        self.target_jpeg_poster = None
         self.local_tunnel = None
         self.printer = None
         self.passthru_executor = None
@@ -63,6 +65,7 @@ class App(object):
         self.target_moonraker_api = None
         self.q = queue.Queue(maxsize=1000)
         self.target_file_operations = None
+        self.nozzlecam = None
 
     def push_event(self, event):
         if self.shutdown:
@@ -77,24 +80,37 @@ class App(object):
             return False
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
-    def wait_for_auth_token(self, args):
+    def wait_for_auth_token(self, config):
         while True:
-            config = Config(args.config_path)
-            if args.log_path:
-                config.logging.path = args.log_path
-            if args.debug:
-                config.logging.level = 'DEBUG'
-            setup_logging(config.logging)
-
             if config.server.auth_token:
                 break
 
             _logger.warning('auth_token not configured. Retry after 2s')
             time.sleep(2)
 
-        _logger.info(f'starting moonraker-obico (v{VERSION})')
         _logger.info('Fetching linked printer...')
-        linked_printer = ServerConn(config, None, None, None).get_linked_printer()
+        return ServerConn(config, None, None, None).get_linked_printer()
+
+    def start(self, args):
+        _logger.info(f'starting moonraker-obico (v{VERSION})')
+
+        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
+        # global _default_int_handler, _default_term_handler
+        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
+        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
+
+        config = Config(args.config_path)
+        config.load_from_config_file()
+        self.sentry = SentryWrapper(config=config)
+        setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
+
+        if not config.server.auth_token:
+            discovery = PrinterDiscovery(config, self.sentry)
+            discovery.start_and_block()
+            config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
+
+        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
+        linked_printer = self.wait_for_auth_token(config)
         _logger.info('Linked printer: {}'.format(linked_printer))
 
         self.model = App.Model(
@@ -103,23 +119,11 @@ class App(object):
             linked_printer=linked_printer,
             printer_state=PrinterState(config),
         )
-        self.sentry = SentryWrapper(config=config)
-
-    def start(self, args):
-        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
-        # global _default_int_handler, _default_term_handler
-        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
-        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
-
-        # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
-        self.wait_for_auth_token(args)
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
         self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
-        self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
-        self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
         self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model, self.sentry)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
@@ -131,37 +135,41 @@ class App(object):
             self.server_conn,
             self.sentry)
 
+        self.target_jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
+        self.target_file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry)
+        self.target__printer = Printer(self.model, self.moonrakerconn, self.server_conn)
+        self.target_moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry)
+        self.target_file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
+
         self.local_tunnel = LocalTunnel(
             tunnel_config=self.model.config.tunnel,
             on_http_response=self.server_conn.send_ws_msg_to_server,
             on_ws_message=self.server_conn.send_ws_msg_to_server,
             sentry=self.sentry)
 
+        run_in_thread(self.server_conn.start)
+        run_in_thread(self.moonrakerconn.start)
+        run_in_thread(self.webcam_streamer.start, self.model.linked_printer.get('cameras', []))
+
+        # If one of the connection is not ready, the init state won't be correctly set up in the obico server
+        while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):
+            _logger.warning('Connections not ready. Trying again in 1s...')
+            time.sleep(1)
+
         self.moonrakerconn.update_webcam_config_from_moonraker()
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
+        self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
-        thread = threading.Thread(target=self.server_conn.start)
-        thread.daemon = True
-        thread.start()
+        self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
+        run_in_thread(self.nozzlecam.start)
 
-        thread = threading.Thread(target=self.moonrakerconn.start)
-        thread.daemon = True
-        thread.start()
-
-        thread = threading.Thread(target=self.webcam_streamer.start, args=(self.model.linked_printer.get('cameras', []),))
-        thread.daemon = True
-        thread.start()
-
-        jpeg_post_thread = threading.Thread(target=self.jpeg_poster.pic_post_loop)
-        jpeg_post_thread.daemon = True
-        jpeg_post_thread.start()
-
-        thread = threading.Thread(target=self.event_loop)
-        thread.daemon = True
-        thread.start()
+        run_in_thread(self.target_jpeg_poster.pic_post_loop)
+        even_loop_thread = run_in_thread(self.event_loop)
 
         try:
-            thread.join()
+            # Save printer_id in the database so that the app can use it to send user to the correct tunnel authorization page
+            self.moonrakerconn.api_post('server/database/item', namespace='obico', key='printer_id', value=self.model.linked_printer.get('id'))
+            even_loop_thread.join()
         except Exception:
             self.sentry.captureException()
 
@@ -366,7 +374,7 @@ class App(object):
         if 'remote_status' in msg:
             self.model.remote_status.update(msg['remote_status'])
             if self.model.remote_status['viewing']:
-                self.jpeg_poster.need_viewing_boost.set()
+                self.target_jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
             _logger.debug(f'Received commands from server: {msg}')

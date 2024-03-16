@@ -117,7 +117,7 @@ class SentryWrapper:
         (os, _, ver, _, arch, _) = platform.uname()
         tags = dict(os=os, os_ver=ver, arch=arch)
         try:
-            v4l2 = run('v4l2-ctl --list-devices', stdout=Capture())
+            v4l2 = run('v4l2-ctl --list-devices 2>/dev/null', stdout=Capture())
             v4l2_out = ''.join(re.compile(r"^([^\t]+)", re.MULTILINE).findall(v4l2.stdout.text)).replace('\n', '')
             if v4l2_out:
                 tags['v4l2'] = v4l2_out
@@ -331,3 +331,23 @@ def parse_integer_or_none(s):
     except:
         return None
 
+
+def run_in_thread(long_running_func, *args, **kwargs):
+    daemon_thread = threading.Thread(target=long_running_func,  args=args, kwargs=kwargs)
+    daemon_thread.daemon = True  # Setting the thread as daemon
+    daemon_thread.start()
+    return daemon_thread
+
+def verify_link_code(config, code):
+    endpoint_prefix = config.server.canonical_endpoint_prefix()
+    url = f'{endpoint_prefix}/api/v1/octo/verify/'
+    resp = requests.post(url, params={'code': code.strip()})
+    _logger.debug(f'/api/v1/octo/verify/ responded: {resp}')
+
+    if resp and resp.ok:
+        data = resp.json()
+        _logger.debug(f'/api/v1/octo/verify/ response payload: {data}. Updating the auth_token in the config file')
+        auth_token = data['printer']['auth_token']
+        config.update_server_auth_token(auth_token)
+
+    return resp

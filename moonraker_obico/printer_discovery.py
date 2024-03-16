@@ -10,10 +10,13 @@ from requests.exceptions import HTTPError
 import random
 import string
 import flask
+from flask import request, jsonify
+from werkzeug.serving import make_server
 import argparse
+from queue import Queue
 
 from .version import VERSION
-from .utils import raise_for_status
+from .utils import raise_for_status, run_in_thread, verify_link_code, wait_for_port
 from .config import Config
 
 try:
@@ -25,55 +28,60 @@ except ImportError:
 
 import netaddr.ip
 
-_logger = logging.getLogger('octoprint.plugins.obico')
+_logger = logging.getLogger('obico.printer_discovery')
 
 # we count steps instead of tracking timestamps;
 # timestamps happened to be unreliable on rpi-s (NTP issue?)
-# printer remains discoverable for about 10 minutes, give or take.
-POLL_PERIOD = 5
-MAX_POLLS = 120
-TOTAL_STEPS = POLL_PERIOD * MAX_POLLS
-
+POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
+HANDSHAKE_PORT = random.randint(45000, 48000)
 
 class PrinterDiscovery(object):
 
-    def __init__(self, config,):
+    def __init__(self, config, sentry):
         self.config = config
+        self.sentry = sentry
         self.stopped = False
         self.device_secret = None
         self.static_info = {}
-        self.plugin = None
 
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
 
-    def start_and_block(self):
+    def start_and_block(self, max_polls=3600):
+        # printer remains discoverable for about 2 hours, give or take.
+        total_steps = POLL_PERIOD * max_polls
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
 
-        #try:
-        self._start()
-        #except Exception:
-            #self.stop()
+        try:
+            self._start(total_steps)
+        except Exception:
+            self.stop()
+            self.sentry.captureException()
 
         _logger.debug('printer_discovery quits')
 
-    def _start(self):
+    def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
-        steps_remaining = TOTAL_STEPS
 
-        host_or_ip = get_local_ip(self.plugin)
+        host_or_ip = get_local_ip()
+
+        sbc_model = ''
+        try:
+            sbc_mode = read('/proc/device-tree/model')[:253]
+        except:
+            pass
 
         self.static_info = dict(
             device_id=self.device_id,
             hostname=platform.uname()[1][:253],
             host_or_ip=host_or_ip,
-            port=get_port(self.plugin),
-            os=get_os(),
+            port=HANDSHAKE_PORT,
+            os=get_os()[:253],
             arch=platform.uname()[4][:253],
-            rpi_model=read('/proc/device-tree/model')[:253],
+            rpi_model=sbc_model,
             plugin_version=VERSION,
             agent='Obico for Klipper',
         )
@@ -83,10 +91,13 @@ class PrinterDiscovery(object):
             self.stop()
             return
 
+        run_in_thread(self.listen_to_handshake)
+
         while not self.stopped:
-            steps_remaining -= 1
-            if steps_remaining < 0:
-                _logger.info('printer_discovery got deadline reached')
+
+            self.config.load_from_config_file() # Refresh the config in case the token is obtained manually, or by the 6-digit method
+            if self.config.server.auth_token:
+                _logger.info('printer_discovery detected a configuration')
                 self.stop()
                 break
 
@@ -103,11 +114,21 @@ class PrinterDiscovery(object):
                     if 400 <= status_code < 500:
                         raise
 
+            steps_remaining -= 1
+            if steps_remaining < 0:
+                _logger.info('printer_discovery got deadline reached')
+                self.stop()
+                break
+
             time.sleep(1)
 
     def stop(self):
         self.stopped = True
         _logger.info('printer_discovery is stopping')
+        try:
+            requests.post(f'http://127.0.0.1:{HANDSHAKE_PORT}/shutdown')
+        except Exception:
+            pass
 
     def id_for_secret(self):
 
@@ -120,7 +141,6 @@ class PrinterDiscovery(object):
         if (
             self.device_secret and
             is_local_address(
-                self.plugin,
                 get_remote_address(flask.request)
             ) and
             flask.request.args.get('device_id') == self.device_id
@@ -134,12 +154,22 @@ class PrinterDiscovery(object):
                     mimetype='application/json'
                 )
             else:
-                resp = flask.Response(
-                    flask.render_template(
-                        'obico_discovery.jinja2',
-                        device_secret=self.device_secret
-                    )
-                )
+                # Create an HTML response from a string
+                resp_content = f"""
+<html>
+<body>
+<p>Handshake succeeded!</p>
+<p>You can close this window now.</p>
+<script>
+  console.log('called');
+  window.opener.postMessage({{"device_secret": "{self.device_secret}"}}, '*');
+</script>
+</body>
+</html>
+"""
+                resp = flask.make_response(resp_content)
+                resp.headers['Content-Type'] = 'text/html'
+
             resp.headers['Access-Control-Allow-Origin'] = '*'
             resp.headers['Access-Control-Allow-Methods'] =\
                 'GET, HEAD, OPTIONS'
@@ -150,7 +180,7 @@ class PrinterDiscovery(object):
     def _call(self):
         _logger.debug('printer_discovery calls server')
         data = self._collect_device_info()
-        endpoint = self.config.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
+        endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
         resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         resp.raise_for_status()
         data = resp.json()
@@ -162,43 +192,67 @@ class PrinterDiscovery(object):
         _logger.info('printer_discovery got incoming msg: {}'.format(msg))
 
         if msg['type'] == 'verify_code':
+            self.config.load_from_config_file() # Refresh the config in case the token is obtained manually, or by the 6-digit method
+            if self.config.server.auth_token:
+                _logger.info('printer_discovery detected a configuration')
+                self.stop()
+                return
+
             if (
                 not self.device_secret or
                 'secret' not in msg['data'] or
                 msg['data']['secret'] != self.device_secret
             ):
                 _logger.error('printer_discovery got unmatching secret')
+                self.sentry.captureMessage(
+                    'printer_discovery got unmatching secret',
+                    extra={'secret': self.device_secret, 'msg': msg}
+                )
                 self.stop()
                 return
 
             if msg['device_id'] != self.device_id:
                 _logger.error('printer_discovery got unmatching device_id')
+                self.sentry.captureMessage(
+                    'printer_discovery got unmatching device_id',
+                    extra={'device_id': self.device_id, 'msg': msg}
+                )
                 self.stop()
                 return
 
             code = msg['data']['code']
-            #result = verify_code(self.plugin, {'code': code})
+            verify_link_code(self.config, code)
+        else:
+            _logger.error('printer_discovery got unexpected message')
 
-#            if result['succeeded'] is True:
-#                _logger.info('printer_discovery verified code successfully')
-#                self.plugin._plugin_manager.send_plugin_message(
-#                    self.plugin._identifier, {'printer_autolinked': True})
-#            else:
-#                _logger.error('printer_discovery could not verify code')
-#                self.plugin.sentry.captureMessage(
-#                    'printer_discovery could not verify code',
-#                    extra={'code': code})
-#
-            self.stop()
-            return
-
-        _logger.error('printer_discovery got unexpected message')
+        self.stop()
+        return
 
     def _collect_device_info(self):
         info = dict(**self.static_info)
         info['printerprofile'] = 'Unknown'
         info['machine_type'] = 'Klipper'
         return info
+
+    def listen_to_handshake(self):
+        handshake_app = flask.Flask('handshake')
+
+        @handshake_app.route('/plugin/obico/grab-discovery-secret')
+        def grab_discovery_secret():
+            return self.id_for_secret()
+
+        @handshake_app.route('/shutdown', methods=['POST'])
+        def shutdown():
+            q.put('Apparently and understandably flask has made it extremely difficult for developers to shut it down.')
+            return 'Ok'
+
+        # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
+        q = Queue()
+        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
+        t = run_in_thread(handshake_server.serve_forever)
+        q.get(block=True)
+        handshake_server.shutdown()
+        t.join()
 
 
 def get_os():  # type: () -> str
@@ -233,19 +287,15 @@ def _get_ip_addr():  # type () -> str
     return primary_ip
 
 
-def get_port(plugin):
-    return 8623
-
-
-def get_local_ip(plugin=None):
+def get_local_ip():
     ip = _get_ip_addr()
-    if ip and is_local_address(plugin, ip):
+    if ip and is_local_address(ip):
         return ip
 
     return ''
 
 
-def is_local_address(plugin, address):
+def is_local_address(address):
     try:
         ip = netaddr.IPAddress(address)
         return ip.is_private() or ip.is_loopback()

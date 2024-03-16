@@ -6,7 +6,6 @@ from threading import Thread
 import backoff
 import json
 import socket
-import psutil
 
 from .utils import pi_version, to_unicode, is_port_open
 from .ws import WebSocketClient
@@ -50,14 +49,28 @@ class JanusConn:
                 if ld_lib_path:
                     env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
                 _logger.debug('Popen: {} {}'.format(env, janus_cmd))
-                janus_proc = psutil.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                janus_proc = subprocess.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 janus_proc.nice(20)
 
                 with open(self.janus_pid_file_path(), 'w') as pid_file:
                     pid_file.write(str(janus_proc.pid))
 
-                while True:
-                    line = to_unicode(janus_proc.stdout.readline(), errors='replace')
+                _logger.debug('Popen: {}'.format(setup_cmd))
+                setup_proc = subprocess.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+                returncode = setup_proc.wait()
+                (stdoutdata, stderrdata) = setup_proc.communicate()
+                if returncode != 0:
+                    raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
+
+            @backoff.on_exception(backoff.expo, Exception, max_tries=5)
+            def run_janus():
+                janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
+                _logger.debug('Popen: {}'.format(janus_cmd))
+                self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+                while not self.shutting_down:
+                    line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
                     if line:
                         _logger.debug('JANUS: ' + line.rstrip())
                     else:  # line == None means the process quits
@@ -83,8 +96,11 @@ class JanusConn:
         self.wait_for_janus()
         self.start_janus_ws()
 
+    def connected(self):
+        return self.janus_ws and self.janus_ws.connected()
+
     def pass_to_janus(self, msg):
-        if self.janus_ws and self.janus_ws.connected():
+        if self.connected():
             self.janus_ws.send(msg)
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=10)
@@ -113,7 +129,7 @@ class JanusConn:
             # Ensure the process is killed before launching a new one
             with open(self.janus_pid_file_path(), 'r') as pid_file:
                 janus_pid = int(pid_file.read())
-                process_to_kill = psutil.Process(janus_pid)
+                process_to_kill = subprocess.Process(janus_pid)
                 process_to_kill.terminate()
                 process_to_kill.wait(5)
         except Exception as e:

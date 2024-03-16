@@ -7,7 +7,6 @@ import time
 import sys
 from collections import deque
 from threading import Thread
-import psutil
 import backoff
 from urllib.error import URLError, HTTPError
 import requests
@@ -22,6 +21,7 @@ from .janus_config_builder import build_janus_config
 _logger = logging.getLogger('obico.webcam_stream')
 
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
+JANUS_MJPEG_DATA_PORT = 17740
 FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 
@@ -45,28 +45,6 @@ def bitrate_for_dim(img_w, img_h):
         return 2000*1000
     else:
         return 3000*1000
-
-def cpu_watch_dog(watched_process, max, interval, server_conn):
-
-    def watch_process_cpu(watched_process, max, interval, server_conn):
-        while True:
-            if not watched_process.is_running():
-                return
-
-            cpu_pct = watched_process.cpu_percent(interval=None)
-            if cpu_pct > max:
-                server_conn.post_printer_event_to_server(
-                    'moonraker-obico: Webcam Streaming Using Excessive CPU',
-                    'The webcam streaming uses excessive CPU. This may negatively impact your print quality, or cause webcam streaming issues.',
-                    event_class='WARNING',
-                    info_url='https://obico.io/docs/user-guides/webcam-streaming-resolution-framerate-klipper/',
-                )
-
-            time.sleep(interval)
-
-    watch_thread = Thread(target=watch_process_cpu, args=(watched_process, max, interval, server_conn))
-    watch_thread.daemon = True
-    watch_thread.start()
 
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
@@ -92,8 +70,8 @@ class WebcamStreamer:
         self.sentry = sentry
         self.ffmpeg_out_rtp_ports = set()
         self.mjpeg_sock_list = []
-
         self.janus = None
+        self.ffmpeg_proc = None
         self.shutting_down = False
 
     ## The methods that are available as passthru target
@@ -229,9 +207,9 @@ class WebcamStreamer:
             test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
             FNULL = open(os.devnull, 'w')
             for encoder in ['h264_omx', 'h264_v4l2m2m']:
-                ffmpeg_cmd = '{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://localhost:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder)
+                ffmpeg_cmd = '{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://127.0.0.1:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder)
                 _logger.debug('Popen: {}'.format(ffmpeg_cmd))
-                ffmpeg_test_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
+                ffmpeg_test_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
                 if ffmpeg_test_proc.wait() == 0:
                     if encoder == 'h264_omx':
                         return '-flags:v +global_header -c:v {} -bsf dump_extra'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
@@ -275,7 +253,7 @@ class WebcamStreamer:
 
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
-        ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
+        ffmpeg_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
         ffmpeg_proc.nice(20)
 
         self.ffmpeg_out_rtp_ports.add(str(rtp_port))
@@ -289,10 +267,8 @@ class WebcamStreamer:
             msg = 'STDOUT:\n{}\nSTDERR:\n{}\n'.format(stdoutdata, stderrdata)
             _logger.error(msg)
             raise Exception('ffmpeg failed! Exit code: {}'.format(returncode))
-        except psutil.TimeoutExpired:
+        except subprocess.TimeoutExpired:
            pass
-
-        cpu_watch_dog(ffmpeg_proc, max=80, interval=20, server_conn=self.server_conn)
 
         def monitor_ffmpeg_process(ffmpeg_proc, retry_after_quit=False):
             # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
@@ -307,14 +283,14 @@ class WebcamStreamer:
                     returncode = ffmpeg_proc.wait()
                     msg = 'STDERR:\n{}\n'.format('\n'.join(ring_buffer))
                     _logger.debug(msg)
-                    self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
 
                     if retry_after_quit:
                         ffmpeg_backoff.more('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
                         ring_buffer = deque(maxlen=50)
                         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
-                        ffmpeg_proc = psutil.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
+                        ffmpeg_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
                     else:
+                        self.sentry.captureMessage('ffmpeg exited un-expectedly. Exit code: {}'.format(returncode))
                         return
                 else:
                     ring_buffer.append(line)
@@ -381,7 +357,7 @@ class WebcamStreamer:
         with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
             try:
                 ffmpeg_pid = int(pid_file.read())
-                process_to_kill = psutil.Process(ffmpeg_pid)
+                process_to_kill = subprocess.Process(ffmpeg_pid)
                 process_to_kill.terminate()
                 process_to_kill.wait(5)
             except Exception as e:
