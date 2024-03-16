@@ -14,10 +14,8 @@ from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
 
 _logger = logging.getLogger('obico.janus')
 
-JANUS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
-CAMERA_STREAMER_RTSP_PORT = 8554
+# CAMERA_STREAMER_RTSP_PORT = 8554
 
 
 class JanusConn:

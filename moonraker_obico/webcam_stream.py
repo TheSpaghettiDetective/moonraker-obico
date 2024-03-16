@@ -254,7 +254,6 @@ class WebcamStreamer:
         _logger.debug('Popen: {}'.format(ffmpeg_cmd))
         FNULL = open(os.devnull, 'w')
         ffmpeg_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdin=subprocess.PIPE, stdout=FNULL, stderr=subprocess.PIPE)
-        ffmpeg_proc.nice(20)
 
         self.ffmpeg_out_rtp_ports.add(str(rtp_port))
 
