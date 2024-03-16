@@ -222,7 +222,7 @@ class WebcamStreamer:
             encoder = h264_encoder()
 
             webcam_config = webcam['moonraker_config']
-            stream_url = webcam_full_url(webcam_configstream_url)
+            stream_url = webcam_full_url(webcam_config.get('stream_url'))
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 
