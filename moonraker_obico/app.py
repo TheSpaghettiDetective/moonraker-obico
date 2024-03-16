@@ -149,7 +149,7 @@ class App(object):
 
         run_in_thread(self.server_conn.start)
         run_in_thread(self.moonrakerconn.start)
-        run_in_thread(self.webcam_streamer.start, self.model.linked_printer.get('cameras', []))
+        run_in_thread(self.webcam_streamer.start, self.model.linked_printer.get('webcams', []))
 
         # If one of the connection is not ready, the init state won't be correctly set up in the obico server
         while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):

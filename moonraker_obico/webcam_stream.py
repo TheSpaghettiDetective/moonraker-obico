@@ -93,7 +93,7 @@ class WebcamStreamer:
 
             self.webcams.append(webcam)
 
-        if not self.webcams: # Default webcam list if cameras are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
+        if not self.webcams: # Default webcam list if webcams are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
             self.webcams = self.default_webcams()
 
         self.assign_janus_params()
@@ -373,7 +373,7 @@ class WebcamStreamer:
             mjpeg_sock.close()
 
     def default_webcams(self):
-        # Default webcam list if cameras are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
+        # Default webcam list if webcams are not configured in Obico, for legacy users who haven't set up webcam in the new mechanism
 
         if self.app_config.webcam.disable_video_streaming:
             return []
