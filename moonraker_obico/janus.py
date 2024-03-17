@@ -7,7 +7,7 @@ import backoff
 import json
 import socket
 
-from .utils import pi_version, to_unicode, is_port_open, run_in_thread
+from .utils import pi_version, to_unicode, is_port_open, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
 from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
 #from .webcam_stream import WebcamStreamer
@@ -40,8 +40,6 @@ class JanusConn:
 
         def run_janus_forever():
             try:
-                self.kill_janus_if_running()
-
                 janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
                 env = {}
                 if ld_lib_path:
@@ -72,8 +70,8 @@ class JanusConn:
 #            stream_thread.daemon = True
 #            stream_thread.start()
 
+        self.kill_janus_if_running()
         run_in_thread(run_janus_forever)
-
         self.wait_for_janus()
         self.start_janus_ws()
 
@@ -84,10 +82,9 @@ class JanusConn:
         if self.connected():
             self.janus_ws.send(msg)
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=10)
     def wait_for_janus(self):
         time.sleep(0.2)
-        socket.socket().connect((JANUS_SERVER, self.janus_port))
+        wait_for_port(JANUS_SERVER, self.janus_port)
 
     def start_janus_ws(self):
 
@@ -110,6 +107,7 @@ class JanusConn:
             # Ensure the process is killed before launching a new one
             with open(self.janus_pid_file_path(), 'r') as pid_file:
                 subprocess.run(['kill', pid_file.read()], check=True)
+            wait_for_port_to_close(JANUS_SERVER, self.janus_port)
         except Exception as e:
             _logger.warning('Failed to shutdown Janus - ' + str(e))
 
