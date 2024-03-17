@@ -355,10 +355,7 @@ class WebcamStreamer:
         # Ensure all ffmpeg processes are killed
         with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
             try:
-                ffmpeg_pid = int(pid_file.read())
-                process_to_kill = subprocess.Process(ffmpeg_pid)
-                process_to_kill.terminate()
-                process_to_kill.wait(5)
+                subprocess.run(['kill', pid_file.read()], check=True)
             except Exception as e:
                 _logger.warning('Failed to shutdown ffmpeg - ' + str(e))
 
