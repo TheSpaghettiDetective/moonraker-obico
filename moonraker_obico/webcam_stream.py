@@ -381,6 +381,7 @@ class WebcamStreamer:
             return []
 
         # In legacy streaming, server gives no streaming parameters. Hence they will all be retrieved from moonraker_webcam. Make sure they are compatibile with the old behavior
+        # this is the only place where we use app_config.webcam
         moonraker_webcam.update(dict(
             stream_url=self.app_config.webcam.stream_url,
             snapshot_url=self.app_config.webcam.snapshot_url,

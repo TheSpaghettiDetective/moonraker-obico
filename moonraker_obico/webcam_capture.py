@@ -35,7 +35,7 @@ def webcam_full_url(url):
 def capture_jpeg(webcam_config, force_stream_url=False):
     MAX_JPEG_SIZE = 5000000
 
-    snapshot_url = webcam_full_url(webcam_config.snapshot_url)
+    snapshot_url = webcam_full_url(webcam_config.get('snapshot_url'))
     if snapshot_url and not force_stream_url:
         r = requests.get(snapshot_url, stream=True, timeout=5, verify=False)
         r.raise_for_status()
@@ -52,7 +52,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
         return response_content
 
     else:
-        stream_url = webcam_full_url(webcam_config.stream_url)
+        stream_url = webcam_full_url(webcam_config.get('stream_url'))
         if not stream_url:
             raise Exception('Invalid snapshot URL or stream URL in webcam setting: "{}"'.format(webcam_config))
 
