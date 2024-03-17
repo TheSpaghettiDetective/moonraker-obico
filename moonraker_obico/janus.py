@@ -7,7 +7,7 @@ import backoff
 import json
 import socket
 
-from .utils import pi_version, to_unicode, is_port_open, wait_for_port_to_close, run_in_thread
+from .utils import pi_version, to_unicode, is_port_open, wait_for_port, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
 from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
 #from .webcam_stream import WebcamStreamer
