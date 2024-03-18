@@ -91,11 +91,6 @@ class App(object):
     def start(self, args):
         _logger.info(f'starting moonraker-obico (v{VERSION})')
 
-        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
-        # global _default_int_handler, _default_term_handler
-        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
-        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
-
         config = Config(args.config_path)
         config.load_from_config_file()
         self.sentry = SentryWrapper(config=config)
@@ -143,7 +138,7 @@ class App(object):
 
         run_in_thread(self.server_conn.start)
         run_in_thread(self.moonrakerconn.start)
-        run_in_thread(self.webcam_streamer.start, self.model.linked_printer.get('webcams', []))
+        run_in_thread(self.webcam_streamer.start, self.server_conn.get_webcams(self.model.linked_printer.get('id')))
 
         # If one of the connection is not ready, the init state won't be correctly set up in the obico server
         while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):

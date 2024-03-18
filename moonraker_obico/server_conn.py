@@ -125,6 +125,14 @@ class ServerConn:
                 pass
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
+    def get_webcams(self, printer_id):
+        try:
+            resp = self.send_http_request('GET', f'/api/v1/octo/webcams/?printer_id={printer_id}', raise_exception=False)
+            _logger.info(f'Webcams: {resp.json()}')
+            return resp.json()['webcams']
+        except Exception as e:
+            _logger.warning('Failed /api/v1/octo/webcams/ api call. Maybe server version too old? - ' + str(e))
+            return []
 
     def send_http_request(self, method, uri, timeout=10, raise_exception=True, skip_debug_logging=False, **kwargs):
         endpoint = self.config.server.canonical_endpoint_prefix() + uri
