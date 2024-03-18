@@ -129,7 +129,7 @@ class ServerConn:
         try:
             resp = self.send_http_request('GET', f'/api/v1/octo/webcams/?printer_id={printer_id}', raise_exception=False)
             _logger.info(f'Webcams: {resp.json()}')
-            return resp.json()['webcams']
+            return resp.json()
         except Exception as e:
             _logger.warning('Failed /api/v1/octo/webcams/ api call. Maybe server version too old? - ' + str(e))
             return []
