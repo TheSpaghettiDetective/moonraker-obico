@@ -93,13 +93,12 @@ class WebcamConfig:
             _logger.warn(f'Invalid disable_video_streaming value. Using default.')
             return False
 
-    @property
-    def target_fps(self):
+    def get_target_fps(self, fallback_fps=25):
         try:
-            fps = float( self.webcam_config_section.get('target_fps') or self.moonraker_webcam_config.get('target_fps') )
+            fps = float( self.webcam_config_section.get('target_fps'))
         except:
-            fps = 25
-        return min(fps, 25)
+            fps = fallback_fps
+        return min(fps, 30)
 
     @property
     def snapshot_ssl_validation(self):

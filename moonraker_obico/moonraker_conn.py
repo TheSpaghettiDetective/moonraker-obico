@@ -141,7 +141,6 @@ class MoonrakerConn:
             if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
                 _logger.debug(f'Found config in Moonraker webcams API: {result}')
                 webcam_configs = [ dict(
-                            target_fps = cfg.get('target_fps', 25),
                             snapshot_url = cfg.get('snapshot_url', None),
                             stream_url = cfg.get('stream_url', None),
                             flip_h = cfg.get('flip_horizontal', False),
@@ -154,7 +153,6 @@ class MoonrakerConn:
 
                 # In case of WebRTC webcam
                 webcam_configs = [ dict(
-                            target_fps = cfg.get('target_fps', 25),
                             snapshot_url = cfg.get('snapshot_url', None),
                             stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
                             flip_h = cfg.get('flip_horizontal', False),
@@ -168,7 +166,6 @@ class MoonrakerConn:
             if result:
                 _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
                 return [ dict(
-                            target_fps = cfg.get('targetFps', 25),
                             snapshot_url = cfg.get('urlSnapshot', None),
                             stream_url = cfg.get('urlStream', None),
                             flip_h = cfg.get('flipX', False),
@@ -181,7 +178,6 @@ class MoonrakerConn:
             if result:
                 _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
                 return [ dict(
-                            target_fps = cfg.get('target_fps', 25),  # TODO Verify the key name in fluidd for FPS
                             stream_url = cfg.get('url', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
