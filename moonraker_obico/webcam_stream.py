@@ -58,7 +58,7 @@ class WebcamStreamer:
 
     @backoff.on_exception(backoff.expo, Exception)
     def mjpeg_loop(self):
-        min_interval_btw_frames = 1.0 / self.webcam_config.get_target_fps(fallback_fps=3)
+        min_interval_btw_frames = 1.0 / self.config.webcam.get_target_fps(fallback_fps=3)
         bandwidth_throttle = 0.004
 
         self.mjpeg_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
