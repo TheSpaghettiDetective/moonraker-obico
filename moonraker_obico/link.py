@@ -133,7 +133,7 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 
         try:
             if debug:
-                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{self.config.server.canonical_endpoint_prefix()}"')
+                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{config.server.canonical_endpoint_prefix()}"')
 
             resp = verify_link_code(config, code)
 
@@ -143,9 +143,10 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
             resp.raise_for_status()
             print('\n###### Successfully linked to your Obico Server account!')
             break
-        except Exception:
-            print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
-            if not debug:
-                print('If you keep getting this error, press ctrl-c to abort it and then run the following command to debug:')
-                print(CYAN + f'PYTHONPATH={os.environ.get("PYTHONPATH")} {os.environ.get("OBICO_ENV")}/bin/python3 -m moonraker_obico.link {" ".join(sys.argv[1:])} -d' + NC)
+        except Exception as e:
+            if debug:
+                print('## DEBUG: Server API error: ', str(e))
 
+            print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
+            print('If you keep getting this error, press ctrl-c to abort it and then run the following command to debug:')
+            print(CYAN + f'PYTHONPATH={os.environ.get("PYTHONPATH")} {os.environ.get("OBICO_ENV")}/bin/python3 -m moonraker_obico.link {" ".join(sys.argv[1:])} -d' + NC)
