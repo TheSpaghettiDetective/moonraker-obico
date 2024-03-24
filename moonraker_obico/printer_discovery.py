@@ -35,7 +35,7 @@ _logger = logging.getLogger('obico.printer_discovery')
 POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
-HANDSHAKE_PORT = random.randint(45000, 48000)
+HANDSHAKE_PORT = 46793
 
 class PrinterDiscovery(object):
 
@@ -49,8 +49,8 @@ class PrinterDiscovery(object):
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
 
-    def start_and_block(self, max_polls=3600):
-        # printer remains discoverable for about 2 hours, give or take.
+    def start_and_block(self, max_polls=7200):
+        # printer remains discoverable for about 4 hours, give or take.
         total_steps = POLL_PERIOD * max_polls
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
@@ -103,7 +103,7 @@ class PrinterDiscovery(object):
 
             try:
                 if steps_remaining % POLL_PERIOD == 0:
-                    self._call()
+                    self.announce_unlinked_status()
             except (IOError, OSError) as ex:
                 # trying to catch only network related errors here,
                 # all other errors must bubble up.
@@ -129,6 +129,46 @@ class PrinterDiscovery(object):
             requests.post(f'http://127.0.0.1:{HANDSHAKE_PORT}/shutdown')
         except Exception:
             pass
+
+    def announce_unlinked_status(self):
+        _logger.debug('printer_discovery calls server')
+        data = self._collect_device_info()
+        endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
+        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
+        resp.raise_for_status()
+        self._process_unlinked_api_response(resp)
+
+    def _collect_device_info(self):
+        info = dict(**self.static_info)
+        info['printerprofile'] = 'Unknown'
+        info['machine_type'] = 'Klipper'
+        return info
+
+    def listen_to_handshake(self):
+        handshake_app = flask.Flask('handshake')
+
+        @handshake_app.route('/plugin/obico/grab-discovery-secret')
+        def grab_discovery_secret():
+            return self.id_for_secret()
+
+        @handshake_app.route('/shutdown', methods=['POST'])
+        def shutdown():
+            q.put('Apparently and understandably flask has made it extremely difficult for developers to shut it down.')
+            return 'Ok'
+
+        # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
+        q = Queue()
+        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
+        t = run_in_thread(handshake_server.serve_forever)
+        q.get(block=True)
+        handshake_server.shutdown()
+        t.join()
+
+
+    # A very convoluted way to
+    #   1. verify the app is local
+    #   2. give the app the secret to exchange for verification code,
+    #   3. use verification code to exchange for auth token
 
     def id_for_secret(self):
 
@@ -177,17 +217,16 @@ class PrinterDiscovery(object):
 
         return flask.abort(403)
 
-    def _call(self):
-        _logger.debug('printer_discovery calls server')
-        data = self._collect_device_info()
-        endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
-        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
-        resp.raise_for_status()
+    def _process_unlinked_api_response(self, resp):
         data = resp.json()
-        for msg in data['messages']:
-            self._process_message(msg)
 
-    def _process_message(self, msg):
+        # The response message was a very over-engineered way to send a single message. It's a list of one message.
+        # The morale of the story is: don't over-engineer.
+        if 'messages' not in data or not isinstance(data['messages'], list) or len(data['messages']) != 1:
+            return
+
+        msg = data['messages'][0]
+
         # Stops after first verify attempt
         _logger.info('printer_discovery got incoming msg: {}'.format(msg))
 
@@ -227,32 +266,6 @@ class PrinterDiscovery(object):
 
         self.stop()
         return
-
-    def _collect_device_info(self):
-        info = dict(**self.static_info)
-        info['printerprofile'] = 'Unknown'
-        info['machine_type'] = 'Klipper'
-        return info
-
-    def listen_to_handshake(self):
-        handshake_app = flask.Flask('handshake')
-
-        @handshake_app.route('/plugin/obico/grab-discovery-secret')
-        def grab_discovery_secret():
-            return self.id_for_secret()
-
-        @handshake_app.route('/shutdown', methods=['POST'])
-        def shutdown():
-            q.put('Apparently and understandably flask has made it extremely difficult for developers to shut it down.')
-            return 'Ok'
-
-        # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
-        q = Queue()
-        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
-        t = run_in_thread(handshake_server.serve_forever)
-        q.get(block=True)
-        handshake_server.shutdown()
-        t.join()
 
 
 def get_os():  # type: () -> str
@@ -305,6 +318,7 @@ def is_local_address(address):
                 address, exc)
         )
         return False
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
