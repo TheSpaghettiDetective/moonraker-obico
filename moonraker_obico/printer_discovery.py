@@ -103,7 +103,7 @@ class PrinterDiscovery(object):
                 break
 
             try:
-                if steps_remaining % POLL_PERIkOD == 0:
+                if steps_remaining % POLL_PERIOD == 0:
                     resp = self.announce_unlinked_status()
                     resp.raise_for_status()
 
