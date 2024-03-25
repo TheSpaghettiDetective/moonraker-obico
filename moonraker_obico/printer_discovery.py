@@ -43,11 +43,12 @@ class PrinterDiscovery(object):
         self.config = config
         self.sentry = sentry
         self.stopped = False
-        self.device_secret = None
         self.static_info = {}
 
+        # The states for auto discovery handshake
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
+        self.device_secret = None
 
     def start_and_block(self, max_polls=7200):
         # printer remains discoverable for about 4 hours, give or take.
@@ -102,8 +103,13 @@ class PrinterDiscovery(object):
                 break
 
             try:
-                if steps_remaining % POLL_PERIOD == 0:
-                    self.announce_unlinked_status()
+                if steps_remaining % POLL_PERIkOD == 0:
+                    resp = self.announce_unlinked_status()
+                    resp.raise_for_status()
+
+                    # Auto discovery handshake will result in a message from one of the calls.
+                    self._process_unlinked_api_response(resp)
+
             except (IOError, OSError) as ex:
                 # trying to catch only network related errors here,
                 # all other errors must bubble up.
@@ -134,9 +140,7 @@ class PrinterDiscovery(object):
         _logger.debug('printer_discovery calls server')
         data = self._collect_device_info()
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
-        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
-        resp.raise_for_status()
-        self._process_unlinked_api_response(resp)
+        return requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
 
     def _collect_device_info(self):
         info = dict(**self.static_info)
