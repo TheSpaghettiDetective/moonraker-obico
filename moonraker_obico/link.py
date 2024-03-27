@@ -7,7 +7,7 @@ import os
 import time
 import select
 
-from .utils import raise_for_status, run_in_thread, verify_link_code, SentryWrapper
+from .utils import raise_for_status, run_in_thread, verify_link_code, fetch_auth_token_and_otp, SentryWrapper
 from .config import Config
 from .printer_discovery import PrinterDiscovery
 
@@ -125,6 +125,15 @@ in the Obico mobile or web app, and enter the code below.
 
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 """)
+
+    try:
+        resp = fetch_auth_token_and_otp(config, None)
+        if resp.ok:
+                print(f'\n you otp code  is "{resp.json()["otp"]}" \n')
+                        
+            
+    except Exception:
+        pass
 
     while True:
         code = input('\nEnter verification code (or leave it empty to abort): ')
