@@ -249,6 +249,14 @@ class Config:
             'misc', 'sentry_opt',
             fallback='in'
         )
+        self.brand_id = config.get(
+            'misc', 'brand_id',
+            fallback=''
+        )
+        self.model_id = config.get(
+            'misc', 'model_id',
+            fallback=''
+        )
 
         self._config = config
 

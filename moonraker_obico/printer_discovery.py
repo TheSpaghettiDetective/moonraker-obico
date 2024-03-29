@@ -83,6 +83,8 @@ class PrinterDiscovery(object):
             os=get_os()[:253],
             arch=platform.uname()[4][:253],
             rpi_model=sbc_model,
+            brand_id=self.config.brand_id,
+            model_id=self.config.model_id,
             plugin_version=VERSION,
             agent='Obico for Klipper',
         )
