@@ -113,7 +113,7 @@ class PrinterDiscovery(object):
                     resp.raise_for_status()
                     data = resp.json()
 
-                    if self._process_one_time_passcode_response(data): # Verify. Stop discovery process
+                    if self._process_one_time_passcode_response(data): # Verified. Stop discovery process
                         self.stop()
                         break
 
@@ -181,6 +181,10 @@ class PrinterDiscovery(object):
         handshake_server.shutdown()
         t.join()
 
+    def _set_one_time_passcode(self, code):
+        self.one_time_passcode = code
+        if self.moonraker_conn.macro_is_configured('OBICO_CONNECTION'):
+            self.moonraker_conn.set_macro_variable('OBICO_CONNECTION', 'one_time_passcode', code)
 
     # Return: True: one time passcode has a match and verified
     def _process_one_time_passcode_response(self, data):
@@ -191,13 +195,13 @@ class PrinterDiscovery(object):
         verification_code = data['verification_code']
         if verification_code != '': # Server tells us we got a match for one time passcode
             verify_link_code(self.config, verification_code)
-            self.one_time_passcode = ''
+            self._set_one_time_passcode('')
             return True
 
         new_one_time_passcode = data['one_time_passcode']
         if self.one_time_passcode != new_one_time_passcode:
             print(f'New one time passcode: {new_one_time_passcode}')
-            self.one_time_passcode = new_one_time_passcode
+            self._set_one_time_passcode(new_one_time_passcode)
 
         return False
 
