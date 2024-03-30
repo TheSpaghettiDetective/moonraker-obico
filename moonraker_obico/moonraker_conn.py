@@ -210,13 +210,8 @@ class MoonrakerConn:
         except:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
-    def initialize_layer_change_macro(self, **kwargs):
-        macro_is_configured = any('gcode_macro _obico_layer_change' in item.lower() for item in self.subscribed_objects)
-        if not macro_is_configured:
-            return
-
-        for key, value in kwargs.items():
-            self.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)
+    def macro_is_configured(self, macro_name):
+        return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.subscribed_objects)
 
     ## WebSocket part
 
