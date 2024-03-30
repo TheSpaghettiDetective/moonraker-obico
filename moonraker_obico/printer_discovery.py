@@ -45,6 +45,9 @@ class PrinterDiscovery(object):
         self.stopped = False
         self.static_info = {}
 
+        # One time passcode to share between the plugin and the server
+        self.one_time_passcode = ''
+
         # The states for auto discovery handshake
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
@@ -108,9 +111,14 @@ class PrinterDiscovery(object):
                 if steps_remaining % POLL_PERIOD == 0:
                     resp = self.announce_unlinked_status()
                     resp.raise_for_status()
+                    data = resp.json()
+
+                    if self._process_one_time_passcode_response(data): # Verify. Stop discovery process
+                        self.stop()
+                        break
 
                     # Auto discovery handshake will result in a message from one of the calls.
-                    self._process_unlinked_api_response(resp)
+                    self._process_unlinked_api_response(data)
 
             except (IOError, OSError) as ex:
                 # trying to catch only network related errors here,
@@ -141,6 +149,9 @@ class PrinterDiscovery(object):
     def announce_unlinked_status(self):
         _logger.debug('printer_discovery calls server')
         data = self._collect_device_info()
+
+        data['one_time_passcode'] = self.one_time_passcode
+
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
         return requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
 
@@ -170,6 +181,25 @@ class PrinterDiscovery(object):
         handshake_server.shutdown()
         t.join()
 
+
+    # Return: True: one time passcode has a match and verified
+    def _process_one_time_passcode_response(self, data):
+        if 'one_time_passcode' not in data or 'verification_code' not in data:
+            _logger.warning('No one_time_passcode or verification_code in response. Maybe old server version?')
+            return False
+
+        verification_code = data['verification_code']
+        if verification_code != '': # Server tells us we got a match for one time passcode
+            verify_link_code(self.config, verification_code)
+            self.one_time_passcode = ''
+            return True
+
+        new_one_time_passcode = data['one_time_passcode']
+        if self.one_time_passcode != new_one_time_passcode:
+            print(f'New one time passcode: {new_one_time_passcode}')
+            self.one_time_passcode = new_one_time_passcode
+
+        return False
 
     # A very convoluted way to
     #   1. verify the app is local
@@ -223,9 +253,7 @@ class PrinterDiscovery(object):
 
         return flask.abort(403)
 
-    def _process_unlinked_api_response(self, resp):
-        data = resp.json()
-
+    def _process_unlinked_api_response(self, data):
         # The response message was a very over-engineered way to send a single message. It's a list of one message.
         # The morale of the story is: don't over-engineer.
         if 'messages' not in data or not isinstance(data['messages'], list) or len(data['messages']) != 1:
