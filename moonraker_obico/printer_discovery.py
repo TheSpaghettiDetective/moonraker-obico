@@ -183,8 +183,8 @@ class PrinterDiscovery(object):
 
     def _set_one_time_passcode(self, code):
         self.one_time_passcode = code
-        if self.moonraker_conn.macro_is_configured('OBICO_CONNECTION'):
-            self.moonraker_conn.set_macro_variable('OBICO_CONNECTION', 'one_time_passcode', code)
+        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', code)
 
     # Return: True: one time passcode has a match and verified
     def _process_one_time_passcode_response(self, data):
