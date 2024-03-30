@@ -18,6 +18,7 @@ from queue import Queue
 from .version import VERSION
 from .utils import raise_for_status, run_in_thread, verify_link_code, wait_for_port
 from .config import Config
+from .moonraker_conn import MoonrakerConn
 
 try:
     from secrets import token_hex
@@ -42,6 +43,7 @@ class PrinterDiscovery(object):
     def __init__(self, config, sentry):
         self.config = config
         self.sentry = sentry
+        self.moonraker_conn = MoonrakerConn(self.config, self.sentry, None,)
         self.stopped = False
         self.static_info = {}
 
