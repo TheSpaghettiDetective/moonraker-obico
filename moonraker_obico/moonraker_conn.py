@@ -47,7 +47,7 @@ class MoonrakerConn:
         self.moonraker_state_requested_ts = 0
         self.request_callbacks = OrderedDict()
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
-        self.subscribed_objects = []
+        self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
 
     ## REST API part
 
@@ -211,7 +211,7 @@ class MoonrakerConn:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
     def macro_is_configured(self, macro_name):
-        return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.subscribed_objects)
+        return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
 
     ## WebSocket part
 
@@ -345,15 +345,14 @@ class MoonrakerConn:
             'gcode_macro _OBICO_LAYER_CHANGE': None,
             'fan': ('speed'),
         }
-        available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
-        self.subscribed_objects = {
-            key: value for key, value in subscribe_objects.items() if key in available_printer_objects
+        subscribed_objects = {
+            key: value for key, value in subscribe_objects.items() if key in self.available_printer_objects
         }
 
-        _logger.debug(f'Subscribing to objects {self.subscribed_objects}')
-        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=self.subscribed_objects))
+        _logger.debug(f'Subscribing to objects {subscribed_objects}')
+        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribed_objects))
 
-        if not 'gcode_macro _OBICO_LAYER_CHANGE' in self.subscribed_objects:
+        if not 'gcode_macro _OBICO_LAYER_CHANGE' in subscribed_objects:
             run_in_thread(self._setup_include_cfgs)
 
     def request_status_update(self, objects=None):
