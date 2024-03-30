@@ -61,6 +61,9 @@ class PrinterDiscovery(object):
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
 
+        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', False)
+
         try:
             self._start(total_steps)
         except Exception:
