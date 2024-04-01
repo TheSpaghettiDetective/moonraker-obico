@@ -6,6 +6,7 @@ import io
 import json
 import socket
 import requests
+from threading import Lock
 from requests.exceptions import HTTPError
 import random
 import string
@@ -49,6 +50,7 @@ class PrinterDiscovery(object):
 
         # One time passcode to share between the plugin and the server
         self.one_time_passcode = ''
+        self.one_time_passcode_lock = Lock()    # Make sure it's thread safe
 
         # The states for auto discovery handshake
         # device_id is different every time plugin starts
@@ -71,6 +73,17 @@ class PrinterDiscovery(object):
             self.sentry.captureException()
 
         _logger.debug('printer_discovery quits')
+
+    def get_one_time_passcode(self):
+        with self.one_time_passcode_lock:
+            return self.one_time_passcode
+
+    def set_one_time_passcode(self, code):
+        with self.one_time_passcode_lock:
+            self.one_time_passcode = code
+
+        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
 
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
@@ -155,7 +168,7 @@ class PrinterDiscovery(object):
         _logger.debug('printer_discovery calls server')
         data = self._collect_device_info()
 
-        data['one_time_passcode'] = self.one_time_passcode
+        data['one_time_passcode'] = self.get_one_time_passcode()
 
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
         return requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
@@ -186,11 +199,6 @@ class PrinterDiscovery(object):
         handshake_server.shutdown()
         t.join()
 
-    def _set_one_time_passcode(self, code):
-        self.one_time_passcode = code
-        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
-
     # Return: True: one time passcode has a match and verified
     def _process_one_time_passcode_response(self, data):
         if 'one_time_passcode' not in data or 'verification_code' not in data:
@@ -200,13 +208,12 @@ class PrinterDiscovery(object):
         verification_code = data['verification_code']
         if verification_code != '': # Server tells us we got a match for one time passcode
             verify_link_code(self.config, verification_code)
-            self._set_one_time_passcode('')
+            self.set_one_time_passcode('')
             return True
 
         new_one_time_passcode = data['one_time_passcode']
-        if self.one_time_passcode != new_one_time_passcode:
-            print(f'New one time passcode: {new_one_time_passcode}')
-            self._set_one_time_passcode(new_one_time_passcode)
+        if self.get_one_time_passcode() != new_one_time_passcode:
+            self.set_one_time_passcode(new_one_time_passcode)
 
         return False
 
@@ -361,16 +368,3 @@ def is_local_address(address):
                 address, exc)
         )
         return False
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-c', '--config', dest='config_path', required=True,
-        help='Path to config file (ini)'
-    )
-    args = parser.parse_args()
-    config = Config(args.config_path)
-
-    discovery = PrinterDiscovery(config=config.server)
-    discovery.start_and_block()

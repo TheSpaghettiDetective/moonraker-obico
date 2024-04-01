@@ -68,12 +68,15 @@ To abort, simply press 'Enter'.
             spinner = ["|", "/", "-", "\\"]
             spinner_idx = 0
 
+            old_version_warning_counter = int(10 / 0.1) # 10 seconds
             while discoverable:
-                sys.stdout.write(spinner[spinner_idx] + "\r")
+                prompt = "Scanning the local network" if old_version_warning_counter > 0 else "If the Obico app version is older than 2.0.0, press 'Enter' to switch to using 6-digit verification code"
+                sys.stdout.write(prompt + "  " + spinner[spinner_idx] + "\r")
                 sys.stdout.flush()
                 spinner_idx = (spinner_idx + 1) % 4
 
                 rlist, _, _ = select.select([sys.stdin], [], [], 0.1)  # Poll with a timeout of 0.1 seconds
+                old_version_warning_counter -= 1
                 if sys.stdin in rlist:
                     sys.stdin.readline()
                     break
@@ -89,6 +92,22 @@ To abort, simply press 'Enter'.
             finally:
                 discoverable = False
 
+        def wait_for_one_time_passcode(timeout=10):
+            global discovery
+            for _ in range(int(timeout / 0.1)):
+                one_time_passcode = discovery.get_one_time_passcode()
+                if one_time_passcode:
+                    break
+
+                time.sleep(0.1)
+            return one_time_passcode
+
+
+        logging.getLogger('werkzeug').setLevel(logging.ERROR)
+        discovery_thread = run_in_thread(run_discovery)
+
+        one_time_passcode = wait_for_one_time_passcode(timeout=5)
+
         print("""
 Now open the Obico mobile or web app. If your phone or computer is connected to the
 same network as your printer, you will see this printer listed in the app. Click
@@ -96,11 +115,11 @@ same network as your printer, you will see this printer listed in the app. Click
 
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 
-Waiting for Obico app to link this printer automatically...  press 'Enter' if you
-want to link your printer using a 6-digit verification code instead.
-""")
-        logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        discovery_thread = run_in_thread(run_discovery)
+Your printer is now discoverable by the Obico app on the same network.""")
+        if one_time_passcode:
+            print(f"""If you can't find the printer in the app, switch to manual linking and enter:  {CYAN}{one_time_passcode}{NC}
+            """)
+
         while discoverable:
             spin()
             if discoverable:
