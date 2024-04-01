@@ -104,6 +104,11 @@ class App(object):
         self.sentry = SentryWrapper(config=config)
         setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
 
+        self.moonrakerconn = MoonrakerConn(config, self.sentry, self.push_event,)
+
+        # Blocking call. When continued, moonrakeconn is guaranteed to be properly configured. Also config object is updated with moonraker objects
+        self.moonrakerconn.block_until_klippy_ready()
+
         if not config.server.auth_token:
             discovery = PrinterDiscovery(config, self.sentry)
             discovery.start_and_block()
@@ -123,7 +128,7 @@ class App(object):
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
-        self.moonrakerconn = MoonrakerConn(self.model.config, self.sentry, self.push_event,)
+
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.janus = JanusConn(self.model, self.server_conn, self.sentry)
         self.target_jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
@@ -139,14 +144,13 @@ class App(object):
             sentry=self.sentry)
 
         run_in_thread(self.server_conn.start)
-        run_in_thread(self.moonrakerconn.start)
 
-        # If one of the connection is not ready, the init state won't be correctly set up in the obico server
-        while not (self.server_conn.ss and self.server_conn.ss.connected() and self.moonrakerconn.conn and self.moonrakerconn.conn.connected()):
+        while not (self.server_conn.ss and self.server_conn.ss.connected()):
             _logger.warning('Connections not ready. Trying again in 1s...')
             time.sleep(1)
 
-        self.moonrakerconn.update_webcam_config_from_moonraker()
+        ### Anything happens after this point can assume both server and moonraker connections are ready
+
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
         self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
