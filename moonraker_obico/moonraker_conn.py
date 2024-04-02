@@ -59,7 +59,8 @@ class MoonrakerConn:
 
         self.app_config.update_moonraker_objects(self)
         self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
-
+        time.sleep(10)  # Wait for the initial status update to be processed
+        logging.debug(f'Exiting block_until_klippy_ready, available_printer_objects: {self.available_printer_objects}')
 
 
     def _start(self) -> None:
@@ -174,6 +175,7 @@ class MoonrakerConn:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
     def macro_is_configured(self, macro_name):
+        logging.debug(f'Entering macro_is_configured, available_printer_objects: {self.available_printer_objects}')
         return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
 
     ## WebSocket part

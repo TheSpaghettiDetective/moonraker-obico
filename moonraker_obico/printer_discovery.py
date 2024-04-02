@@ -78,12 +78,13 @@ class PrinterDiscovery(object):
         with self.one_time_passcode_lock:
             return self.one_time_passcode
 
-    def set_one_time_passcode(self, code):
+    def set_one_time_passcode(self, code, passlink):
         with self.one_time_passcode_lock:
             self.one_time_passcode = code
 
         if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
             self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
+            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{passlink}"\'')
 
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
@@ -208,12 +209,12 @@ class PrinterDiscovery(object):
         verification_code = data['verification_code']
         if verification_code != '': # Server tells us we got a match for one time passcode
             verify_link_code(self.config, verification_code)
-            self.set_one_time_passcode('')
+            self.set_one_time_passcode('', '')
             return True
 
         new_one_time_passcode = data['one_time_passcode']
         if self.get_one_time_passcode() != new_one_time_passcode:
-            self.set_one_time_passcode(new_one_time_passcode)
+            self.set_one_time_passcode(new_one_time_passcode, data['one_time_passlink'])
 
         return False
 
