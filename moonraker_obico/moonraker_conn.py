@@ -53,7 +53,6 @@ class MoonrakerConn:
         self.available_printer_objects = []
         self.remote_event_handlers = {}
 
-
     def block_until_klippy_ready(self):
         run_in_thread(self._start)
         self.klippy_ready.wait()
@@ -63,9 +62,6 @@ class MoonrakerConn:
         self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
         self._request_subscribe(self.available_printer_objects)
         self.app_config.update_moonraker_objects(self)
-        time.sleep(10)  # Wait for the initial status update to be processed
-        logging.debug(f'Exiting block_until_klippy_ready, available_printer_objects: {self.available_printer_objects}')
-
 
     def add_event_handler(self, event_name, handler):
         self.remote_event_handlers[event_name] = handler
@@ -196,7 +192,6 @@ class MoonrakerConn:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
     def macro_is_configured(self, macro_name):
-        logging.debug(f'Entering macro_is_configured, available_printer_objects: {self.available_printer_objects}')
         return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
 
     ## WebSocket part
@@ -276,9 +271,8 @@ class MoonrakerConn:
                 self.sentry.captureException()
 
     def push_event(self, event):
-        if self.shutdown:
+        if self.shutdown or not self._on_event:
             return
-
         self._on_event(event)
 
     def close(self):

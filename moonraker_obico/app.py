@@ -105,12 +105,11 @@ class App(object):
         setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
 
         self.moonrakerconn = MoonrakerConn(config, self.sentry, self.push_event,)
-
         # Blocking call. When continued, moonrakeconn is guaranteed to be properly configured. Also config object is updated with moonraker objects
         self.moonrakerconn.block_until_klippy_ready()
 
         if not config.server.auth_token:
-            discovery = PrinterDiscovery(config, self.sentry)
+            discovery = PrinterDiscovery(config, self.sentry, moonrakerconn=self.moonrakerconn)
             discovery.start_and_block()
             config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
 

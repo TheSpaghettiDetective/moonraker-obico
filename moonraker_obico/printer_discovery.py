@@ -39,12 +39,26 @@ MAX_BACKOFF_SECS = 30
 
 HANDSHAKE_PORT = 46793
 
+class StubMoonrakerConn:
+    """
+    The only purpose of this.moonrakerconn is to set the OBICO_LINK_STATUS macro variables.
+
+    This class is a stub for that purpose so that during situations like linking from console, the plugin doesn't crash.
+    The only function sacrificed is set_macro_variable.
+    """
+    def macro_is_configured(self, macro_name):
+        return False
+
+    def set_macro_variable(self, macro_name, variable_name, value):
+        pass
+
+
 class PrinterDiscovery(object):
 
-    def __init__(self, config, sentry):
+    def __init__(self, config, sentry, moonrakerconn=None):
+        self.moonrakerconn = moonrakerconn if moonrakerconn is not None else StubMoonrakerConn()
         self.config = config
         self.sentry = sentry
-        self.moonraker_conn = MoonrakerConn(self.config, self.sentry, None,)
         self.stopped = False
         self.static_info = {}
 
@@ -63,8 +77,8 @@ class PrinterDiscovery(object):
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
 
-        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', False)
+        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', False)
 
         try:
             self._start(total_steps)
@@ -82,9 +96,9 @@ class PrinterDiscovery(object):
         with self.one_time_passcode_lock:
             self.one_time_passcode = code
 
-        if self.moonraker_conn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
-            self.moonraker_conn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{passlink}"\'')
+        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{passlink}"\'')
 
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
