@@ -18,7 +18,7 @@ import os
 
 from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
-
+from .version import VERSION
 
 REQUEST_STATE_INTERVAL_SECONDS = 30
 if DEBUG:
@@ -51,17 +51,27 @@ class MoonrakerConn:
         self.request_callbacks = OrderedDict()
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
         self.available_printer_objects = []
+        self.remote_event_handlers = {}
 
 
     def block_until_klippy_ready(self):
         run_in_thread(self._start)
         self.klippy_ready.wait()
 
-        self.app_config.update_moonraker_objects(self)
+        self._identify_as_obico()
+        self._register_klipper_remote_methods()
         self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
+        self._request_subscribe(self.available_printer_objects)
+        self.app_config.update_moonraker_objects(self)
         time.sleep(10)  # Wait for the initial status update to be processed
         logging.debug(f'Exiting block_until_klippy_ready, available_printer_objects: {self.available_printer_objects}')
 
+
+    def add_event_handler(self, event_name, handler):
+        self.remote_event_handlers[event_name] = handler
+
+
+    # Internal methods
 
     def _start(self) -> None:
 
@@ -78,6 +88,17 @@ class MoonrakerConn:
                 self.sentry.captureException()
 
             time.sleep(1)
+
+
+    def _identify_as_obico(self):
+        params = dict(client_name='Obico', version=VERSION, type='agent', url='https://obico.io')
+        if self.app_config.moonraker.api_key:
+            params['api_key'] = self.app_config.moonraker.api_key
+        self.jsonrpc_request('server.connection.identify', params=params)
+
+    def _register_klipper_remote_methods(self):
+        self.jsonrpc_request('connection.register_remote_method',
+            params=dict(method_name='obico_remote_event'))
 
 
     ## REST API part
@@ -188,8 +209,6 @@ class MoonrakerConn:
             self.wait_for_klippy_ready()
             self.klippy_ready.set()
 
-            self.request_subscribe()
-
         def on_mr_ws_close(ws, **kwargs):
             self.klippy_ready.clear()
             self.push_event(
@@ -214,6 +233,13 @@ class MoonrakerConn:
 
             if callback:
                 callback(data)
+                return
+
+            if  data.get('method', '') == 'obico_remote_event':
+                event_name = data.get('params', {}).get('event_name')
+                handler = self.remote_event_handlers.get(event_name)
+                if handler:
+                    handler(data.get('params', {}).get('data'))
                 return
 
             self.push_event(
@@ -283,7 +309,7 @@ class MoonrakerConn:
             _logger.warning("Moonraker message queue is full, msg dropped")
 
 
-    def request_subscribe(self):
+    def _request_subscribe(self, available_printer_objects):
         subscribe_objects = {
             'print_stats': ('state', 'message', 'filename', 'info'),
             'webhooks': ('state', 'state_message'),
@@ -293,7 +319,7 @@ class MoonrakerConn:
             'fan': ('speed'),
         }
         subscribed_objects = {
-            key: value for key, value in subscribe_objects.items() if key in self.available_printer_objects
+            key: value for key, value in subscribe_objects.items() if key in available_printer_objects
         }
 
         _logger.debug(f'Subscribing to objects {subscribed_objects}')
