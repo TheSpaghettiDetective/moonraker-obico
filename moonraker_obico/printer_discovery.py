@@ -217,7 +217,7 @@ class PrinterDiscovery(object):
     # Return: True: one time passcode has a match and verified
     def _process_one_time_passcode_response(self, data):
         if 'one_time_passcode' not in data or 'verification_code' not in data:
-            _logger.warning('No one_time_passcode or verification_code in response. Maybe old server version?')
+            # _logger.warning('No one_time_passcode or verification_code in response. Maybe old server version?')
             return False
 
         verification_code = data['verification_code']
