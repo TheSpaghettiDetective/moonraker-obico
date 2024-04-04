@@ -29,6 +29,7 @@ from .janus import JanusConn
 from .tunnel import LocalTunnel
 from .passthru_targets import FileDownloader, Printer, MoonrakerApi, FileOperations
 from .printer_discovery import PrinterDiscovery
+import subprocess
 
 
 _logger = logging.getLogger('obico.app')
@@ -107,6 +108,7 @@ class App(object):
         self.moonrakerconn = MoonrakerConn(config, self.sentry, self.push_event,)
         # Blocking call. When continued, moonrakeconn is guaranteed to be properly configured. Also config object is updated with moonraker objects
         self.moonrakerconn.block_until_klippy_ready()
+        self.moonrakerconn.add_remote_event_handler('relink_obico', self.relink_obico)
 
         if not config.server.auth_token:
             discovery = PrinterDiscovery(config, self.sentry, moonrakerconn=self.moonrakerconn)
@@ -437,6 +439,12 @@ class App(object):
             kwargs = msg.get('ws.tunnel')
             kwargs['type_'] = kwargs.pop('type')
             self.local_tunnel.send_ws_to_local(**kwargs)
+
+    def relink_obico(self, data):
+        self.model.config._config.remove_option('server', 'auth_token')
+        self.model.config.write()
+        subprocess.call(["systemctl", "restart", "moonraker-obico"])
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

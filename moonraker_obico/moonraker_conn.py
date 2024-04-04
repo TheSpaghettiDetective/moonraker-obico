@@ -63,7 +63,7 @@ class MoonrakerConn:
         self._request_subscribe(self.available_printer_objects)
         self.app_config.update_moonraker_objects(self)
 
-    def add_event_handler(self, event_name, handler):
+    def add_remote_event_handler(self, event_name, handler):
         self.remote_event_handlers[event_name] = handler
 
 

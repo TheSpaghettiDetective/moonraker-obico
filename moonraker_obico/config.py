@@ -182,6 +182,8 @@ class Config:
         config = ConfigParser()
         config.read([self._config_path, ])
 
+        self._config = config
+
         self.moonraker = MoonrakerConfig(
             host=config.get(
                 'moonraker', 'host',
@@ -261,8 +263,6 @@ class Config:
             'misc', 'model_id',
             fallback=''
         )
-
-        self._config = config
 
 
     def write(self) -> None:
