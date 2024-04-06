@@ -255,14 +255,13 @@ class Config:
             'misc', 'sentry_opt',
             fallback='in'
         )
-        self.brand_id = config.get(
-            'misc', 'brand_id',
-            fallback=''
-        )
-        self.model_id = config.get(
-            'misc', 'model_id',
-            fallback=''
-        )
+
+    def get_meta_as_dict(self):
+        if self._config.has_section('meta'):
+            meta_items = self._config.items('meta')
+            return dict(meta_items)
+        else:
+            return {}
 
 
     def write(self) -> None:

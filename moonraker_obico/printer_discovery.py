@@ -119,11 +119,13 @@ class PrinterDiscovery(object):
             os=get_os()[:253],
             arch=platform.uname()[4][:253],
             rpi_model=sbc_model,
-            brand_id=self.config.brand_id,
-            model_id=self.config.model_id,
             plugin_version=VERSION,
             agent='Obico for Klipper',
         )
+
+        printer_meta_data = self.config.get_meta_as_dict()
+        if printer_meta_data:
+            self.static_info['meta'] = printer_meta_data
 
         if not host_or_ip:
             _logger.info('printer_discovery could not find out local ip')
