@@ -156,14 +156,8 @@ class PrinterDiscovery(object):
                     self._process_unlinked_api_response(data)
 
             except (IOError, OSError) as ex:
-                # trying to catch only network related errors here,
-                # all other errors must bubble up.
-
-                # http4xx can be an actionable bug, let it bubble up
-                if isinstance(ex, HTTPError):
-                    status_code = ex.response.status_code
-                    if 400 <= status_code < 500:
-                        raise
+                # Should continue on error in case of temporary network problems
+                _logger.warning(ex)
 
             steps_remaining -= 1
             if steps_remaining < 0:
@@ -182,12 +176,12 @@ class PrinterDiscovery(object):
             pass
 
     def announce_unlinked_status(self):
-        _logger.debug('printer_discovery calls server')
         data = self._collect_device_info()
 
         data['one_time_passcode'] = self.get_one_time_passcode()
 
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
+        _logger.debug(f'calling {endpoint}')
         return requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
 
     def _collect_device_info(self):
