@@ -182,6 +182,7 @@ class MoonrakerConn:
 
     def set_macro_variable(self, macro_name, var_name, var_value):
         script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
+        _logger.debug(script)
         try:
             resp = self.api_post(
                 'printer/gcode/script',
