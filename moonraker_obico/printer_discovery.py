@@ -103,8 +103,6 @@ class PrinterDiscovery(object):
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
 
-        host_or_ip = get_local_ip()
-
         sbc_model = ''
         try:
             sbc_mode = read('/proc/device-tree/model')[:253]
@@ -114,23 +112,17 @@ class PrinterDiscovery(object):
         self.static_info = dict(
             device_id=self.device_id,
             hostname=platform.uname()[1][:253],
-            host_or_ip=host_or_ip,
             port=HANDSHAKE_PORT,
             os=get_os()[:253],
             arch=platform.uname()[4][:253],
             rpi_model=sbc_model,
             plugin_version=VERSION,
-            agent='Obico for Klipper',
+            agent='moonraker_obico',
         )
 
         printer_meta_data = self.config.get_meta_as_dict()
         if printer_meta_data:
             self.static_info['meta'] = printer_meta_data
-
-        if not host_or_ip:
-            _logger.info('printer_discovery could not find out local ip')
-            self.stop()
-            return
 
         run_in_thread(self.listen_to_handshake)
 
@@ -144,6 +136,8 @@ class PrinterDiscovery(object):
 
             try:
                 if steps_remaining % POLL_PERIOD == 0:
+
+                    self.static_info['host_or_ip'] = get_local_ip()
                     resp = self.announce_unlinked_status()
                     resp.raise_for_status()
                     data = resp.json()
@@ -182,7 +176,9 @@ class PrinterDiscovery(object):
 
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
         _logger.debug(f'calling {endpoint}')
-        return requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
+        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
+        _logger.debug(f'got response {resp.status_code} {resp.text}')
+        return resp
 
     def _collect_device_info(self):
         info = dict(**self.static_info)
