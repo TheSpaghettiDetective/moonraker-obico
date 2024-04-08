@@ -441,9 +441,12 @@ class App(object):
             self.local_tunnel.send_ws_to_local(**kwargs)
 
     def relink_obico(self, data):
-        self.model.config._config.remove_option('server', 'auth_token')
-        self.model.config.write()
-        subprocess.call(["systemctl", "restart", "moonraker-obico"])
+        if self.model and self.model.config and self.model.config._config:
+            self.model.config._config.remove_option('server', 'auth_token')
+            self.model.config.write()
+            subprocess.call(["systemctl", "restart", "moonraker-obico"])
+        else:
+            _logger.warning('Not linked or not connected to server. Ignoring re-linking request.')
 
 
 if __name__ == '__main__':
