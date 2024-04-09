@@ -42,74 +42,74 @@ if __name__ == '__main__':
     sentry = SentryWrapper(config=config)
     debug = params.debug
 
-    skip_printer_discovery = False
     if config.server.auth_token:
         print(RED+"""
 !!!WARNING: Moonraker-obico already linked!
 Proceed only if you want to re-link your printer to the Obico server.
 For more information, visit:
 https://obico.io/docs/user-guides/relink-klipper
-
-To abort, simply press 'Enter'.
-
 """+NC)
-        skip_printer_discovery = True
+        confirmed = input('\nAre you sure you want to continue? [y/N] ').strip()
+        if confirmed not in ('Y', 'y'):
+            sys.exit(255)
 
-    if not skip_printer_discovery:
-        discovery = PrinterDiscovery(config, sentry)
-        discoverable = True
+        config._config.remove_option('server', 'auth_token')
+        config.write()
 
-        def spin():
-            global discoverable
+    discovery = PrinterDiscovery(config, sentry)
+    discoverable = True
 
-            sys.stdout.write("\033[?25l") # Hide cursor
+    def spin():
+        global discoverable
+
+        sys.stdout.write("\033[?25l") # Hide cursor
+        sys.stdout.flush()
+
+        spinner = ["|", "/", "-", "\\"]
+        spinner_idx = 0
+
+        old_version_warning_counter = int(10 / 0.1) # 10 seconds
+        while discoverable:
+            # prompt = "Scanning the local network" if old_version_warning_counter > 0 else "If the Obico app version is older than 2.0.0, press 'Enter' to switch to using 6-digit verification code"
+            prompt = "Scanning the local network" if old_version_warning_counter > 0 else "Press 'Enter' to switch to using 6-digit verification code"
+            sys.stdout.write(prompt + "  " + spinner[spinner_idx] + "\r")
             sys.stdout.flush()
+            spinner_idx = (spinner_idx + 1) % 4
 
-            spinner = ["|", "/", "-", "\\"]
-            spinner_idx = 0
+            rlist, _, _ = select.select([sys.stdin], [], [], 0.1)  # Poll with a timeout of 0.1 seconds
+            old_version_warning_counter -= 1
+            if sys.stdin in rlist:
+                sys.stdin.readline()
+                break
 
-            old_version_warning_counter = int(10 / 0.1) # 10 seconds
-            while discoverable:
-                # prompt = "Scanning the local network" if old_version_warning_counter > 0 else "If the Obico app version is older than 2.0.0, press 'Enter' to switch to using 6-digit verification code"
-                prompt = "Scanning the local network" if old_version_warning_counter > 0 else "Press 'Enter' to switch to using 6-digit verification code"
-                sys.stdout.write(prompt + "  " + spinner[spinner_idx] + "\r")
-                sys.stdout.flush()
-                spinner_idx = (spinner_idx + 1) % 4
+        sys.stdout.write("\033[?25h") # Show cursor
+        sys.stdout.flush()
 
-                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)  # Poll with a timeout of 0.1 seconds
-                old_version_warning_counter -= 1
-                if sys.stdin in rlist:
-                    sys.stdin.readline()
-                    break
+    def run_discovery():
+        global discoverable
+        global discovery
+        try:
+            discovery.start_and_block(300) # waiting for 2*300 seconds = 10 minutes
+        finally:
+            discoverable = False
 
-            sys.stdout.write("\033[?25h") # Show cursor
-            sys.stdout.flush()
+    def wait_for_one_time_passcode(timeout=10):
+        global discovery
+        for _ in range(int(timeout / 0.1)):
+            one_time_passcode = discovery.get_one_time_passcode()
+            if one_time_passcode:
+                break
 
-        def run_discovery():
-            global discoverable
-            global discovery
-            try:
-                discovery.start_and_block(300) # waiting for 2*300 seconds = 10 minutes
-            finally:
-                discoverable = False
-
-        def wait_for_one_time_passcode(timeout=10):
-            global discovery
-            for _ in range(int(timeout / 0.1)):
-                one_time_passcode = discovery.get_one_time_passcode()
-                if one_time_passcode:
-                    break
-
-                time.sleep(0.1)
-            return one_time_passcode
+            time.sleep(0.1)
+        return one_time_passcode
 
 
-        logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        discovery_thread = run_in_thread(run_discovery)
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+    discovery_thread = run_in_thread(run_discovery)
 
-        one_time_passcode = wait_for_one_time_passcode(timeout=3)
+    one_time_passcode = wait_for_one_time_passcode(timeout=3)
 
-        print("""
+    print("""
 Now open the Obico mobile or web app. If your phone or computer is connected to the
 same network as your printer, you will see this printer listed in the app. Click
 "Link Now" and you will be all set!
@@ -117,27 +117,27 @@ same network as your printer, you will see this printer listed in the app. Click
 If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 
 Your printer is now discoverable by the Obico app on the same network.""")
-        if one_time_passcode:
-            print(f"""If you can't find the printer in the app, switch to manual linking and enter:  {CYAN}{one_time_passcode}{NC}
-            """)
+    if one_time_passcode:
+        print(f"""If you can't find the printer in the app, switch to manual linking and enter:  {CYAN}{one_time_passcode}{NC}
+        """)
 
-        while discoverable:
-            spin()
-            if discoverable:
-                confirmed = input('\nSwitch to using 6-digit verification code to link printer? [Y/n] ').strip()
-                if confirmed not in ('N', 'n'):
-                    discoverable = False
-                else:
-                    print('Continue waiting...')
+    while discoverable:
+        spin()
+        if discoverable:
+            confirmed = input('\nSwitch to using 6-digit verification code to link printer? [Y/n] ').strip()
+            if confirmed not in ('N', 'n'):
+                discoverable = False
+            else:
+                print('Continue waiting...')
 
-        discovery.stop()
-        discovery_thread.join()
+    discovery.stop()
+    discovery_thread.join()
 
-        config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
-        if config.server.auth_token: # linked successfully
-            sys.exit(0)
-        else:
-            print("\n### Switched to using 6-digit verification code to link printer. ###")
+    config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
+    if config.server.auth_token: # linked successfully
+        sys.exit(0)
+    else:
+        print("\n### Switched to using 6-digit verification code to link printer. ###")
 
     print("""
 To link to your Obico Server account, you need to obtain the 6-digit verification code
