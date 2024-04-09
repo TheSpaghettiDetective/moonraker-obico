@@ -115,4 +115,4 @@ class NozzleCam:
             return
 
         for key, value in kwargs.items():
-            self.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)
+            self.moonrakerconn.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)
