@@ -68,16 +68,12 @@ https://obico.io/docs/user-guides/relink-klipper
         spinner = ["|", "/", "-", "\\"]
         spinner_idx = 0
 
-        old_version_warning_counter = int(10 / 0.1) # 10 seconds
         while discoverable:
-            # prompt = "Scanning the local network" if old_version_warning_counter > 0 else "If the Obico app version is older than 2.0.0, press 'Enter' to switch to using 6-digit verification code"
-            prompt = "Scanning the local network" if old_version_warning_counter > 0 else "Press 'Enter' to switch to using 6-digit verification code"
-            sys.stdout.write(prompt + "  " + spinner[spinner_idx] + "\r")
+            sys.stdout.write("Scanning the local network  " + spinner[spinner_idx] + "\r")
             sys.stdout.flush()
             spinner_idx = (spinner_idx + 1) % 4
 
             rlist, _, _ = select.select([sys.stdin], [], [], 0.1)  # Poll with a timeout of 0.1 seconds
-            old_version_warning_counter -= 1
             if sys.stdin in rlist:
                 sys.stdin.readline()
                 break
@@ -119,6 +115,9 @@ If you need help, head to https://obico.io/docs/user-guides/klipper-setup
 Your printer is now discoverable by the Obico app on the same network.""")
     if one_time_passcode:
         print(f"""If you can't find the printer in the app, switch to manual linking and enter:  {CYAN}{one_time_passcode}{NC}
+        """)
+        print(f"""
+If you are using a Obico app version older than 2.0, press 'Enter' to switch to using 6-digit verification code.
         """)
 
     while discoverable:
