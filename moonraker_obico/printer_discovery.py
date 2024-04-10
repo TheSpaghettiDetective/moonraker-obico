@@ -64,7 +64,6 @@ class PrinterDiscovery(object):
 
         # One time passcode to share between the plugin and the server
         self.one_time_passcode = ''
-        self.one_time_passcode_lock = Lock()    # Make sure it's thread safe
 
         # The states for auto discovery handshake
         # device_id is different every time plugin starts
@@ -77,8 +76,7 @@ class PrinterDiscovery(object):
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
 
-        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', False)
+        self.set_obico_link_status(False, '', '')
 
         try:
             self._start(total_steps)
@@ -89,16 +87,17 @@ class PrinterDiscovery(object):
         _logger.debug('printer_discovery quits')
 
     def get_one_time_passcode(self):
-        with self.one_time_passcode_lock:
-            return self.one_time_passcode
+        return self.one_time_passcode
 
-    def set_one_time_passcode(self, code, passlink):
-        with self.one_time_passcode_lock:
-            self.one_time_passcode = code
+    def set_one_time_passcode(self, code):
+        self.one_time_passcode = code
 
+    def set_obico_link_status(self, is_linked, one_time_passcode, one_time_passlink):
         if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{code}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{passlink}"\'')
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', is_linked)
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{one_time_passcode}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{one_time_passlink}"\'')
+
 
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
@@ -215,12 +214,15 @@ class PrinterDiscovery(object):
         verification_code = data['verification_code']
         if verification_code != '': # Server tells us we got a match for one time passcode
             verify_link_code(self.config, verification_code)
-            self.set_one_time_passcode('', '')
+            self.set_one_time_passcode('')
+            self.set_obico_link_status(True, '', '')
             return True
 
         new_one_time_passcode = data['one_time_passcode']
         if self.get_one_time_passcode() != new_one_time_passcode:
-            self.set_one_time_passcode(new_one_time_passcode, data['one_time_passlink'])
+            self.set_one_time_passcode(new_one_time_passcode)
+
+        self.set_obico_link_status(False, new_one_time_passcode, data['one_time_passlink'])
 
         return False
 
