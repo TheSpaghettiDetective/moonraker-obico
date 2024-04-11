@@ -103,7 +103,7 @@ https://obico.io/docs/user-guides/relink-klipper
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     discovery_thread = run_in_thread(run_discovery)
 
-    one_time_passcode = wait_for_one_time_passcode(timeout=3)
+    one_time_passcode = wait_for_one_time_passcode(timeout=5)
 
     print("""
 Now open the Obico mobile or web app. If your phone or computer is connected to the
