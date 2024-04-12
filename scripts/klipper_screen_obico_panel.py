@@ -135,7 +135,11 @@ class Panel(ScreenPanel):
 
         img = qr.make_image(fill_color="black", back_color="white")
         img_byte_arr = BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        try:
+            img.save(img_byte_arr, format='PNG')
+        except Exception:
+            img.save(img_byte_arr)  # Sometimes qrcode doesn't return a PILImage. In that case, save it without format
+
         img_byte_arr = img_byte_arr.getvalue()
 
         # Load the QR code image into a GdkPixbuf
