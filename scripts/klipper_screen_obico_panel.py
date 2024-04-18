@@ -56,8 +56,6 @@ class Panel(ScreenPanel):
         logging.info('activate')
 
         gcode_macros = self._printer.get_gcode_macros()
-        gcode_macros_lower = [macro.lower() for macro in gcode_macros]
-
         if OBICO_LINK_STATUS_MACRO not in [macro.upper() for macro in gcode_macros]:
             self.display_setup_guide_qr_code()
 
