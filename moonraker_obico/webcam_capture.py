@@ -100,7 +100,7 @@ class MjpegStreamChunker:
             self.boundary = line
             self.current_chunk.write(line)
             return None
-        
+
         if len(line) == len(self.boundary) and line == self.boundary:
             # start of next chunk
             return self.current_chunk.getvalue()
