@@ -323,7 +323,7 @@ def pi_version():
         return None
 
 def os_bit():
-    return platform.architecture()[0]
+    return platform.architecture()[0].replace("bit", "-bit")
 
 def parse_integer_or_none(s):
     try:
