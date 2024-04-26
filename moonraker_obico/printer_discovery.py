@@ -6,6 +6,7 @@ import io
 import json
 import socket
 import requests
+from threading import Lock
 from requests.exceptions import HTTPError
 import random
 import string
@@ -18,6 +19,7 @@ from queue import Queue
 from .version import VERSION
 from .utils import raise_for_status, run_in_thread, verify_link_code, wait_for_port
 from .config import Config
+from .moonraker_conn import MoonrakerConn
 
 try:
     from secrets import token_hex
@@ -35,25 +37,46 @@ _logger = logging.getLogger('obico.printer_discovery')
 POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
-HANDSHAKE_PORT = random.randint(45000, 48000)
+HANDSHAKE_PORT = 46793
+
+class StubMoonrakerConn:
+    """
+    The only purpose of this.moonrakerconn is to set the OBICO_LINK_STATUS macro variables.
+
+    This class is a stub for that purpose so that during situations like linking from console, the plugin doesn't crash.
+    The only function sacrificed is set_macro_variable.
+    """
+    def macro_is_configured(self, macro_name):
+        return False
+
+    def set_macro_variable(self, macro_name, variable_name, value):
+        pass
+
 
 class PrinterDiscovery(object):
 
-    def __init__(self, config, sentry):
+    def __init__(self, config, sentry, moonrakerconn=None):
+        self.moonrakerconn = moonrakerconn if moonrakerconn is not None else StubMoonrakerConn()
         self.config = config
         self.sentry = sentry
         self.stopped = False
-        self.device_secret = None
         self.static_info = {}
 
+        # One time passcode to share between the plugin and the server
+        self.one_time_passcode = ''
+
+        # The states for auto discovery handshake
         # device_id is different every time plugin starts
         self.device_id = uuid.uuid4().hex  # type: str
+        self.device_secret = None
 
-    def start_and_block(self, max_polls=3600):
-        # printer remains discoverable for about 2 hours, give or take.
+    def start_and_block(self, max_polls=7200):
+        # printer remains discoverable for about 4 hours, give or take.
         total_steps = POLL_PERIOD * max_polls
         _logger.info(
             'printer_discovery started, device_id: {}'.format(self.device_id))
+
+        self.set_obico_link_status(False, '', '')
 
         try:
             self._start(total_steps)
@@ -63,10 +86,21 @@ class PrinterDiscovery(object):
 
         _logger.debug('printer_discovery quits')
 
+    def get_one_time_passcode(self):
+        return self.one_time_passcode
+
+    def set_one_time_passcode(self, code):
+        self.one_time_passcode = code
+
+    def set_obico_link_status(self, is_linked, one_time_passcode, one_time_passlink):
+        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', is_linked)
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{one_time_passcode}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
+            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{one_time_passlink}"\'')
+
+
     def _start(self, steps_remaining):
         self.device_secret = token_hex(32)
-
-        host_or_ip = get_local_ip()
 
         sbc_model = ''
         try:
@@ -77,19 +111,17 @@ class PrinterDiscovery(object):
         self.static_info = dict(
             device_id=self.device_id,
             hostname=platform.uname()[1][:253],
-            host_or_ip=host_or_ip,
             port=HANDSHAKE_PORT,
             os=get_os()[:253],
             arch=platform.uname()[4][:253],
             rpi_model=sbc_model,
             plugin_version=VERSION,
-            agent='Obico for Klipper',
+            agent='moonraker_obico',
         )
 
-        if not host_or_ip:
-            _logger.info('printer_discovery could not find out local ip')
-            self.stop()
-            return
+        printer_meta_data = self.config.get_meta_as_dict()
+        if printer_meta_data:
+            self.static_info['meta'] = printer_meta_data
 
         run_in_thread(self.listen_to_handshake)
 
@@ -103,16 +135,22 @@ class PrinterDiscovery(object):
 
             try:
                 if steps_remaining % POLL_PERIOD == 0:
-                    self._call()
-            except (IOError, OSError) as ex:
-                # trying to catch only network related errors here,
-                # all other errors must bubble up.
 
-                # http4xx can be an actionable bug, let it bubble up
-                if isinstance(ex, HTTPError):
-                    status_code = ex.response.status_code
-                    if 400 <= status_code < 500:
-                        raise
+                    self.static_info['host_or_ip'] = get_local_ip()
+                    resp = self.announce_unlinked_status()
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                    if self._process_one_time_passcode_response(data): # Verified. Stop discovery process
+                        self.stop()
+                        break
+
+                    # Auto discovery handshake will result in a message from one of the calls.
+                    self._process_unlinked_api_response(data)
+
+            except (IOError, OSError) as ex:
+                # Should continue on error in case of temporary network problems
+                _logger.warning(ex)
 
             steps_remaining -= 1
             if steps_remaining < 0:
@@ -129,6 +167,69 @@ class PrinterDiscovery(object):
             requests.post(f'http://127.0.0.1:{HANDSHAKE_PORT}/shutdown')
         except Exception:
             pass
+
+    def announce_unlinked_status(self):
+        data = self._collect_device_info()
+
+        data['one_time_passcode'] = self.get_one_time_passcode()
+
+        endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
+        _logger.debug(f'calling {endpoint}')
+        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
+        _logger.debug(f'got response {resp.status_code} {resp.text}')
+        return resp
+
+    def _collect_device_info(self):
+        info = dict(**self.static_info)
+        info['printerprofile'] = 'Unknown'
+        info['machine_type'] = 'Klipper'
+        return info
+
+    def listen_to_handshake(self):
+        handshake_app = flask.Flask('handshake')
+
+        @handshake_app.route('/plugin/obico/grab-discovery-secret')
+        def grab_discovery_secret():
+            return self.id_for_secret()
+
+        @handshake_app.route('/shutdown', methods=['POST'])
+        def shutdown():
+            q.put('Apparently and understandably flask has made it extremely difficult for developers to shut it down.')
+            return 'Ok'
+
+        # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
+        q = Queue()
+        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
+        t = run_in_thread(handshake_server.serve_forever)
+        q.get(block=True)
+        handshake_server.shutdown()
+        t.join()
+
+    # Return: True: one time passcode has a match and verified
+    def _process_one_time_passcode_response(self, data):
+        if 'one_time_passcode' not in data or 'verification_code' not in data:
+            _logger.warning('No one_time_passcode or verification_code in response. Maybe old server version?')
+            return False
+
+        verification_code = data['verification_code']
+        if verification_code != '': # Server tells us we got a match for one time passcode
+            verify_link_code(self.config, verification_code)
+            self.set_one_time_passcode('')
+            self.set_obico_link_status(True, '', '')
+            return True
+
+        new_one_time_passcode = data['one_time_passcode']
+        if self.get_one_time_passcode() != new_one_time_passcode:
+            self.set_one_time_passcode(new_one_time_passcode)
+
+        self.set_obico_link_status(False, new_one_time_passcode, data['one_time_passlink'])
+
+        return False
+
+    # A very convoluted way to
+    #   1. verify the app is local
+    #   2. give the app the secret to exchange for verification code,
+    #   3. use verification code to exchange for auth token
 
     def id_for_secret(self):
 
@@ -177,17 +278,14 @@ class PrinterDiscovery(object):
 
         return flask.abort(403)
 
-    def _call(self):
-        _logger.debug('printer_discovery calls server')
-        data = self._collect_device_info()
-        endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
-        resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
-        resp.raise_for_status()
-        data = resp.json()
-        for msg in data['messages']:
-            self._process_message(msg)
+    def _process_unlinked_api_response(self, data):
+        # The response message was a very over-engineered way to send a single message. It's a list of one message.
+        # The morale of the story is: don't over-engineer.
+        if 'messages' not in data or not isinstance(data['messages'], list) or len(data['messages']) != 1:
+            return
 
-    def _process_message(self, msg):
+        msg = data['messages'][0]
+
         # Stops after first verify attempt
         _logger.info('printer_discovery got incoming msg: {}'.format(msg))
 
@@ -227,32 +325,6 @@ class PrinterDiscovery(object):
 
         self.stop()
         return
-
-    def _collect_device_info(self):
-        info = dict(**self.static_info)
-        info['printerprofile'] = 'Unknown'
-        info['machine_type'] = 'Klipper'
-        return info
-
-    def listen_to_handshake(self):
-        handshake_app = flask.Flask('handshake')
-
-        @handshake_app.route('/plugin/obico/grab-discovery-secret')
-        def grab_discovery_secret():
-            return self.id_for_secret()
-
-        @handshake_app.route('/shutdown', methods=['POST'])
-        def shutdown():
-            q.put('Apparently and understandably flask has made it extremely difficult for developers to shut it down.')
-            return 'Ok'
-
-        # https://stackoverflow.com/questions/68885585/wait-for-value-then-stop-server-after-werkzeug-server-shutdown-is-deprecated
-        q = Queue()
-        handshake_server = make_server('0.0.0.0', HANDSHAKE_PORT, handshake_app)
-        t = run_in_thread(handshake_server.serve_forever)
-        q.get(block=True)
-        handshake_server.shutdown()
-        t.join()
 
 
 def get_os():  # type: () -> str
@@ -305,15 +377,3 @@ def is_local_address(address):
                 address, exc)
         )
         return False
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-c', '--config', dest='config_path', required=True,
-        help='Path to config file (ini)'
-    )
-    args = parser.parse_args()
-    config = Config(args.config_path)
-
-    discovery = PrinterDiscovery(config=config.server)
-    discovery.start_and_block()

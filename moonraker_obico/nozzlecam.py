@@ -98,7 +98,7 @@ class NozzleCam:
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
 
-            self.moonrakerconn.initialize_layer_change_macro(
+            self.initialize_layer_change_macro(
                 first_layer_scan_enabled=ext_info.get('first_layer_scan_opted_in', True),
                 first_layer_scan_retract_length=ext_info.get('first_layer_scan_retract', 6),
                 first_layer_scan_unretract_length=ext_info.get('first_layer_scan_retract', 6) + 0.5,
@@ -109,3 +109,10 @@ class NozzleCam:
         except Exception:
             _logger.warn('Exception in build nozzle config. First Layer AI disabled.')
             return None
+
+    def initialize_layer_change_macro(self, **kwargs):
+        if not self.moonrakerconn.macro_is_configured('_OBICO_LAYER_CHANGE'):
+            return
+
+        for key, value in kwargs.items():
+            self.moonrakerconn.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)

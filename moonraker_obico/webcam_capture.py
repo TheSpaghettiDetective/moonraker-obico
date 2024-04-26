@@ -90,6 +90,10 @@ class MjpegStreamChunker:
         #         None: in the middle of the chunk
         # The first time endOfChunk should be called
         # with 'boundary' text as input
+        if not len(line.strip()): # don't parse empty lines as the boundary
+            self.current_chunk.write(line)
+            return None
+
         if not self.boundary:
             self.boundary = line
             self.current_chunk.write(line)

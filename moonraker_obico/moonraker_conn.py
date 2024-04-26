@@ -12,15 +12,13 @@ import json
 import bson
 import websocket
 from random import randrange
-from collections import deque, OrderedDict
-from functools import reduce
-from operator import concat
+from collections import OrderedDict
 import subprocess
 import os
 
 from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
-
+from .version import VERSION
 
 REQUEST_STATE_INTERVAL_SECONDS = 30
 if DEBUG:
@@ -30,15 +28,20 @@ _logger = logging.getLogger('obico.moonraker_conn')
 _ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
 
 class MoonrakerConn:
+    """
+    The correct way to make sure MoonrakerConn is properly initialized is:
+    moonraker_conn = MoonrakerConn(self.sentry, self.push_event,)
+    moonraker_conn.block_until_klippy_ready(self.model.config)
+    """
+
     flow_step_timeout_msecs = 2000
     ready_timeout_msecs = 60000
 
-    def __init__(self, app_config, sentry, on_event):
+    def __init__(self, config, sentry, on_event):
         self.id: str = 'moonrakerconn'
-        self.app_config: Config = app_config
-        self.config: MoonrakerConfig = app_config.moonraker
         self.klippy_ready = threading.Event()  # Based on https://moonraker.readthedocs.io/en/latest/web_api/#websocket-setup
 
+        self.app_config = config
         self.sentry = sentry
         self._on_event = on_event
         self.shutdown: bool = False
@@ -47,15 +50,60 @@ class MoonrakerConn:
         self.moonraker_state_requested_ts = 0
         self.request_callbacks = OrderedDict()
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
-        self.subscribed_objects = []
+        self.available_printer_objects = []
+        self.remote_event_handlers = {}
+
+    def block_until_klippy_ready(self):
+        run_in_thread(self._start)
+        self.klippy_ready.wait()
+
+        self._identify_as_obico()
+        self._register_klipper_remote_methods()
+        self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
+        self._request_subscribe(self.available_printer_objects)
+        self.app_config.update_moonraker_objects(self)
+
+    def add_remote_event_handler(self, event_name, handler):
+        self.remote_event_handlers[event_name] = handler
+
+
+    # Internal methods
+
+    def _start(self) -> None:
+
+        thread = threading.Thread(target=self.message_to_moonraker_loop)
+        thread.daemon = True
+        thread.start()
+
+        while self.shutdown is False:
+            try:
+                if self.klippy_ready.wait() and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
+                    self.request_status_update()
+
+            except Exception as e:
+                self.sentry.captureException()
+
+            time.sleep(1)
+
+
+    def _identify_as_obico(self):
+        params = dict(client_name='Obico', version=VERSION, type='agent', url='https://obico.io')
+        if self.app_config.moonraker.api_key:
+            params['api_key'] = self.app_config.moonraker.api_key
+        self.jsonrpc_request('server.connection.identify', params=params)
+
+    def _register_klipper_remote_methods(self):
+        self.jsonrpc_request('connection.register_remote_method',
+            params=dict(method_name='obico_remote_event'))
+
 
     ## REST API part
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
-        url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
+        url = f'{self.app_config.moonraker.http_address()}/{mr_method.replace(".", "/")}'
         _logger.debug(f'GET {url}')
 
-        headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
+        headers = {'X-Api-Key': self.app_config.moonraker.api_key} if self.app_config.moonraker.api_key else {}
         resp = requests.get(
                 url,
                 headers=headers,
@@ -69,10 +117,10 @@ class MoonrakerConn:
         return resp.json().get('result')
 
     def api_post(self, mr_method, timeout=None, multipart_filename=None, multipart_fileobj=None, **post_params):
-        url = f'{self.config.http_address()}/{mr_method.replace(".", "/")}'
+        url = f'{self.app_config.moonraker.http_address()}/{mr_method.replace(".", "/")}'
         _logger.debug(f'POST {url}')
 
-        headers = {'X-Api-Key': self.config.api_key} if self.config.api_key else {}
+        headers = {'X-Api-Key': self.app_config.moonraker.api_key} if self.app_config.moonraker.api_key else {}
         files={'file': (multipart_filename, multipart_fileobj, 'application/octet-stream')} if multipart_filename and multipart_fileobj else None
         resp = requests.post(
             url,
@@ -86,9 +134,9 @@ class MoonrakerConn:
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def ensure_api_key(self):
-        if not self.config.api_key:
+        if not self.app_config.moonraker.api_key:
             _logger.warning('api key is unset, trying to fetch one')
-            self.config.api_key = self.api_get('access/api_key', raise_for_status=True)
+            self.app_config.moonraker.api_key = self.api_get('access/api_key', raise_for_status=True)
 
     @backoff.on_exception(backoff.expo, Exception, max_value=60)
     def get_server_info(self):
@@ -132,79 +180,9 @@ class MoonrakerConn:
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
         return (data.get('jobs', [None]) or [None])[0]
 
-    def update_webcam_config_from_moonraker(self):
-        def webcam_config_in_moonraker():
-            # TODO: Rotation is not handled correctly
-
-            # Check for the webcam API in the newer Moonraker versions
-            result = self.api_get('server.webcams.list', raise_for_status=False)
-            if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
-                _logger.debug(f'Found config in Moonraker webcams API: {result}')
-                webcam_configs = [ dict(
-                            target_fps = cfg.get('target_fps', 25),
-                            snapshot_url = cfg.get('snapshot_url', None),
-                            stream_url = cfg.get('stream_url', None),
-                            flip_h = cfg.get('flip_horizontal', False),
-                            flip_v = cfg.get('flip_vertical', False),
-                            rotation = cfg.get('rotation', 0),
-                         ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
-
-                if len(webcam_configs) > 0:
-                    return  webcam_configs
-
-                # In case of WebRTC webcam
-                webcam_configs = [ dict(
-                            target_fps = cfg.get('target_fps', 25),
-                            snapshot_url = cfg.get('snapshot_url', None),
-                            stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
-                            flip_h = cfg.get('flip_horizontal', False),
-                            flip_v = cfg.get('flip_vertical', False),
-                            rotation = cfg.get('rotation', 0),
-                         ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
-                return  webcam_configs
-
-            # Check for the standard namespace for webcams
-            result = self.api_get('server.database.item', raise_for_status=False, namespace='webcams')
-            if result:
-                _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
-                return [ dict(
-                            target_fps = cfg.get('targetFps', 25),
-                            snapshot_url = cfg.get('urlSnapshot', None),
-                            stream_url = cfg.get('urlStream', None),
-                            flip_h = cfg.get('flipX', False),
-                            flip_v = cfg.get('flipY', False),
-                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
-                        ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() and cfg.get('enabled', True)]
-
-            # webcam configs not found in the standard location. Try fluidd's flavor
-            result = self.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
-            if result:
-                _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
-                return [ dict(
-                            target_fps = cfg.get('target_fps', 25),  # TODO Verify the key name in fluidd for FPS
-                            stream_url = cfg.get('url', None),
-                            flip_h = cfg.get('flipX', False),
-                            flip_v = cfg.get('flipY', False),
-                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
-                        ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
-
-            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
-            return []
-
-        mr_webcam_config = webcam_config_in_moonraker()
-        if len(mr_webcam_config) > 0:
-            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
-            self.app_config.webcam.moonraker_webcam_config = mr_webcam_config[0]
-
-            # Add all webcam urls to the blacklist so that they won't be tunnelled
-            url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
-            self.app_config.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
-        else:
-            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
-            pass
-
     def set_macro_variable(self, macro_name, var_name, var_value):
         script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
+        _logger.debug(script)
         try:
             resp = self.api_post(
                 'printer/gcode/script',
@@ -214,31 +192,10 @@ class MoonrakerConn:
         except:
             _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
-    def initialize_layer_change_macro(self, **kwargs):
-        macro_is_configured = any('gcode_macro _obico_layer_change' in item.lower() for item in self.subscribed_objects)
-        if not macro_is_configured:
-            return
-
-        for key, value in kwargs.items():
-            self.set_macro_variable('_OBICO_LAYER_CHANGE', key, value)
+    def macro_is_configured(self, macro_name):
+        return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
 
     ## WebSocket part
-
-    def start(self) -> None:
-
-        thread = threading.Thread(target=self.message_to_moonraker_loop)
-        thread.daemon = True
-        thread.start()
-
-        while self.shutdown is False:
-            try:
-                if self.klippy_ready.wait() and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
-                    self.request_status_update()
-
-            except Exception as e:
-                self.sentry.captureException()
-
-            time.sleep(1)
 
     def message_to_moonraker_loop(self):
 
@@ -246,11 +203,7 @@ class MoonrakerConn:
             _logger.info('connection is open')
 
             self.wait_for_klippy_ready()
-
-            self.app_config.update_heater_mapping(self.find_all_heaters())  # We need to find all heaters as their names have to be specified in the objects query request
             self.klippy_ready.set()
-
-            self.request_subscribe()
 
         def on_mr_ws_close(ws, **kwargs):
             self.klippy_ready.clear()
@@ -278,6 +231,13 @@ class MoonrakerConn:
                 callback(data)
                 return
 
+            if  data.get('method', '') == 'obico_remote_event':
+                event_name = data.get('params', {}).get('event_name')
+                handler = self.remote_event_handlers.get(event_name)
+                if handler:
+                    handler(data.get('params', {}).get('data'))
+                return
+
             self.push_event(
                 Event(sender=self.id, name='message', data=data)
             )
@@ -292,9 +252,9 @@ class MoonrakerConn:
                     self.ensure_api_key()
 
                     if not self.conn or not self.conn.connected():
-                        header=['X-Api-Key: {}'.format(self.config.api_key), ]
+                        header=['X-Api-Key: {}'.format(self.app_config.moonraker.api_key), ]
                         self.conn = WebSocketClient(
-                                    url=self.config.ws_url(),
+                                    url=self.app_config.moonraker.ws_url(),
                                     header=header,
                                     on_ws_msg=on_message,
                                     on_ws_open=on_mr_ws_open,
@@ -312,9 +272,8 @@ class MoonrakerConn:
                 self.sentry.captureException()
 
     def push_event(self, event):
-        if self.shutdown:
+        if self.shutdown or not self._on_event:
             return
-
         self._on_event(event)
 
     def close(self):
@@ -345,7 +304,7 @@ class MoonrakerConn:
             _logger.warning("Moonraker message queue is full, msg dropped")
 
 
-    def request_subscribe(self):
+    def _request_subscribe(self, available_printer_objects):
         subscribe_objects = {
             'print_stats': ('state', 'message', 'filename', 'info'),
             'webhooks': ('state', 'state_message'),
@@ -354,15 +313,14 @@ class MoonrakerConn:
             'gcode_macro _OBICO_LAYER_CHANGE': None,
             'fan': ('speed'),
         }
-        available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
-        self.subscribed_objects = {
+        subscribed_objects = {
             key: value for key, value in subscribe_objects.items() if key in available_printer_objects
         }
 
-        _logger.debug(f'Subscribing to objects {self.subscribed_objects}')
-        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=self.subscribed_objects))
+        _logger.debug(f'Subscribing to objects {subscribed_objects}')
+        self.jsonrpc_request('printer.objects.subscribe', params=dict(objects=subscribed_objects))
 
-        if not 'gcode_macro _OBICO_LAYER_CHANGE' in self.subscribed_objects:
+        if not 'gcode_macro _OBICO_LAYER_CHANGE' in subscribed_objects:
             run_in_thread(self._setup_include_cfgs)
 
     def request_status_update(self, objects=None):

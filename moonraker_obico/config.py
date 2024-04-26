@@ -1,6 +1,8 @@
 import dataclasses
 from typing import Optional
 import re
+from functools import reduce
+from operator import concat
 from configparser import ConfigParser
 from urllib.parse import urlparse
 import logging
@@ -93,13 +95,12 @@ class WebcamConfig:
             _logger.warn(f'Invalid disable_video_streaming value. Using default.')
             return False
 
-    @property
-    def target_fps(self):
+    def get_target_fps(self, fallback_fps=25):
         try:
-            fps = float( self.webcam_config_section.get('target_fps') or self.moonraker_webcam_config.get('target_fps') )
+            fps = float( self.webcam_config_section.get('target_fps'))
         except:
-            fps = 25
-        return min(fps, 25)
+            fps = fallback_fps
+        return min(fps, 30)
 
     @property
     def snapshot_ssl_validation(self):
@@ -171,13 +172,17 @@ class LoggingConfig:
 class Config:
 
     def __init__(self, config_path: str):
-        self._heater_mapping = {}
+        self.moonraker_objects = {
+            'heater_mapping': {},
+        }
 
         self._config_path = config_path
 
     def load_from_config_file(self):
         config = ConfigParser()
         config.read([self._config_path, ])
+
+        self._config = config
 
         self.moonraker = MoonrakerConfig(
             host=config.get(
@@ -251,7 +256,12 @@ class Config:
             fallback='in'
         )
 
-        self._config = config
+    def get_meta_as_dict(self):
+        if self._config.has_section('meta'):
+            meta_items = self._config.items('meta')
+            return dict(meta_items)
+        else:
+            return {}
 
 
     def write(self) -> None:
@@ -263,10 +273,98 @@ class Config:
         self._config.set('server', 'auth_token', auth_token)
         self.write()
 
+
+    def get_mapped_server_heater_name(self, mr_heater_name):
+        return self.moonraker_objects['heater_mapping'].get(mr_heater_name)
+
+    def get_mapped_mr_heater_name(self, server_heater_name):
+        mr_heater_name = list(self.moonraker_objects['heater_mapping'].keys())[list(self.moonraker_objects['heater_mapping'].values()).index(server_heater_name)]
+        return mr_heater_name
+
+    def all_mr_heaters(self):
+         return self.moonraker_objects['heater_mapping'].keys()
+
+
+    # Methods to update config based on Moonraker objects
+
+    def update_moonraker_objects(self, moonraker_conn):
+        self.update_heater_mapping(moonraker_conn)
+        self.update_webcam_config_from_moonraker(moonraker_conn)
+
+    def update_webcam_config_from_moonraker(self, moonraker_conn):
+        def webcams_configured_in_moonraker():
+            # TODO: Rotation is not handled correctly
+
+            # Check for the webcam API in the newer Moonraker versions
+            result = moonraker_conn.api_get('server.webcams.list', raise_for_status=False)
+            if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
+                _logger.debug(f'Found config in Moonraker webcams API: {result}')
+                webcam_configs = [ dict(
+                            snapshot_url = cfg.get('snapshot_url', None),
+                            stream_url = cfg.get('stream_url', None),
+                            flip_h = cfg.get('flip_horizontal', False),
+                            flip_v = cfg.get('flip_vertical', False),
+                            rotation = cfg.get('rotation', 0),
+                         ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
+
+                if len(webcam_configs) > 0:
+                    return  webcam_configs
+
+                # In case of WebRTC webcam
+                webcam_configs = [ dict(
+                            snapshot_url = cfg.get('snapshot_url', None),
+                            stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
+                            flip_h = cfg.get('flip_horizontal', False),
+                            flip_v = cfg.get('flip_vertical', False),
+                            rotation = cfg.get('rotation', 0),
+                         ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() ]
+                return  webcam_configs
+
+            # Check for the standard namespace for webcams
+            result = moonraker_conn.api_get('server.database.item', raise_for_status=False, namespace='webcams')
+            if result:
+                _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
+                return [ dict(
+                            snapshot_url = cfg.get('urlSnapshot', None),
+                            stream_url = cfg.get('urlStream', None),
+                            flip_h = cfg.get('flipX', False),
+                            flip_v = cfg.get('flipY', False),
+                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
+                        ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() ]
+
+            # webcam configs not found in the standard location. Try fluidd's flavor
+            result = moonraker_conn.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
+            if result:
+                _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
+                return [ dict(
+                            stream_url = cfg.get('url', None),
+                            flip_h = cfg.get('flipX', False),
+                            flip_v = cfg.get('flipY', False),
+                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
+                        ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
+
+            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+            return []
+
+        mr_webcam_config = webcams_configured_in_moonraker()
+
+        if len(mr_webcam_config) > 0:
+            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
+            self.webcam.moonraker_webcam_config = mr_webcam_config[0]
+
+            # Add all webcam urls to the blacklist so that they won't be tunnelled
+            url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
+            self.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
+        else:
+            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
+            pass
+
     # Adopted from getHeaters, getTemperatureObjects, getTemperatureSensors in mainsail:/src/store/printer/getters.ts
-    def update_heater_mapping(self, heaters):
+    def update_heater_mapping(self, moonraker_conn):
         def capwords(s):
             return ' '.join(elem.capitalize() for elem in s.split(' '))
+
+        heaters = moonraker_conn.find_all_heaters()  # We need to find all heaters as their names have to be specified in the objects query request
 
         for heater in sorted(heaters.get('available_heaters', [])):
             name = heater
@@ -277,20 +375,10 @@ class Config:
             if name.startswith('_'):
                 continue
 
-            self._heater_mapping[heater] = name
+            self.moonraker_objects['heater_mapping'][heater] = name
 
         for sensor in sorted(heaters.get('available_sensors', [])):
             name_split = sensor.split(' ')
             if len(name_split) > 1 and name_split[0] == 'temperature_sensor' and not name_split[1].startswith('_'):
-                self._heater_mapping[sensor] = name_split[1]
+                self.moonraker_objects['heater_mapping'][sensor] = name_split[1]
 
-
-    def get_mapped_server_heater_name(self, mr_heater_name):
-        return self._heater_mapping.get(mr_heater_name)
-
-    def get_mapped_mr_heater_name(self, server_heater_name):
-        mr_heater_name = list(self._heater_mapping.keys())[list(self._heater_mapping.values()).index(server_heater_name)]
-        return mr_heater_name
-
-    def all_mr_heaters(self):
-         return self._heater_mapping.keys()

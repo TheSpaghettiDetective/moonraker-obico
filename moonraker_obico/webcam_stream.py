@@ -226,7 +226,6 @@ class WebcamStreamer:
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 
-
             (img_w, img_h) = (parse_integer_or_none(webcam['streaming_params'].get('recode_width')), parse_integer_or_none(webcam['streaming_params'].get('recode_height')))
             if not img_w or not img_h:
                 _logger.warn('width and/or height not specified or invalid in streaming parameters. Getting the values from the source.')
@@ -305,6 +304,7 @@ class WebcamStreamer:
 
             mjpeg_dataport = webcam['runtime']['mjpeg_dataport']
 
+            min_interval_btw_frames = 1.0 / self.config.webcam.get_target_fps(fallback_fps=3)
             bandwidth_throttle = 0.004
             if pi_version() == "0":    # If Pi Zero
                 bandwidth_throttle *= 2
@@ -318,7 +318,8 @@ class WebcamStreamer:
                 if self.shutting_down:
                     return
 
-                time.sleep( max(last_frame_sent+0.5-time.time(), 0) )  # No more than 1 frame per 0.5 second
+                time.sleep( max(last_frame_sent + min_interval_btw_frames - time.time(), 0) )
+                last_frame_sent = time.time()
 
                 jpg = None
                 try:
@@ -334,8 +335,6 @@ class WebcamStreamer:
                 for chunk in [encoded[i:i+1400] for i in range(0, len(encoded), 1400)]:
                     mjpeg_sock.sendto(chunk, (JANUS_SERVER, mjpeg_dataport))
                     time.sleep(bandwidth_throttle)
-
-            last_frame_sent = time.time()
 
         mjpeg_loop_thread = Thread(target=mjpeg_loop)
         mjpeg_loop_thread.daemon = True
