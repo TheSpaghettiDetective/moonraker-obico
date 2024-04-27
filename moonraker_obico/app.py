@@ -115,7 +115,7 @@ class App(object):
             config=config,
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
-            printer_state=PrinterState(config, self),
+            printer_state=PrinterState(config),
         )
 
         _cfg = self.model.config._config

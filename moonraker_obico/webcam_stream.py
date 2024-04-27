@@ -14,7 +14,7 @@ import base64
 import socket
 
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff, parse_integer_or_none
-from .webcam_capture import capture_jpeg, webcam_full_url
+from .webcam_capture import capture_jpeg
 from .janus import JanusConn
 from .janus_config_builder import build_janus_config
 
@@ -222,7 +222,7 @@ class WebcamStreamer:
             encoder = h264_encoder()
 
             webcam_config = webcam['moonraker_config']
-            stream_url = webcam_full_url(webcam_config.get('stream_url'))
+            stream_url = webcam_config.stream_url
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 

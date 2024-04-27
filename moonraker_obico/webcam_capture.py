@@ -19,23 +19,13 @@ if os.environ.get('DEBUG'):
 
 _logger = logging.getLogger('obico.webcam_capture')
 
-def webcam_full_url(url):
-    if not url or not url.strip():
-        return ''
-
-    full_url = url.strip()
-    if not urlparse(full_url).scheme:
-        full_url = "http://127.0.0.1/" + re.sub(r"^\/", "", full_url)
-
-    return full_url
-
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 @backoff.on_predicate(backoff.expo, max_tries=3)
 def capture_jpeg(webcam_config, force_stream_url=False):
     MAX_JPEG_SIZE = 5000000
 
-    snapshot_url = webcam_full_url(webcam_config.get('snapshot_url'))
+    snapshot_url = webcam_config.snapshot_url
     if snapshot_url and not force_stream_url:
         r = requests.get(snapshot_url, stream=True, timeout=5, verify=False)
         r.raise_for_status()
@@ -52,7 +42,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
         return response_content
 
     else:
-        stream_url = webcam_full_url(webcam_config.get('stream_url'))
+        stream_url = webcam_config.stream_url
         if not stream_url:
             raise Exception('Invalid snapshot URL or stream URL in webcam setting: "{}"'.format(webcam_config))
 
