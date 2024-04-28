@@ -143,6 +143,7 @@ class App(object):
             sentry=self.sentry)
 
         run_in_thread(self.server_conn.start)
+        run_in_thread(self.webcam_streamer.start, self.model.config.webcams)
 
         while not (self.server_conn.ss and self.server_conn.ss.connected()):
             _logger.warning('Connections not ready. Trying again in 1s...')

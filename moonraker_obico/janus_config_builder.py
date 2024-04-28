@@ -185,30 +185,25 @@ def build_janus_plugin_streaming_jcfg(webcams, sentry):
     streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=RUNTIME_JANUS_ETC_DIR)
     with open(streaming_jcfg_path, 'w') as f:
         for webcam in webcams:
-
-            try:
-                if webcam['streaming_params']['mode'] == 'h264_rtsp':
-                    if webcam['streaming_params'].get('rtsp_port'):
-                        f.write(streaming_jcfg_rtsp_section(webcam['runtime']['stream_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam['streaming_params']['rtsp_port']), webcam['runtime']['dataport']))
-                    else:
-                        raise Exception('streaming_params.rtsp_port is required to do h264_rtsp streaming')
-
-                elif webcam['streaming_params']['mode'] in ('h264_copy', 'h264_transcode'):
-                    if webcam['runtime'].get('videoport') and webcam['runtime'].get('videortcpport') and webcam['runtime'].get('dataport'):
-                        f.write(streaming_jcfg_rtp_section(webcam['runtime']['stream_id'], webcam['runtime']['videoport'], webcam['runtime']['videortcpport'], webcam['runtime']['dataport']))
-                    else:
-                        raise Exception('Missing runtime parameters required in building h264-xxx section')
-
-                elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
-                    if webcam['runtime'].get('mjpeg_dataport'):
-                        f.write(streaming_jcfg_mjpeg_section(webcam['runtime']['stream_id'], webcam['runtime']['mjpeg_dataport']))
-                    else:
-                        raise Exception('Missing runtime parameters required in building mjpeg_webrtc section')
+            if webcam.streaming_params['mode'] == 'h264_rtsp':
+                if webcam.streaming_params.get('rtsp_port'):
+                    f.write(streaming_jcfg_rtsp_section(webcam.runtime['stream_id'], 'rtsp://127.0.0.1:{rtsp_port}/stream.h264'.format(rtsp_port=webcam.streaming_params['rtsp_port']), webcam.runtime['dataport']))
                 else:
-                    raise Exception('Unknown streaming mode "{}"'.format(webcam['streaming_params']['mode']))
-            except Exception as e:
-                sentry.captureException()
-                webcam['error'] = 'Error in building janus streaming configuration file - {}'.format(str(e))
+                    raise Exception('streaming_params.rtsp_port is required to do h264_rtsp streaming')
+
+            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode'):
+                if webcam.runtime.get('videoport') and webcam.runtime.get('videortcpport') and webcam.runtime.get('dataport'):
+                    f.write(streaming_jcfg_rtp_section(webcam.runtime['stream_id'], webcam.runtime['videoport'], webcam.runtime['videortcpport'], webcam.runtime['dataport']))
+                else:
+                    raise Exception('Missing runtime parameters required in building h264-xxx section')
+
+            elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
+                if webcam.runtime.get('mjpeg_dataport'):
+                    f.write(streaming_jcfg_mjpeg_section(webcam.runtime['stream_id'], webcam.runtime['mjpeg_dataport']))
+                else:
+                    raise Exception('Missing runtime parameters required in building mjpeg_webrtc section')
+            else:
+                raise Exception('Unknown streaming mode "{}"'.format(webcam.streaming_params['mode']))
 
 
 def build_janus_transport_websocket_jcfg(ws_port, admin_ws_port):

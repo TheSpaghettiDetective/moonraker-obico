@@ -67,8 +67,17 @@ class TunnelConfig:
 class WebcamConfig:
 
     def __init__(self, webcam_config_section):
+        self.name = webcam_config_section.name[len("webcam "):] # '' for default webcam config, in which case we will try to fetch the config from Moonraker
         self.webcam_config_section = webcam_config_section
         self.moonraker_webcam_config = {}
+
+    @property
+    def is_primary_camera(self):
+        return self.webcam_config_section.getboolean('is_primary_camera', True)
+
+    @property
+    def is_nozzle_camera(self):
+        return self.webcam_config_section.getboolean('is_nozzle_camera', False)
 
     @property
     def snapshot_url(self):
@@ -95,7 +104,8 @@ class WebcamConfig:
             _logger.warn(f'Invalid disable_video_streaming value. Using default.')
             return False
 
-    def get_target_fps(self, fallback_fps=25):
+    @property
+    def target_fps(self, fallback_fps=25):
         try:
             fps = float( self.webcam_config_section.get('target_fps'))
         except:
@@ -150,6 +160,14 @@ class WebcamConfig:
         except:
             _logger.warn(f'Invalid aspect_ratio_169 value. Using default.')
             return False
+
+    @property
+    def resolution(self):
+        return self.webcam_config_section.get('resolution')
+
+    @property
+    def stream_mode(self):
+        return self.webcam_config_section.get('stream_mode')
 
     @classmethod
     def webcam_full_url(cls, url):
@@ -238,7 +256,11 @@ class Config:
             url_blacklist=[],
         )
 
-        self.webcam = WebcamConfig(webcam_config_section=config['webcam'])
+        self.webcams = []
+        for section in config.sections():
+            if section.startswith("webcam"):
+                self.webcams.append(WebcamConfig(webcam_config_section=config[section]))
+
 
         self.logging = LoggingConfig(
             path=config.get(
@@ -300,6 +322,7 @@ class Config:
             if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
                 _logger.debug(f'Found config in Moonraker webcams API: {result}')
                 webcam_configs = [ dict(
+                            name = cfg.get('name', None),
                             snapshot_url = cfg.get('snapshot_url', None),
                             stream_url = cfg.get('stream_url', None),
                             flip_h = cfg.get('flip_horizontal', False),
@@ -312,6 +335,7 @@ class Config:
 
                 # In case of WebRTC webcam
                 webcam_configs = [ dict(
+                            name = cfg.get('name', None),
                             snapshot_url = cfg.get('snapshot_url', None),
                             stream_url = cfg.get('snapshot_url', '').replace('action=snapshot', 'action=stream'), # TODO: Webrtc stream_url is not compatible with MJPEG stream url. Let's guess it. it is a little hacky.
                             flip_h = cfg.get('flip_horizontal', False),
@@ -325,6 +349,7 @@ class Config:
             if result:
                 _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
                 return [ dict(
+                            name = cfg.get('name', None),
                             snapshot_url = cfg.get('urlSnapshot', None),
                             stream_url = cfg.get('urlStream', None),
                             flip_h = cfg.get('flipX', False),
@@ -337,27 +362,32 @@ class Config:
             if result:
                 _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
                 return [ dict(
+                            name = cfg.get('name', None),
                             stream_url = cfg.get('url', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
                             rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
                         ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
 
-            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
             return []
 
         mr_webcam_config = webcams_configured_in_moonraker()
 
-        if len(mr_webcam_config) > 0:
-            _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
-            self.webcam.moonraker_webcam_config = mr_webcam_config[0]
+        # Add all webcam urls to the blacklist so that they won't be tunnelled
+        url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
+        self.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
 
-            # Add all webcam urls to the blacklist so that they won't be tunnelled
-            url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
-            self.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
+        if len(self.webcams) == 1 and self.webcams[0].name == '':   # Only default webcam config is present
+             if len(mr_webcam_config) > 0:
+                _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
+                self.webcams[0].moonraker_webcam_config = mr_webcam_config[0]
         else:
-            #TODO: Send notification to user that webcam configs not found when moonraker's announcement api makes to stable
-            pass
+            for webcam in self.webcams:
+                for cfg in mr_webcam_config:
+                    if cfg.get('name', None) == webcam.name:
+                        _logger.debug(f'Found a matching webcam config from Moonraker: {cfg}')
+                        webcam.moonraker_webcam_config = cfg
+
 
     # Adopted from getHeaters, getTemperatureObjects, getTemperatureSensors in mainsail:/src/store/printer/getters.ts
     def update_heater_mapping(self, moonraker_conn):
