@@ -186,7 +186,9 @@ class WebcamStreamer:
         cur_stream_id = 3
         cur_port_num = JANUS_ADMIN_WS_PORT + 1
         for webcam in self.webcams:
-            webcam.runtime = {}
+            if not hasattr(webcam, 'runtime'):
+                webcam.runtime = {}
+
             if not webcam.runtime.get('stream_id'):
                 webcam.runtime['stream_id'] = cur_stream_id
                 cur_stream_id += 1
