@@ -375,7 +375,7 @@ class Config:
 
         # Add all webcam urls to the blacklist so that they won't be tunnelled
         url_list = [[ cfg.get('snapshot_url', None), cfg.get('stream_url', None) ] for cfg in mr_webcam_config ]
-        self.tunnel.url_blacklist = [ url for url in reduce(concat, url_list) if url ]
+        self.tunnel.url_blacklist = [url for url in reduce(concat, url_list, []) if url]
 
         if len(self.webcams) == 1 and self.webcams[0].name == '':   # Only default webcam config is present
              if len(mr_webcam_config) > 0:
