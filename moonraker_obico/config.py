@@ -105,16 +105,16 @@ class WebcamConfig:
             return False
 
     @property
-    def target_fps(self, fallback_fps=25):
-        try:
-            fps = float( self.webcam_config_section.get('target_fps'))
-        except:
-            fps = fallback_fps
-        return min(fps, 30)
+    def target_fps(self):
+        fps = 25
 
-    @property
-    def snapshot_ssl_validation(self):
-        return False
+        if self.moonraker_webcam_config:
+            fps = int(self.moonraker_webcam_config.get('target_fps', 15))
+
+        if self.webcam_config_section:
+            fps = int(self.webcam_config_section.getboolean('target_fps', 25))
+
+        return min(fps, 30)
 
     @property
     def stream_url(self):
@@ -122,23 +122,27 @@ class WebcamConfig:
 
     @property
     def flip_h(self):
-        if 'flip_h' in self.webcam_config_section:
-            try:
-                return self.webcam_config_section.getboolean('flip_h')
-            except:
-                _logger.warn(f'Invalid flip_h value. Using default.')
+        flip = False
 
-        return self.moonraker_webcam_config.get('flip_h')
+        if self.moonraker_webcam_config:
+            flip = self.moonraker_webcam_config.get('flip_h', False)
+
+        if self.webcam_config_section:
+            flip = self.webcam_config_section.getboolean('flip_h', False)
+
+        return flip
 
     @property
     def flip_v(self):
-        if 'flip_v' in self.webcam_config_section:
-            try:
-                return self.webcam_config_section.getboolean('flip_v')
-            except:
-                _logger.warn(f'Invalid flip_v value. Using default.')
+        flip = False
 
-        return self.moonraker_webcam_config.get('flip_v')
+        if self.moonraker_webcam_config:
+            flip = self.moonraker_webcam_config.get('flip_v', False)
+
+        if self.webcam_config_section:
+            flip = self.webcam_config_section.getboolean('flip_v', False)
+
+        return flip
 
     @property
     def rotation(self):
@@ -328,6 +332,7 @@ class Config:
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
                             rotation = cfg.get('rotation', 0),
+                            target_fps = cfg.get('target_fps', 15),
                          ) for cfg in result.get('webcams', []) if 'mjpeg' in cfg.get('service', '').lower() ]
 
                 if len(webcam_configs) > 0:
@@ -341,6 +346,7 @@ class Config:
                             flip_h = cfg.get('flip_horizontal', False),
                             flip_v = cfg.get('flip_vertical', False),
                             rotation = cfg.get('rotation', 0),
+                            target_fps = cfg.get('target_fps', 15),
                          ) for cfg in result.get('webcams', []) if 'webrtc' in cfg.get('service', '').lower() ]
                 return  webcam_configs
 
@@ -354,7 +360,8 @@ class Config:
                             stream_url = cfg.get('urlStream', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
-                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
+                            rotation = cfg.get('rotation', 0),
+                            target_fps = cfg.get('targetFps', 15),
                         ) for cfg in result.get('value', {}).values() if 'mjpeg' in cfg.get('service', '').lower() ]
 
             # webcam configs not found in the standard location. Try fluidd's flavor
@@ -366,7 +373,8 @@ class Config:
                             stream_url = cfg.get('url', None),
                             flip_h = cfg.get('flipX', False),
                             flip_v = cfg.get('flipY', False),
-                            rotation = cfg.get('rotation', 0), # TODO Verify the key name for rotation
+                            rotation = cfg.get('rotate', 0),
+                            target_fps = cfg.get('fpstarget', 15),
                         ) for cfg in result.get('value', {}).get('cameras', []) if cfg.get('enabled', False) ]
 
             return []

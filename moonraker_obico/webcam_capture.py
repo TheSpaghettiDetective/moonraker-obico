@@ -149,7 +149,6 @@ class JpegPoster:
         class SnapshotConfig:
             def __init__(self, snapshot_url):
                 self.snapshot_url = snapshot_url
-                self.snapshot_ssl_validation = False
 
         snapshot = capture_jpeg(SnapshotConfig(url))
         base64_image = base64.b64encode(snapshot).decode('utf-8')

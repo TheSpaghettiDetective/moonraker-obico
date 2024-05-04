@@ -168,7 +168,7 @@ class WebcamStreamer:
                 _logger.warn('Resolution not specified or invalid in webcam config. Getting the values from the source.')
 
             try:
-                webcam.streaming_params['recode_fps'] = int(webcam.target_fps)
+                webcam.streaming_params['recode_fps'] = webcam.target_fps
             except:
                 _logger.warn('FPS not specified or invalid in webcam config. Getting the values from the source.')
 
@@ -316,7 +316,7 @@ class WebcamStreamer:
 
             mjpeg_dataport = webcam.runtime['mjpeg_dataport']
 
-            min_interval_btw_frames = 1.0 / self.config.webcam.get_target_fps(fallback_fps=3)
+            min_interval_btw_frames = 1.0 / webcam.target_fps
             bandwidth_throttle = 0.004
             if pi_version() == "0":    # If Pi Zero
                 bandwidth_throttle *= 2
@@ -335,7 +335,7 @@ class WebcamStreamer:
 
                 jpg = None
                 try:
-                    jpg = capture_jpeg(webcam['moonraker_config'])
+                    jpg = capture_jpeg(webcam)
                 except Exception as e:
                     _logger.warning('Failed to capture jpeg - ' + str(e))
 
