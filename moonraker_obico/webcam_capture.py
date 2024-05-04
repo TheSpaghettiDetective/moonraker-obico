@@ -5,7 +5,7 @@ import re
 import os
 from urllib.request import urlopen
 from urllib.parse import urlparse
-from urllib.error import URLError, HTTPError
+from urllib.error import HTTPError
 from contextlib import closing
 import requests
 import backoff
@@ -107,18 +107,6 @@ class JpegPoster:
         self.last_jpg_post_ts = 0
         self.need_viewing_boost = threading.Event()
 
-
-    def post_pic_to_server(self, viewing_boost=False):
-        try:
-            files = {'pic': capture_jpeg(self.config.webcam)}
-
-            data = {'viewing_boost': 'true'} if viewing_boost else {}
-            resp = self.server_conn.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
-            _logger.debug('Jpeg posted to server - viewing_boost: {0} - {1}'.format(viewing_boost, resp))
-        except (URLError, HTTPError, requests.exceptions.RequestException) as e:
-            _logger.warn('Failed to capture jpeg - ' + str(e))
-            return
-
     def pic_post_loop(self):
         while True:
             try:
@@ -127,7 +115,7 @@ class JpegPoster:
                     self.need_viewing_boost.clear()
                     repeats = 3 if self.app_model.linked_printer.get('is_pro') else 1 # Pro users get better viewing boost
                     for _ in range(repeats):
-                        self.post_pic_to_server(viewing_boost=True)
+                        self.server_conn.post_pic_to_server(webcam_config=self.config.primary_webcam_config, viewing_boost=True)
                     continue
 
                 if not self.app_model.printer_state.is_printing():
@@ -141,7 +129,7 @@ class JpegPoster:
                     continue
 
                 self.last_jpg_post_ts = time.time()
-                self.post_pic_to_server(viewing_boost=False)
+                self.server_conn.post_pic_to_server(webcam_config=self.config.primary_webcam_config, viewing_boost=False)
             except:
                 self.sentry.captureException()
 

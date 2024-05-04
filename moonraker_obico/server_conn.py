@@ -7,6 +7,7 @@ import bson
 import json
 from collections import deque
 import backoff
+from urllib.error import URLError, HTTPError
 
 from .utils import ExpoBackoff
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -119,20 +120,27 @@ class ServerConn:
         files = None
         if attach_snapshot:
             try:
-                files = {'snapshot': capture_jpeg(self)}
+                files = {'snapshot': capture_jpeg(self.config.primary_webcam_config)}
             except Exception as e:
                 _logger.warn('Failed to capture jpeg - ' + str(e))
                 pass
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
-    def get_webcams(self, printer_id):
+    def post_pic_to_server(self, webcam_config, viewing_boost=False):
         try:
-            resp = self.send_http_request('GET', f'/api/v1/octo/webcams/?printer_id={printer_id}', raise_exception=False)
-            _logger.info(f'Webcams: {resp.json()}')
-            return resp.json()
-        except Exception as e:
-            _logger.warning('Failed /api/v1/octo/webcams/ api call. Maybe server version too old? - ' + str(e))
-            return []
+            files = {'pic': capture_jpeg(webcam_config)}
+
+            data = dict(
+                is_primary_camera=webcam_config.is_primary_camera,
+                is_nozzle_camera=webcam_config.is_nozzle_camera,
+                camera_name=webcam_config.camera_name,
+                viewing_boost=viewing_boost
+            )
+            resp = self.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
+            _logger.debug('Jpeg posted to server - camera name: {} - viewing_boost: {} - {}'.format(webcam_config.name, viewing_boost, resp))
+        except (URLError, HTTPError, requests.exceptions.RequestException) as e:
+            _logger.warn('Failed to capture jpeg - ' + str(e))
+            return
 
     def send_http_request(self, method, uri, timeout=10, raise_exception=True, skip_debug_logging=False, **kwargs):
         endpoint = self.config.server.canonical_endpoint_prefix() + uri

@@ -66,14 +66,11 @@ class TunnelConfig:
 @dataclasses.dataclass
 class WebcamConfig:
 
-    def __init__(self, webcam_config_section):
+    def __init__(self, webcam_config_section, is_primary_camera):
         self.name = webcam_config_section.name[len("webcam "):] # '' for default webcam config, in which case we will try to fetch the config from Moonraker
+        self.is_primary_camera = is_primary_camera
         self.webcam_config_section = webcam_config_section
         self.moonraker_webcam_config = {}
-
-    @property
-    def is_primary_camera(self):
-        return self.webcam_config_section.getboolean('is_primary_camera', True)
 
     @property
     def is_nozzle_camera(self):
@@ -261,10 +258,11 @@ class Config:
         )
 
         self.webcams = []
+        is_primary_camera = True # First webcam is primary
         for section in config.sections():
             if section.startswith("webcam"):
-                self.webcams.append(WebcamConfig(webcam_config_section=config[section]))
-
+                self.webcams.append(WebcamConfig(webcam_config_section=config[section], is_primary_camera=is_primary_camera))
+                is_primary_camera = False
 
         self.logging = LoggingConfig(
             path=config.get(
@@ -289,16 +287,21 @@ class Config:
         else:
             return {}
 
-
     def write(self) -> None:
         with open(self._config_path, 'w') as f:
             self._config.write(f)
+
+    @property
+    def primary_webcam_config(self):
+        if len(self.webcams) > 0:
+            return self.webcams[0]
+        else:
+            return None
 
     def update_server_auth_token(self, auth_token: str):
         self.server.auth_token = auth_token
         self._config.set('server', 'auth_token', auth_token)
         self.write()
-
 
     def get_mapped_server_heater_name(self, mr_heater_name):
         return self.moonraker_objects['heater_mapping'].get(mr_heater_name)

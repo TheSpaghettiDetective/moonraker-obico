@@ -137,15 +137,6 @@ class WebcamStreamer:
         self.close_all_mjpeg_socks()
         return ('ok', None)  # return value expected for a passthru target
 
-    def list_system_webcams(self):
-        moonraker_webcams = (self.moonrakerconn.api_get('server.webcams.list', raise_for_status=False) or {}).get('webcams', [])
-        for mr_webcam_config in moonraker_webcams:
-            if 'mjpeg' in mr_webcam_config.get('service', '').lower():
-                (img_w, img_h) = get_webcam_resolution(mr_webcam_config)
-                mr_webcam_config['width'] = img_w
-                mr_webcam_config['height'] = img_h
-
-        return (moonraker_webcams, None)
 
     ## End of passthru target methods
 
