@@ -133,7 +133,7 @@ class ServerConn:
             data = dict(
                 is_primary_camera=webcam_config.is_primary_camera,
                 is_nozzle_camera=webcam_config.is_nozzle_camera,
-                camera_name=webcam_config.camera_name,
+                camera_name=webcam_config.name,
                 viewing_boost=viewing_boost
             )
             resp = self.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
