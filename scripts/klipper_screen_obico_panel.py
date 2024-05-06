@@ -116,7 +116,7 @@ class Panel(ScreenPanel):
         self.qr_code_label.set_markup(f"<big><b>Scan to Set Up Obico</b></big>")
         self.reset_action_container()
 
-        self.update_qr_code('https://obico.io/docs/user-guides/klipper-screen-setup/')
+        self.update_qr_code('https://obico.io/docs/user-guides/klipper-setup/')
 
         self.default_bottom_text()
 
@@ -125,8 +125,8 @@ class Panel(ScreenPanel):
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
+            box_size=4,
+            border=2,
         )
         qr.add_data(link_url)
         qr.make(fit=True)
