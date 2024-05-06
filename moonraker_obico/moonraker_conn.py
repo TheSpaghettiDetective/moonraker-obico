@@ -180,20 +180,26 @@ class MoonrakerConn:
         data = self.api_get('server/history/list', raise_for_status=True, order='desc', limit=1)
         return (data.get('jobs', [None]) or [None])[0]
 
-    def set_macro_variable(self, macro_name, var_name, var_value):
-        script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
-        _logger.debug(script)
-        try:
-            resp = self.api_post(
-                'printer/gcode/script',
-                raise_for_status=True,
-                script=script
-            )
-        except:
-            _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
-
     def macro_is_configured(self, macro_name):
         return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
+
+    def set_macro_variables(self, macro_name, **kwargs):
+        if not self.macro_is_configured(macro_name):
+            _logger.warning(f'{macro_name} not configured as a macro. Check your printer.cfg file.')
+            return
+
+        for var_name, var_value in kwargs.items():
+            script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
+            _logger.debug(script)
+            try:
+                resp = self.api_post(
+                    'printer/gcode/script',
+                    raise_for_status=True,
+                    script=script
+                )
+            except:
+                _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
+
 
     ## WebSocket part
 
