@@ -52,6 +52,7 @@ class MoonrakerConn:
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
         self.available_printer_objects = []
         self.remote_event_handlers = {}
+        self._last_set_macro_variables_call = None
 
     def block_until_klippy_ready(self):
         run_in_thread(self._start)
@@ -184,6 +185,10 @@ class MoonrakerConn:
         return any(f'gcode_macro {macro_name.lower()}' in item.lower() for item in self.available_printer_objects)
 
     def set_macro_variables(self, macro_name, **kwargs):
+        current_call = (macro_name, tuple(kwargs.items()))
+        if self._last_set_macro_variables_call == current_call:
+            return
+
         if not self.macro_is_configured(macro_name):
             _logger.warning(f'{macro_name} not configured as a macro. Check your printer.cfg file.')
             return
@@ -197,6 +202,7 @@ class MoonrakerConn:
                     raise_for_status=True,
                     script=script
                 )
+                self._last_set_macro_variables_call = current_call
             except:
                 _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
 
