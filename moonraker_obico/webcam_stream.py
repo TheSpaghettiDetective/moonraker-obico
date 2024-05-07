@@ -164,12 +164,12 @@ class WebcamStreamer:
                 _logger.warn('FPS not specified or invalid in webcam config. Getting the values from the source.')
 
     def assign_janus_params(self):
-        first_h264_webcam = next(filter(lambda item: 'h264' in item.streaming_params['mode'], self.webcams), None)
+        first_h264_webcam = next(filter(lambda item: 'h264' in item.streaming_params['mode'] and item.is_primary_camera, self.webcams), None)
         if first_h264_webcam:
             first_h264_webcam.runtime = {}
             first_h264_webcam.runtime['stream_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
 
-        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item.streaming_params['mode'], self.webcams), None)
+        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item.streaming_params['mode'] and item.is_primary_camera, self.webcams), None)
         if first_mjpeg_webcam:
             first_mjpeg_webcam.runtime = {}
             first_mjpeg_webcam.runtime['stream_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
