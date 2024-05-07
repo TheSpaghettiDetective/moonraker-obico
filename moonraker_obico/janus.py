@@ -7,39 +7,31 @@ import backoff
 import json
 import socket
 
-from .utils import ExpoBackoff, pi_version, to_unicode, is_port_open
+from .utils import pi_version, to_unicode, is_port_open, wait_for_port, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
-from .webcam_stream import WebcamStreamer
+from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
+#from .webcam_stream import WebcamStreamer
 
 _logger = logging.getLogger('obico.janus')
 
-JANUS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-JANUS_WS_PORT = 17058
-JANUS_PRINTER_DATA_PORT = 17739
-MAX_PAYLOAD_SIZE = 1500  # hardcoded in streaming plugin
-CAMERA_STREAMER_RTSP_PORT = 8554
-
-
-class JanusNotSupportedException(Exception):
-    pass
+# CAMERA_STREAMER_RTSP_PORT = 8554
 
 
 class JanusConn:
 
-    def __init__(self, app_model, server_conn, sentry):
-        self.config = app_model.config
-        self.app_model = app_model
+    def __init__(self, janus_port, app_config, server_conn, is_pro, sentry):
+        self.janus_port = janus_port
+        self.app_config = app_config
         self.server_conn = server_conn
+        self.is_pro = is_pro
         self.sentry = sentry
-        self.janus_ws_backoff = ExpoBackoff(120, max_attempts=20)
         self.janus_ws = None
-        self.janus_proc = None
         self.shutting_down = False
-        self.webcam_streamer = None
+        #self.webcam_streamer = None
         self.use_camera_streamer_rtsp = False
 
-    def start(self):
+    def start(self, janus_bin_path, ld_lib_path):
 
         if os.getenv('JANUS_SERVER', '').strip() != '':
             _logger.warning('Using an external Janus gateway. Not starting the built-in Janus gateway.')
@@ -47,66 +39,39 @@ class JanusConn:
             return
 
         def run_janus_forever():
+            try:
+                janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
+                env = {}
+                if ld_lib_path:
+                    env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
+                _logger.debug('Popen: {} {}'.format(env, janus_cmd))
+                janus_proc = subprocess.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-            def setup_janus_config():
-                video_enabled = 'true' if pi_version() and self.config.webcam.disable_video_streaming is not True else 'false'
-                auth_token = self.config.server.auth_token
+                with open(self.janus_pid_file_path(), 'w') as pid_file:
+                    pid_file.write(str(janus_proc.pid))
 
-                cmd_path = os.path.join(JANUS_DIR, 'setup.sh')
-                setup_cmd = '{} -A {} -V {}'.format(cmd_path, auth_token, video_enabled)
-                if self.use_camera_streamer_rtsp:
-                    setup_cmd += ' -r'
-
-                _logger.debug('Popen: {}'.format(setup_cmd))
-                setup_proc = subprocess.Popen(setup_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                returncode = setup_proc.wait()
-                (stdoutdata, stderrdata) = setup_proc.communicate()
-                if returncode != 0:
-                    raise JanusNotSupportedException('Janus setup failed. Skipping Janus connection. Error: \n{}'.format(stdoutdata))
-
-            @backoff.on_exception(backoff.expo, Exception, max_tries=5)
-            def run_janus():
-                janus_cmd = os.path.join(JANUS_DIR, 'run.sh')
-                _logger.debug('Popen: {}'.format(janus_cmd))
-                self.janus_proc = subprocess.Popen(janus_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                while not self.shutting_down:
-                    line = to_unicode(self.janus_proc.stdout.readline(), errors='replace')
+                while True:
+                    line = to_unicode(janus_proc.stdout.readline(), errors='replace')
                     if line:
                         _logger.debug('JANUS: ' + line.rstrip())
-                    elif not self.shutting_down:  # line == None means the process quits
-                        self.janus_proc.wait()
-                        raise Exception('Janus quit! This should not happen. Exit code: {}'.format(self.janus_proc.returncode))
-
-            try:
-                setup_janus_config()
-                run_janus()
-            except JanusNotSupportedException as e:
-                _logger.warning(e)
+                    else:  # line == None means the process quits
+                        _logger.warn('Janus quit with exit code {}'.format(janus_proc.wait()))
+                        return
             except Exception as ex:
                 self.sentry.captureException()
-                self.server_conn.post_printer_event_to_server(
-                    'moonraker-obico: Webcam Streaming Failed',
-                    'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
-                    event_class='WARNING',
-                    info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
-                )
 
-        self.use_camera_streamer_rtsp = self.app_model.linked_printer.get('is_pro') and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
-        _logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
+        #self.use_camera_streamer_rtsp = self.is_pro and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
+        #_logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
 
-        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry, self)
-        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
-            _logger.info('Starting webcam streamer')
-            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
-            stream_thread.daemon = True
-            stream_thread.start()
+#        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
+#        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
+#            _logger.info('Starting webcam streamer')
+#            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
+#            stream_thread.daemon = True
+#            stream_thread.start()
 
-        janus_proc_thread = Thread(target=run_janus_forever)
-        janus_proc_thread.daemon = True
-        janus_proc_thread.start()
-
+        self.kill_janus_if_running()
+        run_in_thread(run_janus_forever)
         self.wait_for_janus()
         self.start_janus_ws()
 
@@ -117,29 +82,34 @@ class JanusConn:
         if self.connected():
             self.janus_ws.send(msg)
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=10)
     def wait_for_janus(self):
-        time.sleep(1)
-        socket.socket().connect((JANUS_SERVER, JANUS_WS_PORT))
+        time.sleep(0.2)
+        wait_for_port(JANUS_SERVER, self.janus_port)
 
     def start_janus_ws(self):
 
         def on_close(ws, **kwargs):
-            self.janus_ws_backoff.more(Exception('Janus WS connection closed!'))
-            if not self.shutting_down:
-                _logger.warning('Reconnecting to Janus WS.')
-                self.start_janus_ws()
-
-        def on_message(ws, msg):
-            if self.process_janus_msg(msg):
-                self.janus_ws_backoff.reset()
+            _logger.warn('Janus WS connection closed!')
 
         self.janus_ws = WebSocketClient(
-            'ws://{}:{}/'.format(JANUS_SERVER, JANUS_WS_PORT),
-            on_ws_msg=on_message,
+            'ws://{}:{}/'.format(JANUS_SERVER, self.janus_port),
+            on_ws_msg=self.process_janus_msg,
             on_ws_close=on_close,
             subprotocols=['janus-protocol'],
             waitsecs=5)
+
+    def janus_pid_file_path(self):
+        return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=self.janus_port)
+
+    def kill_janus_if_running(self):
+        try:
+            # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
+            # Ensure the process is killed before launching a new one
+            with open(self.janus_pid_file_path(), 'r') as pid_file:
+                subprocess.run(['kill', pid_file.read()], check=True)
+            wait_for_port_to_close(JANUS_SERVER, self.janus_port)
+        except Exception as e:
+            _logger.warning('Failed to shutdown Janus - ' + str(e))
 
     def shutdown(self):
         self.shutting_down = True
@@ -149,18 +119,12 @@ class JanusConn:
 
         self.janus_ws = None
 
-        if self.janus_proc:
-            try:
-                self.janus_proc.terminate()
-            except Exception:
-                pass
+        self.kill_janus_if_running()
 
-        self.janus_proc = None
-
-        if self.webcam_streamer:
-            self.webcam_streamer.restore()
-
-    def process_janus_msg(self, raw_msg):
+#        if self.webcam_streamer:
+#            self.webcam_streamer.restore()
+#
+    def process_janus_msg(self, ws, raw_msg):
         try:
             msg = json.loads(raw_msg)
 

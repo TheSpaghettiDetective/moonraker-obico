@@ -322,6 +322,15 @@ def pi_version():
     except:
         return None
 
+def os_bit():
+    return platform.architecture()[0].replace("bit", "-bit")
+
+def parse_integer_or_none(s):
+    try:
+        return int(s)
+    except:
+        return None
+
 
 def run_in_thread(long_running_func, *args, **kwargs):
     daemon_thread = threading.Thread(target=long_running_func,  args=args, kwargs=kwargs)

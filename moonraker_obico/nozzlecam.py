@@ -8,7 +8,6 @@ _logger = logging.getLogger('obico.nozzlecam')
 class NozzleCamConfig:
     def __init__(self, snapshot_url):
         self.snapshot_url = snapshot_url
-        self.snapshot_ssl_validation = False
 
 class NozzleCam:
 

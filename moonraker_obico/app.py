@@ -19,6 +19,7 @@ from moonraker_obico.nozzlecam import NozzleCam
 from .version import VERSION
 from .utils import SentryWrapper, run_in_thread
 from .webcam_capture import JpegPoster
+from .webcam_stream import WebcamStreamer
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
@@ -56,12 +57,12 @@ class App(object):
         self.sentry = None
         self.server_conn = None
         self.moonrakerconn = None
+        self.webcam_streamer = None
         self.jpeg_poster = None
-        self.janus = None
         self.local_tunnel = None
         self.printer = None
         self.passthru_executor = None
-        self.q: queue.Queue = queue.Queue(maxsize=1000)
+        self.q = queue.Queue(maxsize=1000)
         self.nozzlecam = None
 
     def push_event(self, event):
@@ -91,11 +92,6 @@ class App(object):
     def start(self, args):
         _logger.info(f'starting moonraker-obico (v{VERSION})')
 
-        # TODO: This doesn't work as ffmpeg seems to mess with signals as well
-        # global _default_int_handler, _default_term_handler
-        # _default_int_handler = signal.signal(signal.SIGINT, self.interrupted)
-        # _default_term_handler = signal.signal(signal.SIGTERM, self.interrupted)
-
         config = Config(args.config_path)
         config.load_from_config_file()
         self.sentry = SentryWrapper(config=config)
@@ -119,26 +115,23 @@ class App(object):
             config=config,
             remote_status={'viewing': False, 'should_watch': False},
             linked_printer=linked_printer,
-            printer_state=PrinterState(config, self),
+            printer_state=PrinterState(config),
         )
 
         _cfg = self.model.config._config
         _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
 
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
-
-        # TODO: To be removed in webcam NG
-        self.janus = JanusConn(self.model, self.server_conn, self.sentry)
-
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
+        self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model, self.sentry)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
+                webcam_streamer = self.webcam_streamer,
                 jpeg_poster = self.jpeg_poster,
-                # webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model.config, self.model.linked_printer.get('is_pro'), self.sentry),
                 file_downloader = FileDownloader(self.model, self.moonrakerconn, self.server_conn, self.sentry),
                 moonraker_api = MoonrakerApi(self.model, self.moonrakerconn, self.sentry),
-                file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry),
+                file_operations = FileOperations(self.model, self.moonrakerconn, self.sentry)
             ),
             self.server_conn,
             self.sentry)
@@ -150,6 +143,7 @@ class App(object):
             sentry=self.sentry)
 
         run_in_thread(self.server_conn.start)
+        run_in_thread(self.webcam_streamer.start, self.model.config.webcams)
 
         while not (self.server_conn.ss and self.server_conn.ss.connected()):
             _logger.warning('Connections not ready. Trying again in 1s...')
@@ -167,9 +161,6 @@ class App(object):
 
         run_in_thread(self.jpeg_poster.pic_post_loop)
         even_loop_thread = run_in_thread(self.event_loop)
-
-        # Janus may take a while to start, or fail to start. Put it in thread to make sure it does not block
-        run_in_thread(self.janus.start)
 
         try:
             # Save printer_id in the database so that the app can use it to send user to the correct tunnel authorization page
@@ -189,8 +180,6 @@ class App(object):
             self.server_conn.close()
         if self.moonrakerconn:
             self.moonrakerconn.close()
-        if self.janus:
-            self.janus.shutdown()
 
     # TODO: This doesn't work as ffmpeg seems to mess with signals as well
     def interrupted(self, signum, frame):
@@ -399,9 +388,9 @@ class App(object):
             passthru_thread.is_daemon = True
             passthru_thread.start()
 
-        if msg.get('janus') and self.janus:
+        if msg.get('janus') and self.webcam_streamer and self.webcam_streamer.janus:
             _logger.debug(f'Received janus from server: {msg}')
-            self.janus.pass_to_janus(msg.get('janus'))
+            self.webcam_streamer.janus.pass_to_janus(msg.get('janus'))
 
         if msg.get('http.tunnelv2') and self.local_tunnel:
             kwargs = msg.get('http.tunnelv2')

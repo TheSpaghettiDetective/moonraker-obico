@@ -23,7 +23,6 @@ def setup_logging(logging_config, log_path=None, debug=False):
         "%(asctime)s  %(levelname)8s  %(name)s - %(message)s"
     )
 
-
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(formatter)
     handlers.append(sh)
