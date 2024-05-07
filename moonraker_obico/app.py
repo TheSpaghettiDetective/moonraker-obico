@@ -154,8 +154,7 @@ class App(object):
         self.model.printer_state.thermal_presets = self.moonrakerconn.find_all_thermal_presets()
         self.model.printer_state.installed_plugins = self.moonrakerconn.find_all_installed_plugins()
 
-        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', True)
+        self.moonrakerconn.set_macro_variables('OBICO_LINK_STATUS', is_linked=True)
 
         self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
         run_in_thread(self.nozzlecam.start)

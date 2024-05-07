@@ -44,12 +44,9 @@ class StubMoonrakerConn:
     The only purpose of this.moonrakerconn is to set the OBICO_LINK_STATUS macro variables.
 
     This class is a stub for that purpose so that during situations like linking from console, the plugin doesn't crash.
-    The only function sacrificed is set_macro_variable.
+    The only function sacrificed is set_macro_variables.
     """
-    def macro_is_configured(self, macro_name):
-        return False
-
-    def set_macro_variable(self, macro_name, variable_name, value):
+    def set_macro_variables(self, macro_name, **kwargs):
         pass
 
 
@@ -93,10 +90,11 @@ class PrinterDiscovery(object):
         self.one_time_passcode = code
 
     def set_obico_link_status(self, is_linked, one_time_passcode, one_time_passlink):
-        if self.moonrakerconn.macro_is_configured('OBICO_LINK_STATUS'):
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'is_linked', is_linked)
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passcode', f'\'"{one_time_passcode}"\'') # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
-            self.moonrakerconn.set_macro_variable('OBICO_LINK_STATUS', 'one_time_passlink', f'\'"{one_time_passlink}"\'')
+        self.moonrakerconn.set_macro_variables('OBICO_LINK_STATUS',
+            is_linked=is_linked,
+            one_time_passcode=f'\'"{one_time_passcode}"\'', # f'\'"{code}"\'' because of https://github.com/Klipper3d/klipper/issues/4816#issuecomment-950109507
+            one_time_passlink=f'\'"{one_time_passlink}"\''
+        )
 
 
     def _start(self, steps_remaining):
