@@ -204,7 +204,7 @@ class MoonrakerApi:
             try:
                 # Wrap requests.exceptions.RequestException in Exception, since it's one of the configured errors_to_ignore
                 try:
-                    ret_value = api_func(self.func, **kwargs)
+                    ret_value = api_func(self.func, timeout=30, **kwargs)
                 except requests.exceptions.RequestException as exc:
                     if (self.func == "printer/gcode/script"):
                         raise Exception(' "{}" - "{}"'.format(self.func, kwargs.get('script', '')[:5])) from exc # Take first 5 characters of the scrips to see if Sentry grouping will behave more friendly
