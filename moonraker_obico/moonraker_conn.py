@@ -383,9 +383,14 @@ class MoonrakerConn:
 
     def request_home(self, axes) -> Dict:
         # TODO check axes
-        script = "G28 %s" % " ".join(
-            map(lambda x: "%s0" % x.upper(), axes)
-        )
+
+        if axises == ['x', 'y', 'z']:
+            script = "G28"
+        else:
+            script = "G28 %s" % " ".join(
+                map(lambda x: "%s0" % x.upper(), axes)
+            )
+
         return self.jsonrpc_request('printer.gcode.script', params=dict(script=script))
 
     def request_set_temperature(self, heater, target_temp) -> Dict:
