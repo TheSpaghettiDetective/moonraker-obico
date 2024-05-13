@@ -384,7 +384,7 @@ class MoonrakerConn:
     def request_home(self, axes) -> Dict:
         # TODO check axes
 
-        if axises == ['x', 'y', 'z']:
+        if axes == ['x', 'y', 'z']:
             script = "G28"
         else:
             script = "G28 %s" % " ".join(
