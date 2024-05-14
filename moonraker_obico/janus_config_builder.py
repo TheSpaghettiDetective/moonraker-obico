@@ -5,24 +5,22 @@ import os
 import distro
 import subprocess
 import re
-import shutil
 
-
-from .utils import os_bit, pi_version
+from .utils import os_bit, pi_version, board_id
 
 JANUS_ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
 RUNTIME_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'runtime', 'etc', 'janus')
 TPL_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'templates', 'etc', 'janus')
 
 distro_id = distro.id()
-if distro_id == 'debian' and pi_version(): # On some Raspbian/RPi OS versions, distro.id() returns 'debian' instead of 'raspbian'.
-    distro_id = 'raspbian'
+if distro_id == 'raspbian' and pi_version(): # On some Raspbian/RPi OS versions, distro.id() returns 'debian'. On others, it returns 'raspbian'.
+    distro_id = 'debian'
 
-PRECOMPILED_DIR = '{root_dir}/precomplied/{os_id}.{os_version}.{os_bit}'.format(root_dir=JANUS_ROOT_DIR, os_id=distro_id, os_version=distro.major_version(), os_bit=os_bit())
+PRECOMPILED_DIR = '{root_dir}/precomplied/{board_id}.{os_id}.{os_version}.{os_bit}'.format(root_dir=JANUS_ROOT_DIR, board_id=board_id(), os_id=distro_id, os_version=distro.major_version(), os_bit=os_bit())
 
 _logger = logging.getLogger('obico.janus_config_builder')
 
-def precompiled_janus_jcfg_folders_section(lib_dir):
+def janus_jcfg_folders_section(lib_dir):
     return """
             plugins_folder = "{lib_dir}/janus/plugins"                     # Plugins folder
             transports_folder = "{lib_dir}/janus/transports"       # Transports folder
@@ -30,36 +28,31 @@ def precompiled_janus_jcfg_folders_section(lib_dir):
             loggers_folder = "{lib_dir}/janus/loggers"
 """.format(lib_dir=lib_dir)
 
-def system_janus_jcfg_folders_section(janus_jcfg_path):
-  pattern = r'^\s*(plugins_folder|transports_folder|events_folder|loggers_folder)\s*='
-  filtered_lines = []
-
-  with open(janus_jcfg_path, 'r') as f:
-      for line in f:
-          if re.search(pattern, line):
-              filtered_lines.append(line)
-
-  return ''.join(filtered_lines)
-
-
-def find_system_janus_jcfg_path():
-    janus_path = shutil.which('janus')
-    janus_jcfg_path = None
-
-    if not janus_path:
-        return (None, None)
+def find_system_janus_paths():
+    janus_path = None
+    janus_lib_path = None
 
     try:
         output = subprocess.check_output(['dpkg', '-L', 'janus'], universal_newlines=True)
         paths = output.split('\n')
-        for path in paths:
-            path = path.strip()
-            if path.endswith('/janus.jcfg'):
-                janus_jcfg_path = path
+
+        # janus binary path if only 1 line ends with /bin/janus
+        janus_paths = [path.strip() for path in paths if path.strip().endswith('/bin/janus')]
+        if len(janus_paths) == 1:
+            janus_path = janus_paths[0]
+
+        # janus lib path if line contains plugins/libjanus_streaming.so
+        janus_lib_paths = [path.strip() for path in paths if '/janus/plugins/libjanus_streaming.so' in path]
+        if janus_lib_paths:
+            janus_lib_path = os.path.dirname(janus_lib_paths[0])
+            janus_lib_path = os.path.normpath(janus_lib_path)
+            if janus_lib_path.endswith('/janus/plugins'):
+                janus_lib_path = janus_lib_path[:-14]  # remove "/plugins" from the end
+
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
-    return (janus_path, janus_jcfg_path)
+    return (janus_path, janus_lib_path)
 
 
 def build_janus_jcfg(auth_token):
@@ -69,14 +62,14 @@ def build_janus_jcfg(auth_token):
     janus_bin_path = None
     folder_section = None
 
-    (janus_bin_path, system_janus_jcfg_path) = find_system_janus_jcfg_path()
-    if janus_bin_path and system_janus_jcfg_path:
-        folder_section = system_janus_jcfg_folders_section(system_janus_jcfg_path)
+    (janus_bin_path, system_janus_lib_path) = find_system_janus_paths()
+    if janus_bin_path and system_janus_lib_path:
+        folder_section = janus_jcfg_folders_section(system_janus_lib_path)
     else:
         janus_bin_path = os.path.join(PRECOMPILED_DIR, 'bin', 'janus')
         ld_lib_path = os.path.join(PRECOMPILED_DIR, 'lib')
         if os.path.exists(janus_bin_path) and os.path.exists(ld_lib_path) and os.path.isdir(ld_lib_path):
-            folder_section = precompiled_janus_jcfg_folders_section(ld_lib_path)
+            folder_section = janus_jcfg_folders_section(ld_lib_path)
 
     if not janus_bin_path or not folder_section:
         return (None, None)

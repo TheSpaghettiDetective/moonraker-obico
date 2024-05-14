@@ -322,8 +322,22 @@ def pi_version():
     except:
         return None
 
+
 def os_bit():
     return platform.architecture()[0].replace("bit", "-bit")
+
+
+def board_id():
+    model_file = "/sys/firmware/devicetree/base/model"
+    if os.path.isfile(model_file):
+        with open(model_file, 'r') as file:
+            data = file.read()
+            if "raspberry" in data.lower():
+                return "rpi"
+            elif "makerbase" in data.lower() or "roc-rk3328-cc" in data:
+                return "mks"
+    return "NA"
+
 
 def parse_integer_or_none(s):
     try:

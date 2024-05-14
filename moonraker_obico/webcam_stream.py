@@ -102,34 +102,44 @@ class WebcamStreamer:
         self.assign_janus_params()
         try:
             (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT, self.sentry)
+            if not janus_bin_path:
+                _logger.error('Janus not found or not configured correctly. Quiting webcam streaming.')
+                self.server_conn.post_printer_event_to_server(
+                    'moonraker-obico: Webcam Streaming Failed',
+                    'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
+                    event_class='WARNING',
+                    info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
+                )
+                self.shutdown()
+                return
+
+            self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.is_pro, self.sentry)
+            self.janus.start(janus_bin_path, ld_lib_path)
+
+            if not self.wait_for_janus():
+                for webcam in self.webcams:
+                    webcam.setdefault('error', 'Janus failed to start')
+
+            for webcam in self.webcams:
+                if webcam.streaming_params['mode'] == 'h264_rtsp':
+                    continue    # No extra process is needed when the mode is 'h264_rtsp'
+                elif webcam.streaming_params['mode'] == 'h264_copy':
+                    self.h264_copy(webcam)
+                elif webcam.streaming_params['mode'] == 'h264_transcode':
+                    self.h264_transcode(webcam)
+                elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
+                    self.mjpeg_webrtc(webcam)
+
+            normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
+            self.printer_state.set_webcams(normalized_webcams)
+            self.server_conn.post_status_update_to_server(with_settings=True)
+
+            return (normalized_webcams, None)  # return value expected for a passthru target
         except Exception:
             self.sentry.captureException()
-            _logger.error('Error in configuring janus. Quiting webcam streaming.')
+            _logger.error('Error. Quitting webcam streaming.', exc_info=True)
             self.shutdown()
             return
-
-        self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.is_pro, self.sentry)
-        self.janus.start(janus_bin_path, ld_lib_path)
-
-        if not self.wait_for_janus():
-            for webcam in self.webcams:
-                webcam.setdefault('error', 'Janus failed to start')
-
-        for webcam in self.webcams:
-            if webcam.streaming_params['mode'] == 'h264_rtsp':
-                continue    # No extra process is needed when the mode is 'h264_rtsp'
-            elif webcam.streaming_params['mode'] == 'h264_copy':
-                self.h264_copy(webcam)
-            elif webcam.streaming_params['mode'] == 'h264_transcode':
-                self.h264_transcode(webcam)
-            elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
-                self.mjpeg_webrtc(webcam)
-
-        normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
-        self.printer_state.set_webcams(normalized_webcams)
-        self.server_conn.post_status_update_to_server(with_settings=True)
-
-        return (normalized_webcams, None)  # return value expected for a passthru target
 
     def shutdown(self):
         self.shutting_down = True
