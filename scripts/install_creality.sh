@@ -33,17 +33,17 @@ ensure_deps() {
   if [ $CREALITY_VARIANT = "sonic_pad" ]; then
     opkg install ${PKGLIST}
     pip3 install -q --no-cache-dir virtualenv
-    pip3 install -q --no-cache-dir --upgrade pip
   elif [ $CREALITY_VARIANT = "k1" ]; then
     /opt/bin/opkg install ${PKGLIST}
-    pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir --upgrade pip
     pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir virtualenv
   fi
   ensure_venv
   if [ $CREALITY_VARIANT = "sonic_pad" ]; then
+    pip3 install -q --no-cache-dir --upgrade pip
     debug Running... "${OBICO_ENV}"/bin/pip3 install -q --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
     "${OBICO_ENV}"/bin/pip3 install -q --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
   elif [ $CREALITY_VARIANT = "k1" ]; then
+    pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir --upgrade pip
     debug Running... "${OBICO_ENV}"/bin/pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
     "${OBICO_ENV}"/bin/pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --require-virtualenv --no-cache-dir -r "${OBICO_DIR}"/requirements.txt
   fi
