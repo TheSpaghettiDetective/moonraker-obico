@@ -125,7 +125,7 @@ ensure_venv() {
     report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
     if is_k1; then
-      python3 /usr/lib/python3.8/site-packages/virtualenv.py -p /usr/bin/python3  --system-site-packages "${OBICO_ENV}"
+      virtualenv -p /opt/bin/python3 --system-site-packages "${OBICO_ENV}"
     else
       virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
     fi
