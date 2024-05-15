@@ -96,7 +96,7 @@ class JanusConn:
             on_ws_msg=self.process_janus_msg,
             on_ws_close=on_close,
             subprotocols=['janus-protocol'],
-            waitsecs=5)
+            waitsecs=30)
 
     def janus_pid_file_path(self):
         return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=self.janus_port)
