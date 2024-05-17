@@ -97,7 +97,7 @@ class WebcamStreamer:
         self.shutdown_subprocesses()
         self.close_all_mjpeg_socks()
 
-        self.webcams = webcam_configs
+        self.webcams = [webcam_config.as_dict() for webcam_config in webcam_configs]
         self.find_streaming_params()
         self.assign_janus_params()
         try:
@@ -117,17 +117,16 @@ class WebcamStreamer:
             self.janus.start(janus_bin_path, ld_lib_path)
 
             if not self.wait_for_janus():
-                for webcam in self.webcams:
-                    webcam.setdefault('error', 'Janus failed to start')
+                return
 
             for webcam in self.webcams:
-                if webcam.streaming_params['mode'] == 'h264_rtsp':
+                if webcam['streaming_params']['mode'] == 'h264_rtsp':
                     continue    # No extra process is needed when the mode is 'h264_rtsp'
-                elif webcam.streaming_params['mode'] == 'h264_copy':
+                elif webcam['streaming_params']['mode'] == 'h264_copy':
                     self.h264_copy(webcam)
-                elif webcam.streaming_params['mode'] == 'h264_transcode':
+                elif webcam['streaming_params']['mode'] == 'h264_transcode':
                     self.h264_transcode(webcam)
-                elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
+                elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
                     self.mjpeg_webrtc(webcam)
 
             normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
@@ -153,61 +152,67 @@ class WebcamStreamer:
 
     def find_streaming_params(self):
         ffmpeg_h264_encoder = find_ffmpeg_h264_encoder()
-        webcams = []
         for webcam in self.webcams:
-            stream_mode = webcam.stream_mode if webcam.stream_mode else ('h264_transcode' if ffmpeg_h264_encoder else 'mjpeg_webrtc')
-            webcam.streaming_params = dict(
+            stream_mode = webcam.get('stream_mode') or ('h264_transcode' if ffmpeg_h264_encoder else 'mjpeg_webrtc')
+            webcam['streaming_params'] = dict(
                     mode=stream_mode,
                     h264_encoder=ffmpeg_h264_encoder,
             )
 
             try:
-                (img_w, img_h) = map(int, webcam.resolution.split('x'))
-                webcam.streaming_params['recode_width'] = img_w
-                webcam.streaming_params['recode_height'] = img_h
+                (img_w, img_h) = map(int, webcam['resolution'].split('x'))
+                webcam['streaming_params']['recode_width'] = img_w
+                webcam['streaming_params']['recode_height'] = img_h
             except:
                 _logger.warn('Resolution not specified or invalid in webcam config. Getting the values from the source.')
 
             try:
-                webcam.streaming_params['recode_fps'] = webcam.target_fps
+                webcam['streaming_params']['recode_fps'] = webcam['target_fps']
             except:
                 _logger.warn('FPS not specified or invalid in webcam config. Getting the values from the source.')
 
     def assign_janus_params(self):
-        first_h264_webcam = next(filter(lambda item: 'h264' in item.streaming_params['mode'] and item.is_primary_camera, self.webcams), None)
+        first_h264_webcam = next(filter(lambda item: 'h264' in item['streaming_params']['mode'] and item['is_primary_camera'], self.webcams), None)
         if first_h264_webcam:
-            first_h264_webcam.runtime = {}
-            first_h264_webcam.runtime['stream_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
+            first_h264_webcam['runtime'] = {}
+            first_h264_webcam['runtime']['stream_id'] = 1  # Set janus id to 1 for the first h264 stream to be compatible with old mobile app versions
+            first_h264_webcam['runtime']['data_channel'] = True    # data channel on stream_id=1 to be backward compatible with old mobile app versions
 
-        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item.streaming_params['mode'] and item.is_primary_camera, self.webcams), None)
+        first_mjpeg_webcam = next(filter(lambda item: 'mjpeg' in item['streaming_params']['mode'] and item['is_primary_camera'], self.webcams), None)
         if first_mjpeg_webcam:
-            first_mjpeg_webcam.runtime = {}
-            first_mjpeg_webcam.runtime['stream_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
+            first_mjpeg_webcam['runtime'] = {}
+            first_mjpeg_webcam['runtime']['stream_id'] = 2  # Set janus id to 2 for the first mjpeg stream to be compatible with old mobile app versions
 
         cur_stream_id = 3
         cur_port_num = JANUS_ADMIN_WS_PORT + 1
         for webcam in self.webcams:
-            if not hasattr(webcam, 'runtime'):
-                webcam.runtime = {}
+            if not webcam.get('runtime'):
+                webcam['runtime'] = {}
 
-            if not webcam.runtime.get('stream_id'):
-                webcam.runtime['stream_id'] = cur_stream_id
+            if not webcam['runtime'].get('stream_id'):
+                webcam['runtime']['stream_id'] = cur_stream_id
                 cur_stream_id += 1
 
-            if webcam.streaming_params['mode'] == 'h264_rtsp':
-                 webcam.runtime['dataport'] = cur_port_num
+            if webcam['streaming_params']['mode'] in ('h264_copy', 'h264_transcode'):
+                 webcam['runtime']['videoport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode'):
-                 webcam.runtime['videoport'] = cur_port_num
+                 webcam['runtime']['videortcpport'] = cur_port_num
                  cur_port_num += 1
-                 webcam.runtime['videortcpport'] = cur_port_num
-                 cur_port_num += 1
-                 webcam.runtime['dataport'] = cur_port_num
-                 cur_port_num += 1
-            elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
-                 webcam.runtime['mjpeg_dataport'] = cur_port_num
+                 if webcam['runtime']['stream_id'] == 1:    # data channel on stream_id=1 to be backward compatible with old mobile app versions
+                    webcam['runtime']['dataport'] = cur_port_num
+                    cur_port_num += 1
+            elif webcam['streaming_params']['mode'] == 'mjpeg_webrtc':
+                 webcam['runtime']['mjpeg_dataport'] = cur_port_num
                  cur_port_num += 1
 
+        data_channel_webcam = next((webcam for webcam in self.webcams if webcam['runtime'].get('data_channel') == True), None)
+
+        if not data_channel_webcam:
+            new_webcam = {
+                'streaming_params': {'mode': 'data_channel_only'},
+                'runtime': {'stream_id': cur_port_num, 'dataport': cur_port_num, 'data_channel': True}
+            }
+            self.webcams.append(new_webcam)
 
     def wait_for_janus(self):
         for i in range(100):
@@ -223,8 +228,8 @@ class WebcamStreamer:
             if not self.is_pro:
                 raise Exception('Free user can not stream webcam in h264_copy mode')
 
-            h264_http_url =  webcam.streaming_params.get('h264_http_url')
-            rtp_port = webcam.runtime['videoport']
+            h264_http_url =  webcam['streaming_params'].get('h264_http_url')
+            rtp_port = webcam['runtime']['videoport']
 
             # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
             self.start_ffmpeg(rtp_port, '-re -i {} -c:v copy'.format(h264_http_url), retry_after_quit=True)
@@ -235,27 +240,27 @@ class WebcamStreamer:
     def h264_transcode(self, webcam):
 
         try:
-            stream_url = webcam.stream_url
+            stream_url = webcam['stream_url']
             if not stream_url:
                 raise Exception('stream_url not configured. Unable to stream the webcam.')
 
-            (img_w, img_h) = (parse_integer_or_none(webcam.streaming_params.get('recode_width')), parse_integer_or_none(webcam.streaming_params.get('recode_height')))
+            (img_w, img_h) = (parse_integer_or_none(webcam['streaming_params'].get('recode_width')), parse_integer_or_none(webcam['streaming_params'].get('recode_height')))
             if not img_w or not img_h:
                 _logger.warn('width and/or height not specified or invalid in streaming parameters. Getting the values from the source.')
                 (img_w, img_h) = get_webcam_resolution(webcam)
 
-            fps = parse_integer_or_none(webcam.streaming_params.get('recode_fps'))
+            fps = parse_integer_or_none(webcam['streaming_params'].get('recode_fps'))
             if not fps:
                 _logger.warn('FPS not specified or invalid in streaming parameters. Getting the values from the source.')
-                fps = webcam.target_fps
+                fps = webcam['target_fps']
 
             bitrate = bitrate_for_dim(img_w, img_h)
             if not self.is_pro:
                 fps = min(8, fps) # For some reason, when fps is set to 5, it looks like 2FPS. 8fps looks more like 5
                 bitrate = int(bitrate/2)
 
-            rtp_port = webcam.runtime['videoport']
-            self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=webcam.streaming_params.get('h264_encoder')))
+            rtp_port = webcam['runtime']['videoport']
+            self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=webcam['streaming_params'].get('h264_encoder')))
         except Exception:
             self.sentry.captureException()
 
@@ -315,9 +320,9 @@ class WebcamStreamer:
         @backoff.on_exception(backoff.expo, Exception)
         def mjpeg_loop():
 
-            mjpeg_dataport = webcam.runtime['mjpeg_dataport']
+            mjpeg_dataport = webcam['runtime']['mjpeg_dataport']
 
-            min_interval_btw_frames = 1.0 / webcam.target_fps
+            min_interval_btw_frames = 1.0 / webcam['target_fps']
             bandwidth_throttle = 0.004
             if pi_version() == "0":    # If Pi Zero
                 bandwidth_throttle *= 2
@@ -382,13 +387,14 @@ class WebcamStreamer:
 
     def normalized_webcam_dict(self, webcam):
         return dict(
-                name=webcam.name,
-                is_primary_camera=webcam.is_primary_camera,
-                is_nozzle_camera=webcam.is_nozzle_camera,
-                stream_mode=webcam.streaming_params.get('mode'),
-                stream_id=webcam.runtime.get('stream_id'),
-                flipV=webcam.flip_v,
-                flipH=webcam.flip_h,
-                rotation=webcam.rotation,
-                streamRatio='16:9' if webcam.aspect_ratio_169 else '4:3',
+                name=webcam.get('name', ''),
+                is_primary_camera=webcam.get('is_primary_camera', False),
+                is_nozzle_camera=webcam.get('is_nozzle_camera', False),
+                stream_mode=webcam.get('streaming_params', {}).get('mode'),
+                stream_id=webcam.get('runtime', {}).get('stream_id'),
+                flipV=webcam.get('flip_v', False),
+                flipH=webcam.get('flip_h', False),
+                rotation=webcam.get('rotation', 0),
+                streamRatio='16:9' if webcam.get('aspect_ratio_169') else '4:3',
+                data_channel=webcam.get('runtime', {}).get('data_channel', False),
                 )

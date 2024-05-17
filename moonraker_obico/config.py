@@ -181,6 +181,12 @@ class WebcamConfig:
 
         return full_url
 
+    def as_dict(self):
+        attrs = ['name', 'is_primary_camera'] + [attr for attr in dir(self) if isinstance(getattr(WebcamConfig, attr, None), property)]
+        result = {}
+        for attr in attrs:
+                result[attr] = getattr(self, attr)
+        return result
 
 @dataclasses.dataclass
 class LoggingConfig:
