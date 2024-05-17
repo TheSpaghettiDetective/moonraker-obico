@@ -210,7 +210,7 @@ class WebcamStreamer:
         if not data_channel_webcam:
             new_webcam = {
                 'streaming_params': {'mode': 'data_channel_only'},
-                'runtime': {'stream_id': cur_port_num, 'dataport': cur_port_num, 'data_channel': True}
+                'runtime': {'stream_id': cur_stream_id, 'dataport': cur_port_num, 'data_channel': True}
             }
             self.webcams.append(new_webcam)
 
