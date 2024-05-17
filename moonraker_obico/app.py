@@ -27,7 +27,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .janus import JanusConn
 from .tunnel import LocalTunnel
-from .printer_discovery import PrinterDiscovery
+from .printer_discovery import PrinterDiscovery, StubMoonrakerConn
 import subprocess
 from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
 
@@ -97,10 +97,13 @@ class App(object):
         self.sentry = SentryWrapper(config=config)
         setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
 
-        self.moonrakerconn = MoonrakerConn(config, self.sentry, self.push_event,)
-        # Blocking call. When continued, moonrakeconn is guaranteed to be properly configured. Also config object is updated with moonraker objects
-        self.moonrakerconn.block_until_klippy_ready()
-        self.moonrakerconn.add_remote_event_handler('relink_obico', self.relink_obico)
+        if args.dev_mode:
+            self.moonrakerconn = StubMoonrakerConn()
+        else:
+            self.moonrakerconn = MoonrakerConn(config, self.sentry, self.push_event,)
+            # Blocking call. When continued, moonrakeconn is guaranteed to be properly configured. Also config object is updated with moonraker objects
+            self.moonrakerconn.block_until_klippy_ready()
+            self.moonrakerconn.add_remote_event_handler('relink_obico', self.relink_obico)
 
         if not config.server.auth_token:
             discovery = PrinterDiscovery(config, self.sentry, moonrakerconn=self.moonrakerconn)
@@ -428,6 +431,11 @@ if __name__ == '__main__':
         '-d', '--debug', dest='debug', required=False,
         action='store_true', default=False,
         help='Enable debug logging'
+    )
+    parser.add_argument(
+        '--dev-mode', dest='dev_mode', required=False,
+        action='store_true', default=False,
+        help='Dev mode. Use stub moonraker. For dev only (not for production).'
     )
     args = parser.parse_args()
     App().start(args)

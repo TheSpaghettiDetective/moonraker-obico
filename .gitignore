@@ -9,4 +9,5 @@ dist
 .DS_Store
 moonraker-obico.cfg
 moonraker-obico.cfg.local
+moonraker-obico.cfg.stg
 venv

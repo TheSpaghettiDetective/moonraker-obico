@@ -46,9 +46,11 @@ class StubMoonrakerConn:
     This class is a stub for that purpose so that during situations like linking from console, the plugin doesn't crash.
     The only function sacrificed is set_macro_variables.
     """
-    def set_macro_variables(self, macro_name, **kwargs):
-        pass
 
+    def __getattr__(self, name):
+        def method(*args, **kwargs):
+            _logger.debug(f"Stubbing {name} call")
+        return method
 
 class PrinterDiscovery(object):
 
