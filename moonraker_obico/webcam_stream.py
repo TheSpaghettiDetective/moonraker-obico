@@ -125,6 +125,8 @@ class WebcamStreamer:
                     continue    # No extra process is needed when the mode is 'h264_rtsp'
                 elif webcam.streaming_params['mode'] == 'h264_copy':
                     self.h264_copy(webcam)
+                elif webcam.streaming_params['mode'] == 'h264_device':
+                    self.h264_device(webcam)
                 elif webcam.streaming_params['mode'] == 'h264_transcode':
                     self.h264_transcode(webcam)
                 elif webcam.streaming_params['mode'] == 'mjpeg_webrtc':
@@ -197,7 +199,7 @@ class WebcamStreamer:
             if webcam.streaming_params['mode'] == 'h264_rtsp':
                  webcam.runtime['dataport'] = cur_port_num
                  cur_port_num += 1
-            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode'):
+            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode', 'h264_device'):
                  webcam.runtime['videoport'] = cur_port_num
                  cur_port_num += 1
                  webcam.runtime['videortcpport'] = cur_port_num
@@ -223,11 +225,22 @@ class WebcamStreamer:
             if not self.is_pro:
                 raise Exception('Free user can not stream webcam in h264_copy mode')
 
-            h264_http_url =  webcam.streaming_params.get('h264_http_url')
+            # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
+            self.start_ffmpeg(webcam.runtime['videoport'], f'-re -i {webcam.h264_http_url} -c:v copy', retry_after_quit=True)
+        except Exception:
+            self.sentry.captureException()
+
+
+    def h264_device(self, webcam):
+        try:
+            (img_w, img_h) = (parse_integer_or_none(webcam.streaming_params.get('recode_width')), parse_integer_or_none(webcam.streaming_params.get('recode_height')))
+            if not img_w or not img_h:
+                _logger.warn('width and/or height not specified or invalid for h264_device mode. Using default.')
+                (img_w, img_h) = (640, 480)
+
             rtp_port = webcam.runtime['videoport']
 
-            # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
-            self.start_ffmpeg(rtp_port, '-re -i {} -c:v copy'.format(h264_http_url), retry_after_quit=True)
+            self.start_ffmpeg(rtp_port, f'-f v4l2 -framerate {webcam.target_fps} -s {img_w}x{img_h} -input_format h264 -i {webcam.h264_device_path} -c:v copy -flags:v +global_header')
         except Exception:
             self.sentry.captureException()
 

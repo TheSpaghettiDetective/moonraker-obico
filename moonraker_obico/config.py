@@ -67,10 +67,15 @@ class TunnelConfig:
 class WebcamConfig:
 
     def __init__(self, webcam_config_section, is_primary_camera):
-        self.name = webcam_config_section.name[len("webcam "):] # '' for default webcam config, in which case we will try to fetch the config from Moonraker
         self.is_primary_camera = is_primary_camera
         self.webcam_config_section = webcam_config_section
         self.moonraker_webcam_config = {}
+
+        self.name = self.webcam_config_section.name[len("webcam "):] # '' for default webcam config, in which case we will try to fetch the config from Moonraker
+        self.resolution = self.webcam_config_section.get('resolution')
+        self.stream_mode = self.webcam_config_section.get('stream_mode')
+        self.h264_http_url = self.webcam_config_section.get('h264_http_url')
+        self.h264_device_path = self.webcam_config_section.get('h264_device_path')
 
     @property
     def is_nozzle_camera(self):
@@ -162,13 +167,6 @@ class WebcamConfig:
             _logger.warn(f'Invalid aspect_ratio_169 value. Using default.')
             return False
 
-    @property
-    def resolution(self):
-        return self.webcam_config_section.get('resolution')
-
-    @property
-    def stream_mode(self):
-        return self.webcam_config_section.get('stream_mode')
 
     @classmethod
     def webcam_full_url(cls, url):

@@ -184,7 +184,7 @@ def build_janus_plugin_streaming_jcfg(webcams, sentry):
                 else:
                     raise Exception('streaming_params.rtsp_port is required to do h264_rtsp streaming')
 
-            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode'):
+            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode', 'h264_device'):
                 if webcam.runtime.get('videoport') and webcam.runtime.get('videortcpport') and webcam.runtime.get('dataport'):
                     f.write(streaming_jcfg_rtp_section(webcam.runtime['stream_id'], webcam.runtime['videoport'], webcam.runtime['videortcpport'], webcam.runtime['dataport']))
                 else:
