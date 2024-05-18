@@ -109,6 +109,7 @@ class App(object):
             discovery = PrinterDiscovery(config, self.sentry, moonrakerconn=self.moonrakerconn)
             discovery.start_and_block()
             config.load_from_config_file() # PrinterDiscovery may or may not have succeeded. Reload from the file to make sure auth_token is loaded
+            config.update_moonraker_objects(self.moonrakerconn) # Config internal objects refreshed from the config file, make sure they are updated again with moonraker states
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         linked_printer = self.wait_for_auth_token(config)
