@@ -180,6 +180,11 @@ class WebcamConfig:
         return full_url
 
 
+    def __repr__(self):
+        attributes = ', '.join(f'{k}={getattr(self, k)}' for k in dir(self) if not k.startswith('__') and not callable(getattr(self, k)))
+        return f"WebcamConfig({attributes})"
+
+
 @dataclasses.dataclass
 class LoggingConfig:
     path: str
