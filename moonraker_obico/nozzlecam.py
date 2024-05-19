@@ -5,9 +5,6 @@ from urllib.parse import urlparse
 from moonraker_obico.webcam_capture import capture_jpeg
 _logger = logging.getLogger('obico.nozzlecam')
 
-class NozzleCamConfig:
-    def __init__(self, snapshot_url):
-        self.snapshot_url = snapshot_url
 
 class NozzleCam:
 
@@ -19,9 +16,9 @@ class NozzleCam:
         self.last_on_first_layer = 0 # track the time the print was last on the first layer to give some buffer for macro to initiate first layer scanning
 
     def start(self):
-        nozzle_config = self.create_nozzlecam_config()
+        nozzlecam_snapshot_url = self.get_nozzlecam_snapshot_url()
 
-        if nozzle_config is None:
+        if nozzlecam_snapshot_url is None:
             return
 
         capturing = False
@@ -44,7 +41,7 @@ class NozzleCam:
             if first_layer_scanning:
                 capturing_interval = 0.1
             try:
-                self.send_nozzlecam_jpeg(capture_jpeg(nozzle_config), first_layer_scanning)
+                self.send_nozzlecam_jpeg(capture_jpeg(nozzlecam_snapshot_url), first_layer_scanning)
             except Exception:
                 _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
 
@@ -90,7 +87,15 @@ class NozzleCam:
         except Exception:
             _logger.error('Failed to send images', exc_info=True)
 
-    def create_nozzlecam_config(self):
+    def get_nozzlecam_snapshot_url(self):
+        if self.model and self.model.config and self.model.config.webcams:
+            nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
+
+        if nozzle_cam_config:
+            _logger.info(f'Nozzle camera {nozzle_cam_config.name} found. URL: {nozzle_cam_config.snapshot_url}')
+            return nozzle_cam_config.snapshot_url
+
+        # For Celestrius alpha testers
         try:
             ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.model.linked_printer["id"]}/ext/', timeout=60, raise_exception=True).json().get('ext', {})
             nozzle_url = ext_info.get('nozzlecam_url', '')
@@ -104,7 +109,7 @@ class NozzleCam:
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
-            return NozzleCamConfig(nozzle_url)
+            return nozzle_url
         except Exception:
-            _logger.warn('Exception in build nozzle config. First Layer AI disabled.')
+            _logger.warn('Can not find nozzle camera. First Layer AI disabled.')
             return None

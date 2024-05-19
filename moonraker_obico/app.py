@@ -48,9 +48,6 @@ class App(object):
         linked_printer: Dict
         printer_state: PrinterState
 
-        def is_configured(self):
-            return True  # FIXME
-
     def __init__(self):
         self.shutdown = False
         self.model = None
