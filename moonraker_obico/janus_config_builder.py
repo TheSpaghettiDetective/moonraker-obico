@@ -251,6 +251,9 @@ certificates: {{
 
 
 def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port, sentry):
+    if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
+        os.makedirs(RUNTIME_JANUS_ETC_DIR)
+
     (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
     build_janus_plugin_streaming_jcfg(webcams, sentry)
