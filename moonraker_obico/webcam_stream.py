@@ -104,12 +104,7 @@ class WebcamStreamer:
             (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
                 _logger.error('Janus not found or not configured correctly. Quiting webcam streaming.')
-                self.server_conn.post_printer_event_to_server(
-                    'moonraker-obico: Webcam Streaming Failed',
-                    'The webcam streaming failed to start. Obico is now streaming at 0.1 FPS.',
-                    event_class='WARNING',
-                    info_url='https://www.obico.io/docs/user-guides/webcam-stream-stuck-at-1-10-fps/',
-                )
+                self.send_streaming_failed_event()
                 self.shutdown()
                 return
 
@@ -140,6 +135,7 @@ class WebcamStreamer:
         except Exception:
             self.sentry.captureException()
             _logger.error('Error. Quitting webcam streaming.', exc_info=True)
+            self.send_streaming_failed_event()
             self.shutdown()
             return
 
@@ -150,8 +146,13 @@ class WebcamStreamer:
         return ('ok', None)  # return value expected for a passthru target
 
 
-    ## End of passthru target methods
-
+    def send_streaming_failed_event(self):
+        self.server_conn.post_printer_event_to_server(
+            'moonraker-obico: Webcam Streaming Failed',
+            f'Make sure the webcam is properly configured in moonraker-obico.cfg.',
+            event_class='WARNING',
+            info_url='https://obico.io/docs/user-guides/moonraker-obico/config/#webcam-section',
+        )
 
     def find_streaming_params(self):
         ffmpeg_h264_encoder = find_ffmpeg_h264_encoder()
