@@ -101,7 +101,7 @@ class WebcamStreamer:
         self.find_streaming_params()
         self.assign_janus_params()
         try:
-            (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT, self.sentry)
+            (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
                 _logger.error('Janus not found or not configured correctly. Quiting webcam streaming.')
                 self.server_conn.post_printer_event_to_server(

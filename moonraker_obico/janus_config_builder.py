@@ -174,7 +174,7 @@ mjpeg-{stream_id}: {{
 """.format(stream_id=stream_id, mjpeg_dataport=mjpeg_dataport))
 
 
-def build_janus_plugin_streaming_jcfg(webcams, sentry):
+def build_janus_plugin_streaming_jcfg(webcams):
     streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=RUNTIME_JANUS_ETC_DIR)
     with open(streaming_jcfg_path, 'w') as f:
         for webcam in webcams:
@@ -250,13 +250,13 @@ certificates: {{
 """.format(ws_port=ws_port, admin_ws_port=admin_ws_port))
 
 
-def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port, sentry):
+def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
     if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
         os.makedirs(RUNTIME_JANUS_ETC_DIR)
 
     (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
-    build_janus_plugin_streaming_jcfg(webcams, sentry)
+    build_janus_plugin_streaming_jcfg(webcams)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
 
     return (janus_bin_path, ld_lib_path)
