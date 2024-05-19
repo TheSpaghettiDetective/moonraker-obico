@@ -145,13 +145,12 @@ class WebcamStreamer:
         self.close_all_mjpeg_socks()
         return ('ok', None)  # return value expected for a passthru target
 
-
     def send_streaming_failed_event(self):
         self.server_conn.post_printer_event_to_server(
             'moonraker-obico: Webcam Streaming Failed',
             f'Make sure the webcam is properly configured in moonraker-obico.cfg.',
             event_class='WARNING',
-            info_url='https://obico.io/docs/user-guides/moonraker-obico/config/#webcam-section',
+            info_url='https://obico.io/docs/user-guides/moonraker-obico/webcam/',
         )
 
     def find_streaming_params(self):

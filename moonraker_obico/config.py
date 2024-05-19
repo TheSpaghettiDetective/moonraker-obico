@@ -114,7 +114,7 @@ class WebcamConfig:
             fps = int(self.moonraker_webcam_config.get('target_fps', 15))
 
         if self.webcam_config_section:
-            fps = int(self.webcam_config_section.getboolean('target_fps', 25))
+            fps = int(self.webcam_config_section.get('target_fps', 25))
 
         return min(fps, 30)
 
