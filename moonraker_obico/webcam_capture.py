@@ -23,7 +23,7 @@ _logger = logging.getLogger('obico.webcam_capture')
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 @backoff.on_predicate(backoff.expo, max_tries=3)
 def capture_jpeg(webcam_config, force_stream_url=False):
-    MAX_JPEG_SIZE = 5000000
+    MAX_JPEG_SIZE = 7000000
 
     snapshot_url = webcam_config.snapshot_url
     if snapshot_url and not force_stream_url:
