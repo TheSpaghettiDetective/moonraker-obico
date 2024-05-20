@@ -109,7 +109,7 @@ class FileDownloader:
                 raise
 
 
-        if self.model.printer_state.is_printing():
+        if self.model.printer_state.is_busy():
             return None, 'Printer busy!'
 
         call_func_with_state_transition(self.server_conn, self.model.printer_state, self.model.printer_state.STATE_GCODE_DOWNLOADING, _download_and_print, MAX_GCODE_DOWNLOAD_SECONDS)

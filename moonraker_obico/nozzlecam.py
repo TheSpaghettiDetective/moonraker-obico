@@ -37,6 +37,10 @@ class NozzleCam:
                 continue
 
             capturing = True
+
+            if not self.model.printer_state.is_printing(): # Probably the print was paused, or some other reasons
+                continue
+
             first_layer_scanning = self.first_layer_macro_status().get('first_layer_scanning', False)
             if first_layer_scanning:
                 capturing_interval = 0.1
@@ -46,8 +50,7 @@ class NozzleCam:
                 _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
 
     def should_capture(self):
-        if not self.model.printer_state.is_printing():
-            self.layer_change_macro_embedded_in_gcode = False
+        if not self.model.printer_state.is_busy():
             return False
 
         macro_status = self.first_layer_macro_status()
@@ -92,10 +95,16 @@ class NozzleCam:
             nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
 
         if nozzle_cam_config:
-            _logger.info(f'Nozzle camera {nozzle_cam_config.name} found. URL: {nozzle_cam_config.snapshot_url}')
-            return nozzle_cam_config.snapshot_url
+            _logger.info(f'Nozzle camera found: {nozzle_cam_config}')
+            return nozzle_cam_config
 
         # For Celestrius alpha testers
+
+        class StubNozzleCamConfig:
+            def __init__(self, snapshot_url):
+                self.snapshot_url = snapshot_url
+                self.is_nozzle_camera = True
+
         try:
             ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.model.linked_printer["id"]}/ext/', timeout=60, raise_exception=True).json().get('ext', {})
             nozzle_url = ext_info.get('nozzlecam_url', '')
@@ -109,7 +118,7 @@ class NozzleCam:
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
-            return nozzle_url
+            return StubNozzleCamConfig(nozzle_url)
         except Exception:
             _logger.warn('Can not find nozzle camera. First Layer AI disabled.')
             return None
