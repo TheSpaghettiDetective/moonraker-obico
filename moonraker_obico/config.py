@@ -129,8 +129,8 @@ class WebcamConfig:
         if self.moonraker_webcam_config:
             flip = self.moonraker_webcam_config.get('flip_h', False)
 
-        if self.webcam_config_section:
-            flip = self.webcam_config_section.getboolean('flip_h', False)
+        if self.webcam_config_section and self.webcam_config_section.getboolean('flip_h') is not None:
+            flip = self.webcam_config_section.getboolean('flip_h')
 
         return flip
 
@@ -141,19 +141,26 @@ class WebcamConfig:
         if self.moonraker_webcam_config:
             flip = self.moonraker_webcam_config.get('flip_v', False)
 
-        if self.webcam_config_section:
-            flip = self.webcam_config_section.getboolean('flip_v', False)
+        if self.webcam_config_section and self.webcam_config_section.getboolean('flip_v') is not None:
+            flip = self.webcam_config_section.getboolean('flip_v')
 
         return flip
 
     @property
     def rotation(self):
         invalid_value_message = f'Invalid rotation value. Valid values: [0, 90, 180, 270]. Using default.'
+        rotation = 0
         try:
-            rotation = self.webcam_config_section.getint('rotation', 0)
+            if self.moonraker_webcam_config:
+                rotation = self.moonraker_webcam_config.get('rotation', 0)
+
+            if self.webcam_config_section and self.webcam_config_section.getint('rotation') is not None:
+                rotation = self.webcam_config_section.getint('rotation')
+
             if not rotation in [0, 90, 180, 270]:
                 _logger.warn(invalid_value_message)
                 return 0
+
             return rotation
         except:
             _logger.warn(invalid_value_message)
