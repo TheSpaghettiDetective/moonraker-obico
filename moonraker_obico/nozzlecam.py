@@ -91,15 +91,6 @@ class NozzleCam:
             _logger.error('Failed to send images', exc_info=True)
 
     def get_nozzlecam_snapshot_url(self):
-        if self.model and self.model.config and self.model.config.webcams:
-            nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
-
-        if nozzle_cam_config:
-            _logger.info(f'Nozzle camera found: {nozzle_cam_config}')
-            return nozzle_cam_config
-
-        # For Celestrius alpha testers
-
         class StubNozzleCamConfig:
             def __init__(self, snapshot_url):
                 self.snapshot_url = snapshot_url
@@ -116,6 +107,14 @@ class NozzleCam:
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
+            if self.model and self.model.config and self.model.config.webcams:
+                nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
+
+            if nozzle_cam_config:
+                _logger.info(f'Nozzle camera found: {nozzle_cam_config}')
+                return nozzle_cam_config
+
+            # For Celestrius alpha testers
             nozzle_url = ext_info.get('nozzlecam_url', '')
             if nozzle_url is None or len(nozzle_url) == 0:
                 return None
