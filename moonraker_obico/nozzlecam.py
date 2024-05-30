@@ -107,9 +107,6 @@ class NozzleCam:
 
         try:
             ext_info = self.server_conn.send_http_request('GET', f'/ent/api/printers/{self.model.linked_printer["id"]}/ext/', timeout=60, raise_exception=True).json().get('ext', {})
-            nozzle_url = ext_info.get('nozzlecam_url', '')
-            if nozzle_url is None or len(nozzle_url) == 0:
-                return None
 
             self.moonrakerconn.set_macro_variables('_OBICO_LAYER_CHANGE',
                 first_layer_scan_enabled=ext_info.get('first_layer_scan_opted_in', True),
@@ -118,6 +115,10 @@ class NozzleCam:
                 first_layer_scan_retract_length=ext_info.get('first_layer_scan_retract_speed', 15),
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
+
+            nozzle_url = ext_info.get('nozzlecam_url', '')
+            if nozzle_url is None or len(nozzle_url) == 0:
+                return None
 
             return StubNozzleCamConfig(nozzle_url)
         except Exception:
