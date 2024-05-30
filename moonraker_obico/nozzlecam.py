@@ -114,7 +114,8 @@ class NozzleCam:
             self.moonrakerconn.set_macro_variables('_OBICO_LAYER_CHANGE',
                 first_layer_scan_enabled=ext_info.get('first_layer_scan_opted_in', True),
                 first_layer_scan_retract_length=ext_info.get('first_layer_scan_retract', 6),
-                first_layer_scan_unretract_length=ext_info.get('first_layer_scan_retract', 6) + 0.5,
+                first_layer_scan_retract_length=ext_info.get('first_layer_scan_cooldown_temp', 170),
+                first_layer_scan_retract_length=ext_info.get('first_layer_scan_retract_speed', 15),
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
