@@ -16,9 +16,9 @@ class NozzleCam:
         self.last_on_first_layer = 0 # track the time the print was last on the first layer to give some buffer for macro to initiate first layer scanning
 
     def start(self):
-        nozzlecam_snapshot_url = self.get_nozzlecam_snapshot_url()
+        nozzlecam_config = self.get_nozzlecam_config()
 
-        if nozzlecam_snapshot_url is None:
+        if nozzlecam_config is None:
             return
 
         capturing = False
@@ -45,7 +45,7 @@ class NozzleCam:
             if first_layer_scanning:
                 capturing_interval = 0.1
             try:
-                self.send_nozzlecam_jpeg(capture_jpeg(nozzlecam_snapshot_url), first_layer_scanning)
+                self.send_nozzlecam_jpeg(capture_jpeg(nozzlecam_config), first_layer_scanning)
             except Exception:
                 _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
 
@@ -90,7 +90,7 @@ class NozzleCam:
         except Exception:
             _logger.error('Failed to send images', exc_info=True)
 
-    def get_nozzlecam_snapshot_url(self):
+    def get_nozzlecam_config(self):
         class StubNozzleCamConfig:
             def __init__(self, snapshot_url):
                 self.snapshot_url = snapshot_url
