@@ -3,19 +3,16 @@ import logging
 import subprocess
 import time
 from threading import Thread
-import backoff
 import json
 import socket
 
 from .utils import pi_version, to_unicode, is_port_open, wait_for_port, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
 from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
-#from .webcam_stream import WebcamStreamer
 
 _logger = logging.getLogger('obico.janus')
 
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-# CAMERA_STREAMER_RTSP_PORT = 8554
 
 
 class JanusConn:
@@ -28,8 +25,6 @@ class JanusConn:
         self.sentry = sentry
         self.janus_ws = None
         self.shutting_down = False
-        #self.webcam_streamer = None
-        self.use_camera_streamer_rtsp = False
 
     def start(self, janus_bin_path, ld_lib_path):
 
@@ -59,16 +54,6 @@ class JanusConn:
                         return
             except Exception as ex:
                 self.sentry.captureException()
-
-        #self.use_camera_streamer_rtsp = self.is_pro and is_port_open('127.0.0.1', CAMERA_STREAMER_RTSP_PORT)
-        #_logger.debug(f'Using camera streamer RSTP? {self.use_camera_streamer_rtsp}')
-
-#        self.webcam_streamer = WebcamStreamer(self.app_model, self.server_conn, self.sentry)
-#        if not self.config.webcam.disable_video_streaming and not self.use_camera_streamer_rtsp:
-#            _logger.info('Starting webcam streamer')
-#            stream_thread = Thread(target=self.webcam_streamer.video_pipeline)
-#            stream_thread.daemon = True
-#            stream_thread.start()
 
         self.kill_janus_if_running()
         run_in_thread(run_janus_forever)
@@ -121,9 +106,6 @@ class JanusConn:
 
         self.kill_janus_if_running()
 
-#        if self.webcam_streamer:
-#            self.webcam_streamer.restore()
-#
     def process_janus_msg(self, ws, raw_msg):
         try:
             msg = json.loads(raw_msg)

@@ -25,7 +25,6 @@ from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
 from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
-from .janus import JanusConn
 from .tunnel import LocalTunnel
 from .printer_discovery import PrinterDiscovery, StubMoonrakerConn
 import subprocess

@@ -21,7 +21,6 @@ from .janus_config_builder import build_janus_config
 _logger = logging.getLogger('obico.webcam_stream')
 
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
-JANUS_MJPEG_DATA_PORT = 17740
 FFMPEG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg')
 FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 
