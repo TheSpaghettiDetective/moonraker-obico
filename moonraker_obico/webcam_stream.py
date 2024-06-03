@@ -12,6 +12,7 @@ from urllib.error import URLError, HTTPError
 import requests
 import base64
 import socket
+import traceback
 
 from .utils import get_image_info, pi_version, to_unicode, ExpoBackoff, parse_integer_or_none
 from .webcam_capture import capture_jpeg
@@ -61,15 +62,18 @@ def get_webcam_resolution(webcam_config):
 def find_ffmpeg_h264_encoder():
     test_video = os.path.join(FFMPEG_DIR, 'test-video.mp4')
     FNULL = open(os.devnull, 'w')
-    for encoder in ['h264_omx', 'h264_v4l2m2m']:
-        ffmpeg_cmd = '{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://127.0.0.1:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder)
-        _logger.debug('Popen: {}'.format(ffmpeg_cmd))
-        ffmpeg_test_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
-        if ffmpeg_test_proc.wait() == 0:
-            if encoder == 'h264_omx':
-                return '-flags:v +global_header -c:v {} -bsf dump_extra'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
-            else:
-                return '-c:v {}'.format(encoder)
+    try:
+        for encoder in ['h264_omx', 'h264_v4l2m2m']:
+            ffmpeg_cmd = '{} -re -i {} -pix_fmt yuv420p -vcodec {} -an -f rtp rtp://127.0.0.1:8014?pkt_size=1300'.format(FFMPEG, test_video, encoder)
+            _logger.debug('Popen: {}'.format(ffmpeg_cmd))
+            ffmpeg_test_proc = subprocess.Popen(ffmpeg_cmd.split(' '), stdout=FNULL, stderr=FNULL)
+            if ffmpeg_test_proc.wait() == 0:
+                if encoder == 'h264_omx':
+                    return '-flags:v +global_header -c:v {} -bsf dump_extra'.format(encoder)  # Apparently OMX encoder needs extra param to get the stream to work
+                else:
+                    return '-c:v {}'.format(encoder)
+    except Exception as e:
+        _logger.exception('Failed to find ffmpeg h264 encoder. Exception: %s\n%s', e, traceback.format_exc())
 
     _logger.warn('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
     return None
