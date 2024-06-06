@@ -80,9 +80,10 @@ def find_ffmpeg_h264_encoder():
 
 class WebcamStreamer:
 
-    def __init__(self, server_conn, moonrakerconn, app_model, sentry):
+    def __init__(self, server_conn, moonrakerconn, client_conn, app_model, sentry):
         self.server_conn = server_conn
         self.moonrakerconn = moonrakerconn
+        self.client_conn = client_conn
         self.printer_state = app_model.printer_state
         self.app_config = app_model.config
         self.is_pro = app_model.linked_printer.get('is_pro')
@@ -103,6 +104,13 @@ class WebcamStreamer:
         self.webcams = webcam_configs
         self.find_streaming_params()
         self.assign_janus_params()
+
+        # Now we know if we have a data channel, we can tell client_conn to start the data channel
+        first_webcam_with_dataport = next((webcam for webcam in self.webcams if webcam.get('runtime', {}).get('dataport')), None)
+        if first_webcam_with_dataport:
+            first_webcam_with_dataport['runtime']['data_channel_available'] = True
+            self.plugin.client_conn.open_data_channel(first_webcam_with_dataport['runtime']['dataport'])
+
         try:
             (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
