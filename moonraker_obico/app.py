@@ -370,7 +370,7 @@ class App(object):
                 self.unset_current_print(printer_state)
                 return
 
-        self.server_conn.post_status_update_to_server()
+        self.server_conn.post_status_update_to_server(is_critical=False) # Nothing critical has changed. Can be skipped so that it won't bombard the server
 
     def process_server_msg(self, msg):
         if 'remote_status' in msg:
@@ -426,7 +426,7 @@ class App(object):
             self.post_printer_status_to_client()
 
     def post_printer_status_to_client(self):
-        self.client_conn.send_msg_to_client(status)
+        self.client_conn.send_msg_to_client({'status': self.model.printer_state.to_status()})
 
 
 if __name__ == '__main__':
