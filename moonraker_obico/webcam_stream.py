@@ -109,7 +109,7 @@ class WebcamStreamer:
         first_webcam_with_dataport = next((webcam for webcam in self.webcams if webcam.runtime.get('dataport')), None)
         if first_webcam_with_dataport:
             first_webcam_with_dataport.runtime['data_channel_available'] = True
-            self.plugin.client_conn.open_data_channel(first_webcam_with_dataport.runtime['dataport'])
+            self.client_conn.open_data_channel(first_webcam_with_dataport.runtime['dataport'])
 
         try:
             (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
