@@ -35,6 +35,7 @@ PI_CAM_RESOLUTIONS = {
     'ultra_high': ((1640, 1232), (1920, 1080)),
 }
 
+
 def bitrate_for_dim(img_w, img_h):
     dim = img_w * img_h
     if dim <= 480 * 270:
@@ -45,6 +46,10 @@ def bitrate_for_dim(img_w, img_h):
         return 2000*1000
     else:
         return 3000*1000
+
+
+class JanusNotFoundException(Exception):
+  pass
 
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
@@ -103,13 +108,12 @@ class WebcamStreamer:
         self.webcams = webcam_configs
         self.find_streaming_params()
         self.assign_janus_params()
+        normalized_webcams = []
+        streaming_error = None
         try:
             (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
-                _logger.error('Janus not found or not configured correctly. Quiting webcam streaming.')
-                self.send_streaming_failed_event()
-                self.shutdown()
-                return
+                raise JanusNotFoundException('Janus not found or not configured correctly.')
 
             self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.is_pro, self.sentry)
             self.janus.start(janus_bin_path, ld_lib_path)
@@ -131,16 +135,23 @@ class WebcamStreamer:
                     self.mjpeg_webrtc(webcam)
 
             normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
-            self.printer_state.set_webcams(normalized_webcams)
-            self.server_conn.post_status_update_to_server(with_settings=True)
 
-            return (normalized_webcams, None)  # return value expected for a passthru target
-        except Exception:
-            self.sentry.captureException()
-            _logger.error('Error. Quitting webcam streaming.', exc_info=True)
+        except JanusNotFoundException as e:
+            streaming_error = str(e)
+            _logger.error(f'{e} Quitting webcam streaming.', exc_info=True)
             self.send_streaming_failed_event()
             self.shutdown()
-            return
+
+        except Exception as e:
+            self.sentry.captureException()
+            streaming_error = str(e)
+            self.send_streaming_failed_event()
+            self.shutdown()
+
+        finally:
+            self.printer_state.set_webcams(normalized_webcams)
+            self.server_conn.post_status_update_to_server(with_settings=True)
+            return (normalized_webcams, streaming_error)  # return value expected for a passthru target
 
     def shutdown(self):
         self.shutting_down = True
