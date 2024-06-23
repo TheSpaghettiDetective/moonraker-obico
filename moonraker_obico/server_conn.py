@@ -18,7 +18,7 @@ from .lib import curlify
 
 NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 30
 if DEBUG:
-    REQUEST_STATE_INTERVAL_SECONDS = 10
+    NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 5
 
 _logger = logging.getLogger('obico.server_conn')
 
@@ -98,8 +98,7 @@ class ServerConn:
             _logger.warning("Server message queue is full, msg dropped")
 
     def post_status_update_to_server(self, print_event: Optional[str] = None, with_settings: Optional[bool] = False, is_critical=True):
-        print('status_posted_to_server_ts', self.status_posted_to_server_ts)
-        print('time.time()', time.time())
+        # Throttle the non-critical updates to the server to reduce the server load
         if not (print_event or with_settings or is_critical) and self.status_posted_to_server_ts > time.time() - NON_CRITICAL_UPDATE_INTERVAL_SECONDS:
             return
 
