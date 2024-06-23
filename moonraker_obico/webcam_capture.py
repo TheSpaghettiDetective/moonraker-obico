@@ -13,8 +13,10 @@ import logging
 import time
 import threading
 
+from .utils import DEBUG
+
 POST_PIC_INTERVAL_SECONDS = 10.0
-if os.environ.get('DEBUG'):
+if DEBUG:
     POST_PIC_INTERVAL_SECONDS = 3.0
 
 _logger = logging.getLogger('obico.webcam_capture')

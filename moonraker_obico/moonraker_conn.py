@@ -20,9 +20,6 @@ from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
 from .version import VERSION
 
-REQUEST_STATE_INTERVAL_SECONDS = 30
-if DEBUG:
-    REQUEST_STATE_INTERVAL_SECONDS = 10
 
 _logger = logging.getLogger('obico.moonraker_conn')
 _ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
@@ -47,7 +44,6 @@ class MoonrakerConn:
         self.shutdown: bool = False
         self.conn = None
         self.ws_message_queue_to_moonraker = queue.Queue(maxsize=16)
-        self.moonraker_state_requested_ts = 0
         self.request_callbacks = OrderedDict()
         self.request_callbacks_lock = threading.RLock()   # Because OrderedDict is not thread-safe
         self.available_printer_objects = []
@@ -78,7 +74,7 @@ class MoonrakerConn:
 
         while self.shutdown is False:
             try:
-                if self.klippy_ready.wait() and self.moonraker_state_requested_ts < time.time() - REQUEST_STATE_INTERVAL_SECONDS:
+                if self.klippy_ready.wait():
                     self.request_status_update()
 
             except Exception as e:
@@ -229,7 +225,6 @@ class MoonrakerConn:
                 return
 
             data = json.loads(raw)
-            _logger.debug(f'Received from Moonraker: {data}')
 
             callback = None
 
@@ -243,6 +238,7 @@ class MoonrakerConn:
                 callback(data)
                 return
 
+            _logger.debug(f'Received from Moonraker: {data}')
             if  data.get('method', '') == 'obico_remote_event':
                 event_name = data.get('params', {}).get('event_name')
                 handler = self.remote_event_handlers.get(event_name)
@@ -275,7 +271,6 @@ class MoonrakerConn:
                         self.klippy_ready.wait()
                         _logger.info('Klippy ready')
 
-                _logger.debug("Sending to Moonraker: \n{}".format(data))
                 self.conn.send(json.dumps(data, default=str))
             except WebSocketConnectionException as e:
                 _logger.warning(e)
@@ -293,7 +288,7 @@ class MoonrakerConn:
         if not self.conn:
             self.conn.close()
 
-    def jsonrpc_request(self, method, params=None, callback=None):
+    def jsonrpc_request(self, method, params=None, callback=None, log_for_debug=True):
         next_id = randrange(100000)
         payload = {
             "jsonrpc": "2.0",
@@ -311,6 +306,8 @@ class MoonrakerConn:
                 self.request_callbacks[next_id] = callback
 
         try:
+            if log_for_debug:
+                _logger.debug(f'Sending to Moonraker: {payload}')
             self.ws_message_queue_to_moonraker.put_nowait(payload)
         except queue.Full:
             _logger.warning("Moonraker message queue is full, msg dropped")
@@ -341,8 +338,6 @@ class MoonrakerConn:
                 Event(sender=self.id, name='status_update', data=data)
             )
 
-        self.moonraker_state_requested_ts = time.time()
-
         if objects is None:
             objects = {
                 "webhooks": None,
@@ -360,7 +355,12 @@ class MoonrakerConn:
             for heater in (self.app_config.all_mr_heaters()):
                 objects[heater] = None
 
-        self.jsonrpc_request('printer.objects.query', params=dict(objects=objects), callback=status_update_callback)
+        self.jsonrpc_request(
+            'printer.objects.query',
+            params=dict(objects=objects),
+            callback=status_update_callback,
+            log_for_debug=False, # Skip logging for routine status update because it's too verbose
+        )
 
     def request_jog(self, axes_dict: Dict[str, Number], is_relative: bool, feedrate: int) -> Dict:
         # TODO check axes

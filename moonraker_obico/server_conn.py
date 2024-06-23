@@ -9,13 +9,16 @@ from collections import deque
 import backoff
 from urllib.error import URLError, HTTPError
 
-from .utils import ExpoBackoff
+from .utils import ExpoBackoff, DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
 from .webcam_capture import capture_jpeg
 from .lib import curlify
 
+NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 30
+if DEBUG:
+    NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 5
 
 _logger = logging.getLogger('obico.server_conn')
 
@@ -94,7 +97,11 @@ class ServerConn:
         except queue.Full:
             _logger.warning("Server message queue is full, msg dropped")
 
-    def post_status_update_to_server(self, print_event: Optional[str] = None, with_settings: Optional[bool] = False):
+    def post_status_update_to_server(self, print_event: Optional[str] = None, with_settings: Optional[bool] = False, is_critical=True):
+        # Throttle the non-critical updates to the server to reduce the server load
+        if not (print_event or with_settings or is_critical) and self.status_posted_to_server_ts > time.time() - NON_CRITICAL_UPDATE_INTERVAL_SECONDS:
+            return
+
         self.send_ws_msg_to_server(self.printer_state.to_dict(print_event=print_event, with_settings=with_settings))
         self.status_posted_to_server_ts = time.time()
 

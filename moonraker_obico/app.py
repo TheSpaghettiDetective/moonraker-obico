@@ -12,7 +12,7 @@ import re
 import signal
 import backoff
 import pathlib
-
+import subprocess
 import requests  # type: ignore
 
 from moonraker_obico.nozzlecam import NozzleCam
@@ -27,7 +27,7 @@ from .moonraker_conn import MoonrakerConn, Event
 from .server_conn import ServerConn
 from .tunnel import LocalTunnel
 from .printer_discovery import PrinterDiscovery, StubMoonrakerConn
-import subprocess
+from .client_conn import ClientConn
 from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
 
 
@@ -52,6 +52,7 @@ class App(object):
         self.model = None
         self.sentry = None
         self.server_conn = None
+        self.client_conn = None
         self.moonrakerconn = None
         self.webcam_streamer = None
         self.jpeg_poster = None
@@ -124,7 +125,8 @@ class App(object):
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
         self.printer = Printer(self.model, self.moonrakerconn, self.server_conn)
-        self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.model, self.sentry)
+        self.client_conn = ClientConn()
+        self.webcam_streamer = WebcamStreamer(self.server_conn, self.moonrakerconn, self.client_conn, self.model, self.sentry)
         self.passthru_executor = PassthruExecutor(dict(
                 _printer = self.printer,   # The client would pass "_printer" instead of "printer" for historic reasons
                 webcam_streamer = self.webcam_streamer,
@@ -160,6 +162,8 @@ class App(object):
         run_in_thread(self.nozzlecam.start)
 
         run_in_thread(self.jpeg_poster.pic_post_loop)
+        run_in_thread(self.status_update_to_client_loop)
+
         even_loop_thread = run_in_thread(self.event_loop)
 
         try:
@@ -180,6 +184,8 @@ class App(object):
             self.server_conn.close()
         if self.moonrakerconn:
             self.moonrakerconn.close()
+        if self.client_conn:
+            self.client_conn.close()
 
     # TODO: This doesn't work as ffmpeg seems to mess with signals as well
     def interrupted(self, signum, frame):
@@ -364,7 +370,7 @@ class App(object):
                 self.unset_current_print(printer_state)
                 return
 
-        self.server_conn.post_status_update_to_server()
+        self.server_conn.post_status_update_to_server(is_critical=False) # Nothing critical has changed. Can be skipped so that it won't bombard the server
 
     def process_server_msg(self, msg):
         if 'remote_status' in msg:
@@ -412,6 +418,15 @@ class App(object):
             subprocess.call(["systemctl", "restart", "moonraker-obico"])
         else:
             _logger.warning('Not linked or not connected to server. Ignoring re-linking request.')
+
+
+    def status_update_to_client_loop(self):
+        while self.shutdown is False:
+            time.sleep(2)
+            self.post_printer_status_to_client()
+
+    def post_printer_status_to_client(self):
+        self.client_conn.send_msg_to_client({'status': self.model.printer_state.to_status()})
 
 
 if __name__ == '__main__':
