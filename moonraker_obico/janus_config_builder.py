@@ -156,6 +156,22 @@ h264-{stream_id}: {{
 }}
 """.format(stream_id=stream_id, videoport=videoport, videortcpport=videortcpport, dataport=dataport))
 
+def streaming_jcfg_data_channel_only_section(stream_id, dataport):
+    return("""
+data-{stream_id}: {{
+        type = "rtp"
+        id = {stream_id}
+        description = "data"
+        enabled = true
+        audio = false
+        video = false
+        data = true
+        dataport = {dataport}
+        datatype = "binary"
+        dataiface = "127.0.0.1"
+        databuffermsg = false
+}}
+""".format(stream_id=stream_id, dataport=dataport))
 
 def streaming_jcfg_mjpeg_section(stream_id, mjpeg_dataport):
     return("""
@@ -195,6 +211,13 @@ def build_janus_plugin_streaming_jcfg(webcams):
                     f.write(streaming_jcfg_mjpeg_section(webcam.runtime['stream_id'], webcam.runtime['mjpeg_dataport']))
                 else:
                     raise Exception('Missing runtime parameters required in building mjpeg_webrtc section')
+
+            elif webcam.streaming_params['mode'] == 'data_channel_only':
+                if webcam.runtime.get('dataport'):
+                    f.write(streaming_jcfg_data_channel_only_section(webcam.runtime['stream_id'], webcam.runtime['dataport']))
+                else:
+                    raise Exception('Missing runtime parameters required in building streaming_jcfg_data_channel_only_section section')
+
             else:
                 raise Exception('Unknown streaming mode "{}"'.format(webcam.streaming_params['mode']))
 

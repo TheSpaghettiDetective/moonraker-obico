@@ -83,6 +83,10 @@ def find_ffmpeg_h264_encoder():
     _logger.warn('No ffmpeg found, or ffmpeg does NOT support h264_omx/h264_v4l2m2m encoding.')
     return None
 
+class DataChannelOnlyWebcamConfig: # Stub WebcamConfig for building janus config
+    pass
+
+
 class WebcamStreamer:
 
     def __init__(self, server_conn, moonrakerconn, client_conn, app_model, sentry):
@@ -113,7 +117,14 @@ class WebcamStreamer:
         streaming_error = None
 
         try:
-            (janus_bin_path, ld_lib_path) = build_janus_config(self.webcams, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
+            data_channel = next((webcam for webcam in self.webcams if webcam.runtime.get('dataport')), None)
+            if not data_channel:
+                data_channel = DataChannelOnlyWebcamConfig()
+                data_channel.streaming_params = dict(mode='data_channel_only')
+                data_channel.runtime = dict(stream_id=389, dataport=JANUS_WS_PORT+389) # A random stream_id and port that is unlikely to conflict
+
+            webcams_to_build_janus_config = self.webcams + [data_channel] if data_channel else self.webcams
+            (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
                 raise JanusNotFoundException('Janus not found or not configured correctly.')
 
@@ -138,11 +149,7 @@ class WebcamStreamer:
 
             normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams]
 
-            # Now we know if we have a data channel, we can tell client_conn to start the data channel
-            first_webcam_with_dataport = next((webcam for webcam in self.webcams if webcam.runtime.get('dataport')), None)
-            if first_webcam_with_dataport:
-                first_webcam_with_dataport.runtime['data_channel_available'] = True
-                self.client_conn.open_data_channel(first_webcam_with_dataport.runtime['dataport'])
+            self.client_conn.open_data_channel(data_channel.runtime['dataport'])
 
         except JanusNotFoundException as e:
             streaming_error = str(e)
@@ -159,7 +166,7 @@ class WebcamStreamer:
             self.shutdown()
 
         finally:
-            self.printer_state.set_webcams(normalized_webcams)
+            self.printer_state.set_webcams(normalized_webcams, data_channel.runtime.get('stream_id') if data_channel else None)
             self.server_conn.post_status_update_to_server(with_settings=True)
             return (normalized_webcams, streaming_error)  # return value expected for a passthru target
 
@@ -220,10 +227,7 @@ class WebcamStreamer:
                 webcam.runtime['stream_id'] = cur_stream_id
                 cur_stream_id += 1
 
-            if webcam.streaming_params['mode'] == 'h264_rtsp':
-                 webcam.runtime['dataport'] = cur_port_num
-                 cur_port_num += 1
-            elif webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode', 'h264_device'):
+            if webcam.streaming_params['mode'] in ('h264_copy', 'h264_transcode', 'h264_device'):
                  webcam.runtime['videoport'] = cur_port_num
                  cur_port_num += 1
                  webcam.runtime['videortcpport'] = cur_port_num
@@ -424,6 +428,7 @@ class WebcamStreamer:
                 is_nozzle_camera=webcam.is_nozzle_camera,
                 stream_mode=webcam.streaming_params.get('mode'),
                 stream_id=webcam.runtime.get('stream_id'),
+                data_channel_available=webcam.runtime.get('dataport', -1) > 0,
                 flipV=webcam.flip_v,
                 flipH=webcam.flip_h,
                 rotation=webcam.rotation,

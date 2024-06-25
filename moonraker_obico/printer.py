@@ -39,6 +39,7 @@ class PrinterState:
         self.installed_plugins = []
         self.current_file_metadata = None
         self.webcams = None
+        self.data_channel_id = None
 
     def has_active_job(self) -> bool:
         return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
@@ -80,9 +81,10 @@ class PrinterState:
         with self._mutex:
             return self.obico_g_code_file_id
 
-    def set_webcams(self, webcams):
+    def set_webcams(self, webcams, data_channel_id):
         with self._mutex:
             self.webcams = webcams
+            self.data_channel_id = data_channel_id
 
     @classmethod
     def get_state_from_status(cls, data: Dict) -> str:
@@ -118,6 +120,7 @@ class PrinterState:
             if with_settings:
                 data["settings"] = dict(
                     webcams=self.webcams,
+                    data_channel_id=self.data_channel_id,
                     temperature=dict(dict(profiles=self.thermal_presets)),
                     agent=dict(
                         name="moonraker_obico",
