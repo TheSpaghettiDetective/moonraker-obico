@@ -117,13 +117,14 @@ class WebcamStreamer:
         streaming_error = None
 
         try:
-            data_channel = next((webcam for webcam in self.webcams if webcam.runtime.get('dataport')), None)
+            webcams_to_build_janus_config = [webcam for webcam in self.webcams]
+            data_channel = next((webcam for webcam in webcams_to_build_janus_config if webcam.runtime.get('dataport')), None)
             if not data_channel:
                 data_channel = DataChannelOnlyWebcamConfig()
                 data_channel.streaming_params = dict(mode='data_channel_only')
                 data_channel.runtime = dict(stream_id=389, dataport=JANUS_WS_PORT+389) # A random stream_id and port that is unlikely to conflict
+                webcams_to_build_janus_config.append(data_channel)
 
-            webcams_to_build_janus_config = self.webcams + [data_channel] if data_channel else self.webcams
             (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
                 raise JanusNotFoundException('Janus not found or not configured correctly.')
