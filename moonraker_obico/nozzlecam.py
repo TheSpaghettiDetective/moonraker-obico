@@ -107,6 +107,7 @@ class NozzleCam:
                 first_layer_scan_zhop=ext_info.get('first_layer_scan_zhop', 4),
                 )
 
+            nozzle_cam_config = None
             if self.model and self.model.config and self.model.config.webcams:
                 nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
 
