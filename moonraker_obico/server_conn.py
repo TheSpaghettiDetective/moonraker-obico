@@ -134,6 +134,9 @@ class ServerConn:
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
     def post_pic_to_server(self, webcam_config, viewing_boost=False):
+        if not webcam_config:
+            _logger.warn('webcam_config is None. Skipping jpeg posting to server. Ill-configured [webcam] section?')
+
         try:
             files = {'pic': capture_jpeg(webcam_config)}
 
