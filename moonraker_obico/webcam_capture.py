@@ -46,7 +46,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
     else:
         stream_url = webcam_config.stream_url
         if not stream_url:
-            raise Exception('Invalid snapshot URL or stream URL in webcam setting: "{}"'.format(webcam_config))
+            raise ValueError('Invalid snapshot URL or stream URL in webcam setting: "{}"'.format(webcam_config))
 
         with closing(urlopen(stream_url)) as res:
             chunker = MjpegStreamChunker()
@@ -56,9 +56,9 @@ def capture_jpeg(webcam_config, force_stream_url=False):
                 data = res.readline()
                 data_bytes += len(data)
                 if data == b'':
-                    raise Exception('End of stream before a valid jpeg is found')
+                    raise ValueError('End of stream before a valid jpeg is found')
                 if data_bytes > MAX_JPEG_SIZE:
-                    raise Exception('Reached the size cap before a valid jpeg is found.')
+                    raise ValueError('Reached the size cap before a valid jpeg is found.')
 
                 mjpg = chunker.findMjpegChunk(data)
                 if mjpg:
@@ -68,7 +68,7 @@ def capture_jpeg(webcam_config, force_stream_url=False):
                     if mjpeg_headers_index > 0:
                         return mjpg[mjpeg_headers_index+4:]
                     else:
-                        raise Exception('Wrong mjpeg data format')
+                        raise ValueError('Wrong mjpeg data format')
 
 
 class MjpegStreamChunker:

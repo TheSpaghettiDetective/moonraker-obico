@@ -148,7 +148,7 @@ class ServerConn:
             )
             resp = self.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('Jpeg posted to server - camera name: {} - viewing_boost: {} - {}'.format(webcam_config.name, viewing_boost, resp))
-        except (URLError, HTTPError, requests.exceptions.RequestException) as e:
+        except (URLError, HTTPError, requests.exceptions.RequestException, ValueError) as e:
             _logger.warn('Failed to capture jpeg - ' + str(e))
             return
 
