@@ -136,6 +136,7 @@ class ServerConn:
     def post_pic_to_server(self, webcam_config, viewing_boost=False):
         if not webcam_config:
             _logger.warn('webcam_config is None. Skipping jpeg posting to server. Ill-configured [webcam] section?')
+            return
 
         try:
             files = {'pic': capture_jpeg(webcam_config)}
