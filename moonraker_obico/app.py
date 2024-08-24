@@ -74,7 +74,7 @@ class App(object):
             _logger.error(f'event queue is full, dropping event {event}')
             return False
 
-    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    @backoff.on_exception(backoff.expo, Exception, max_value=120)
     def wait_for_auth_token(self, config):
         while True:
             if config.server.auth_token:
@@ -83,16 +83,16 @@ class App(object):
             _logger.warning('auth_token not configured. Retry after 2s')
             time.sleep(2)
 
-        _logger.info('Fetching linked printer...')
         return ServerConn(config, None, None, None).get_linked_printer()
 
     def start(self, args):
-        _logger.info(f'starting moonraker-obico (v{VERSION})')
-
         config = Config(args.config_path)
         config.load_from_config_file()
         self.sentry = SentryWrapper(config=config)
         setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
+
+        config_dict = {section: dict(config._config.items(section)) for section in config._config.sections()}
+        _logger.info(f'moonraker-obico config:\n{config_dict}')
 
         if args.dev_mode:
             self.moonrakerconn = StubMoonrakerConn()

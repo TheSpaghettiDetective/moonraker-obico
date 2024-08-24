@@ -15,6 +15,7 @@ from flask import request, jsonify
 from werkzeug.serving import make_server
 import argparse
 from queue import Queue
+import backoff
 
 from .version import VERSION
 from .utils import raise_for_status, run_in_thread, verify_link_code, wait_for_port
@@ -168,6 +169,7 @@ class PrinterDiscovery(object):
         except Exception:
             pass
 
+    @backoff.on_exception(backoff.expo, Exception, max_value=120)
     def announce_unlinked_status(self):
         data = self._collect_device_info()
 

@@ -195,7 +195,7 @@ class WebcamConfig:
 @dataclasses.dataclass
 class LoggingConfig:
     path: str
-    level: str = 'DEBUG'
+    level: str = 'INFO'
 
 
 class Config:
