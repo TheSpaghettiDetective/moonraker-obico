@@ -10,7 +10,7 @@ assignees: ''
 **Note**
 Most of the times, an issue you may potentially run into is not a bug. Instead, it is related to configurations, such as internet connectivity issues, github repo proxy, system time is not correct, etc.
 
-If you are not sure, please don't open a bug report here. Instead, you can get the issue solved much faster by seeking help in our support forum: https://obico.io/discord-obico-klipper/
+If you are not sure, please don't open a bug report here. Instead, you can get the issue solved much faster by seeking help in our support forum: https://www.obico.io/discord-obico-klipper/
 
 Proceed to opening a bug report only if you are sure it is a defect in the code given a correct configuration.
 

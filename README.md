@@ -12,7 +12,7 @@ This is a Moonraker plugin that enables the Klipper-based 3D printers to connect
     cd moonraker-obico
     ./install.sh
 
-[Detailed documentation](https://obico.io/docs/user-guides/klipper-setup/).
+[Detailed documentation](https://www.obico.io/docs/user-guides/klipper-setup/).
 
 
 # Uninstall

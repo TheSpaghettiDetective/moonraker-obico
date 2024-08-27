@@ -182,7 +182,7 @@ class WebcamStreamer:
             'moonraker-obico: Webcam Streaming Failed',
             error if error else f'Make sure the webcam is properly configured in moonraker-obico.cfg.',
             event_class='WARNING',
-            info_url='https://obico.io/docs/user-guides/moonraker-obico/webcam/',
+            info_url='https://www.obico.io/docs/user-guides/moonraker-obico/webcam/',
         )
 
     def find_streaming_params(self):

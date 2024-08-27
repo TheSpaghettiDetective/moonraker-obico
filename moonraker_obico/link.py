@@ -47,7 +47,7 @@ if __name__ == '__main__':
 !!!WARNING: Moonraker-obico already linked!
 Proceed only if you want to re-link your printer to the Obico server.
 For more information, visit:
-https://obico.io/docs/user-guides/relink-klipper
+https://www.obico.io/docs/user-guides/relink-klipper
 """+NC)
         confirmed = input('\nAre you sure you want to continue? [y/N] ').strip()
         if confirmed not in ('Y', 'y'):
@@ -110,7 +110,7 @@ Now open the Obico mobile or web app. If your phone or computer is connected to 
 same network as your printer, you will see this printer listed in the app. Click
 "Link Now" and you will be all set!
 
-If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+If you need help, head to https://www.obico.io/docs/user-guides/klipper-setup
 
 Your printer is now discoverable by the Obico app on the same network.""")
     if one_time_passcode:
@@ -142,7 +142,7 @@ If you are using a Obico app version older than 2.0, press 'Enter' to switch to 
 To link to your Obico Server account, you need to obtain the 6-digit verification code
 in the Obico mobile or web app, and enter the code below.
 
-If you need help, head to https://obico.io/docs/user-guides/klipper-setup
+If you need help, head to https://www.obico.io/docs/user-guides/klipper-setup
 """)
 
     while True:

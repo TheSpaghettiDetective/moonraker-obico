@@ -40,7 +40,7 @@ create_config() {
     cat <<EOF
 
 Now tell us what Obico Server you want to link your printer to.
-You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
+You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://www.obico.io.
 For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
 
 EOF
@@ -215,9 +215,9 @@ need_help() {
   cat <<EOF
 Need help? Stop by:
 
-- The Obico's help docs: https://obico.io/help/
-- The Moonraker-Obico support channel: https://obico.io/discord-obico-klipper
-- The Obico discord community: https://obico.io/discord/
+- The Obico's help docs: https://www.obico.io/help/
+- The Moonraker-Obico support channel: https://www.obico.io/discord-obico-klipper
+- The Obico discord community: https://www.obico.io/discord/
 
 EOF
 }
