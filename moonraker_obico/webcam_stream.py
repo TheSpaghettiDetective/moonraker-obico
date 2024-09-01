@@ -302,6 +302,7 @@ class WebcamStreamer:
             self.sentry.captureException()
 
 
+    @backoff.on_exception(backoff.expo, Exception, base=3, jitter=None, max_tries=5) # Apparently crowsnest would return invalid mjpeg data right after start and hence throw off ffmpeg. We should retry in this case
     def start_ffmpeg(self, rtp_port, ffmpeg_args, retry_after_quit=False):
         ffmpeg_cmd = '{ffmpeg} -loglevel error {ffmpeg_args} -an -f rtp rtp://{janus_server}:{rtp_port}?pkt_size=1300'.format(ffmpeg=FFMPEG, ffmpeg_args=ffmpeg_args, janus_server=JANUS_SERVER, rtp_port=rtp_port)
 
