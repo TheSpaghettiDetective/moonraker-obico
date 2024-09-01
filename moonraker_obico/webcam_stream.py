@@ -127,7 +127,7 @@ class WebcamStreamer:
 
             (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
-                raise JanusNotFoundException('Janus not found or not configured correctly.')
+                raise JanusNotFoundException('Janus not found or not configured correctly. Click the link for troubleshooting guide.')
 
             self.janus = JanusConn(JANUS_WS_PORT, self.app_config, self.server_conn, self.is_pro, self.sentry)
             self.janus.start(janus_bin_path, ld_lib_path)
@@ -155,7 +155,7 @@ class WebcamStreamer:
         except JanusNotFoundException as e:
             streaming_error = str(e)
             _logger.error(f'{e} Webcam is now streaming in 0.1FPS.', exc_info=True)
-            self.send_streaming_failed_event(streaming_error)
+            self.send_streaming_failed_event(streaming_error, info_url='https://obico.io/docs/user-guides/webcam-install-janus/')
             self.shutdown()
             # When Janus is not found, we will stream the primary camera in 0.1FPS. This provides a better user experience, and is compatible with old mobile app versions
             normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams if webcam.is_primary_camera]
@@ -177,12 +177,12 @@ class WebcamStreamer:
         self.close_all_mjpeg_socks()
         return ('ok', None)  # return value expected for a passthru target
 
-    def send_streaming_failed_event(self, error=None):
+    def send_streaming_failed_event(self, error=None, info_url='https://obico.io/docs/user-guides/moonraker-obico/webcam/'):
         self.server_conn.post_printer_event_to_server(
             'moonraker-obico: Webcam Streaming Failed',
             error if error else f'Make sure the webcam is properly configured in moonraker-obico.cfg.',
             event_class='WARNING',
-            info_url='https://www.obico.io/docs/user-guides/moonraker-obico/webcam/',
+            info_url=info_url
         )
 
     def find_streaming_params(self):
