@@ -268,11 +268,17 @@ class Config:
         )
 
         self.webcams = []
+        webcam_sections = [section for section in config.sections() if section.startswith("webcam")]
+        if len(webcam_sections) == 0:
+            _logger.warn('No webcam configs found. Creating default config.')
+            self._config.add_section('webcam')
+            self.write()
+            webcam_sections = [section for section in config.sections() if section.startswith("webcam")]
+
         is_primary_camera = True # First webcam is primary
-        for section in config.sections():
-            if section.startswith("webcam"):
-                self.webcams.append(WebcamConfig(webcam_config_section=config[section], is_primary_camera=is_primary_camera))
-                is_primary_camera = False
+        for section in webcam_sections:
+            self.webcams.append(WebcamConfig(webcam_config_section=config[section], is_primary_camera=is_primary_camera))
+            is_primary_camera = False
 
         self.logging = LoggingConfig(
             path=config.get(
