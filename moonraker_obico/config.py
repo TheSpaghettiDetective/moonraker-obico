@@ -309,6 +309,9 @@ class Config:
             return None
 
     def update_server_auth_token(self, auth_token: str):
+        if 'server' not in self._config:
+            self._config.add_section('server')
+
         self.server.auth_token = auth_token
         self._config.set('server', 'auth_token', auth_token)
         self.write()
