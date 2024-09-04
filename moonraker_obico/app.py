@@ -71,7 +71,7 @@ class App(object):
             self.q.put_nowait(event)
             return True
         except queue.Full:
-            _logger.error(f'event queue is full, dropping event {event}')
+            _logger.warning(f'event queue is full, dropping event {event}')
             return False
 
     @backoff.on_exception(backoff.expo, Exception, max_value=120)
