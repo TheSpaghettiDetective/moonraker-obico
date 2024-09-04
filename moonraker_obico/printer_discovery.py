@@ -303,7 +303,7 @@ class PrinterDiscovery(object):
                 'secret' not in msg['data'] or
                 msg['data']['secret'] != self.device_secret
             ):
-                _logger.error('printer_discovery got unmatching secret')
+                _logger.warning('printer_discovery got unmatching secret')
                 self.sentry.captureMessage(
                     'printer_discovery got unmatching secret',
                     extra={'secret': self.device_secret, 'msg': msg}
@@ -312,7 +312,7 @@ class PrinterDiscovery(object):
                 return
 
             if msg['device_id'] != self.device_id:
-                _logger.error('printer_discovery got unmatching device_id')
+                _logger.warning('printer_discovery got unmatching device_id')
                 self.sentry.captureMessage(
                     'printer_discovery got unmatching device_id',
                     extra={'device_id': self.device_id, 'msg': msg}
@@ -323,7 +323,7 @@ class PrinterDiscovery(object):
             code = msg['data']['code']
             verify_link_code(self.config, code)
         else:
-            _logger.error('printer_discovery got unexpected message')
+            _logger.warning('printer_discovery got unexpected message')
 
         self.stop()
         return
@@ -374,7 +374,7 @@ def is_local_address(address):
         ip = netaddr.IPAddress(address)
         return ip.is_private() or ip.is_loopback()
     except Exception as exc:
-        _logger.error(
+        _logger.warning(
             'could not determine whether {} is local address ({})'.format(
                 address, exc)
         )

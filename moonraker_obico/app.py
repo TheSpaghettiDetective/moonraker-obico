@@ -71,7 +71,7 @@ class App(object):
             self.q.put_nowait(event)
             return True
         except queue.Full:
-            _logger.error(f'event queue is full, dropping event {event}')
+            _logger.warning(f'event queue is full, dropping event {event}')
             return False
 
     @backoff.on_exception(backoff.expo, Exception, max_value=120)
@@ -175,7 +175,7 @@ class App(object):
 
     def stop(self, cause=None):
         if cause:
-            _logger.error(f'shutdown ({cause})')
+            _logger.info(f'shutdown ({cause})')
         else:
             _logger.info('shutdown')
 
@@ -270,7 +270,7 @@ class App(object):
             if cur_job:
                 return int(cur_job.get('start_time', '0'))
             else:
-                _logger.error(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
+                _logger.warning(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
                 return None
 
         printer_state.set_current_print_ts(find_current_print_ts())
@@ -364,7 +364,7 @@ class App(object):
                     self.post_print_event(PrinterState.EVENT_FAILED)
                 else:
                     # FIXME
-                    _logger.error(
+                    _logger.warning(
                         f'unexpected state "{_state}", please report.')
 
                 self.unset_current_print(printer_state)

@@ -47,7 +47,7 @@ class NozzleCam:
             try:
                 self.send_nozzlecam_jpeg(capture_jpeg(nozzlecam_config), first_layer_scanning)
             except Exception:
-                _logger.error('Failed to capture and send nozzle cam jpeg', exc_info=True)
+                _logger.warning('Failed to capture and send nozzle cam jpeg', exc_info=True)
 
     def should_capture(self):
         if not self.model.printer_state.is_busy():
@@ -88,7 +88,7 @@ class NozzleCam:
             self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('server notified 1st layer is done')
         except Exception:
-            _logger.error('Failed to send images', exc_info=True)
+            _logger.warning('Failed to send images', exc_info=True)
 
     def get_nozzlecam_config(self):
         class StubNozzleCamConfig:

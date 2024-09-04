@@ -46,7 +46,7 @@ class ServerConn:
                 self.ss = None
 
             if close_status_code == 4321:
-                _logger.error('Shared auth_token detected. Shutting down.')
+                _logger.warning('Shared auth_token detected. Shutting down.')
                 self.should_reconnect = False
 
         def on_server_ws_open(ws):

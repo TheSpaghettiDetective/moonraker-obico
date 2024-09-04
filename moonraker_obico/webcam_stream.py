@@ -154,7 +154,7 @@ class WebcamStreamer:
 
         except JanusNotFoundException as e:
             streaming_error = str(e)
-            _logger.error(f'{e} Webcam is now streaming in 0.1FPS.', exc_info=True)
+            _logger.warning(f'{e} Webcam is now streaming in 0.1FPS.')
             self.send_streaming_failed_event(streaming_error, info_url='https://obico.io/docs/user-guides/webcam-install-janus/')
             self.shutdown()
             # When Janus is not found, we will stream the primary camera in 0.1FPS. This provides a better user experience, and is compatible with old mobile app versions
@@ -319,7 +319,7 @@ class WebcamStreamer:
             returncode = ffmpeg_proc.wait(timeout=10) # If ffmpeg fails, it usually does so without 10s
             (stdoutdata, stderrdata) = ffmpeg_proc.communicate()
             msg = 'STDOUT:\n{}\nSTDERR:\n{}\n'.format(stdoutdata, stderrdata)
-            _logger.error(msg)
+            _logger.warning(msg)
             raise Exception('ffmpeg failed! Exit code: {}'.format(returncode))
         except subprocess.TimeoutExpired:
            pass
@@ -409,10 +409,7 @@ class WebcamStreamer:
         # It is possible that some orphaned ffmpeg process is running (maybe previous python process was killed -9?).
         # Ensure all ffmpeg processes are killed
         with open(self.ffmpeg_pid_file_path(rtc_port), 'r') as pid_file:
-            try:
-                subprocess.run(['kill', pid_file.read()], check=True)
-            except Exception as e:
-                _logger.warning('Failed to shutdown ffmpeg - ' + str(e))
+            subprocess.run(['kill', pid_file.read()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def shutdown_subprocesses(self):
         if self.janus:

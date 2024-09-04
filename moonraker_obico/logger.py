@@ -13,11 +13,19 @@ def setup_logging(logging_config, log_path=None, debug=False):
                       'INFO': logging.INFO,
                       'WARNING': logging.WARNING,
                       'ERROR': logging.ERROR,
+                      'CRITICAL': logging.CRITICAL,
 	}
+
     logger = logging.getLogger()
-    log_level = log_level_info.get(logging_config.level.upper(), logging.INFO)
+    log_level = log_level_info.get(logging_config.level.upper(), logging.ERROR)
     logger.setLevel(log_level)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    if logging_config.log_network:
+        logging.getLogger("urllib3").setLevel(log_level)
+        logging.getLogger("backoff").setLevel(log_level)
+    else:
+        logging.getLogger("urllib3").setLevel(logging.CRITICAL) # So that we don't flood the logs with network errors
+        logging.getLogger("backoff").setLevel(logging.CRITICAL) # So that we don't flood the logs with retry failures
 
     formatter = logging.Formatter(
         "%(asctime)s  %(levelname)8s  %(name)s - %(message)s"

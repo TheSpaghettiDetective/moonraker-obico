@@ -196,6 +196,7 @@ class WebcamConfig:
 class LoggingConfig:
     path: str
     level: str = 'INFO'
+    log_network: bool = False
 
 
 class Config:
@@ -288,6 +289,10 @@ class Config:
             level=config.get(
                 'logging', 'level',
                 fallback=''
+            ),
+            log_network=config.getboolean(
+                'logging', 'log_network',
+                fallback=False
             ),
 		)
 

@@ -87,14 +87,11 @@ class JanusConn:
         return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=self.janus_port)
 
     def kill_janus_if_running(self):
-        try:
-            # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
-            # Ensure the process is killed before launching a new one
-            with open(self.janus_pid_file_path(), 'r') as pid_file:
-                subprocess.run(['kill', pid_file.read()], check=True)
-            wait_for_port_to_close(JANUS_SERVER, self.janus_port)
-        except Exception as e:
-            _logger.warning('Failed to shutdown Janus - ' + str(e))
+        # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
+        # Ensure the process is killed before launching a new one
+        with open(self.janus_pid_file_path(), 'r') as pid_file:
+            subprocess.run(['kill', pid_file.read()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        wait_for_port_to_close(JANUS_SERVER, self.janus_port)
 
     def shutdown(self):
         self.shutting_down = True
