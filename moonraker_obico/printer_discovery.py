@@ -323,7 +323,7 @@ class PrinterDiscovery(object):
             code = msg['data']['code']
             verify_link_code(self.config, code)
         else:
-            _logger.error('printer_discovery got unexpected message')
+            _logger.warning('printer_discovery got unexpected message. Dropping it.')
 
         self.stop()
         return

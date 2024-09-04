@@ -66,16 +66,16 @@ class DataChannelConn(object):
                 try:
                     self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 except OSError as ex:
-                    _logger.error('could not open udp socket (%s)' % ex)
+                    _logger.warning('could not open udp socket (%s)' % ex)
 
             if self.sock is not None:
                 try:
                     self.sock.sendto(payload, (self.addr, self.port))
                 except socket.error as ex:
-                    _logger.error(
+                    _logger.warning(
                         'could not send to janus datachannel (%s)' % ex)
                 except OSError as ex:
-                    _logger.error('udp socket might be closed (%s)' % ex)
+                    _logger.warning('udp socket might be closed (%s)' % ex)
                     self.sock = None
 
     def close(self):
