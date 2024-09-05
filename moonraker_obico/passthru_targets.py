@@ -169,8 +169,7 @@ class Printer:
         if not self.moonrakerconn:
             return None, 'Printer is not connected!'
 
-        mr_heater = self.model.config.get_mapped_mr_heater_name(heater)
-        self.moonrakerconn.request_set_temperature(heater=mr_heater, target_temp=target_temp)
+        self.moonrakerconn.request_set_temperature(heater=heater, target_temp=target_temp)
         return None, None
 
 

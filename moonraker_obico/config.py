@@ -330,10 +330,6 @@ class Config:
     def get_mapped_server_heater_name(self, mr_heater_name):
         return self.moonraker_objects['heater_mapping'].get(mr_heater_name)
 
-    def get_mapped_mr_heater_name(self, server_heater_name):
-        mr_heater_name = list(self.moonraker_objects['heater_mapping'].keys())[list(self.moonraker_objects['heater_mapping'].values()).index(server_heater_name)]
-        return mr_heater_name
-
     def all_mr_heaters(self):
          return self.moonraker_objects['heater_mapping'].keys()
 
