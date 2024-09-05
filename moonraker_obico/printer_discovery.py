@@ -18,7 +18,7 @@ from queue import Queue
 import backoff
 
 from .version import VERSION
-from .utils import raise_for_status, run_in_thread, verify_link_code, wait_for_port
+from .utils import raise_for_status, run_in_thread, verify_link_code
 from .config import Config
 from .moonraker_conn import MoonrakerConn
 
