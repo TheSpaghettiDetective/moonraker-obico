@@ -89,9 +89,12 @@ class JanusConn:
     def kill_janus_if_running(self):
         # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
         # Ensure the process is killed before launching a new one
-        with open(self.janus_pid_file_path(), 'r') as pid_file:
-            subprocess.run(['kill', pid_file.read()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        wait_for_port_to_close(JANUS_SERVER, self.janus_port)
+        try:
+            with open(self.janus_pid_file_path(), 'r') as pid_file:
+                subprocess.run(['kill', pid_file.read()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            wait_for_port_to_close(JANUS_SERVER, self.janus_port)
+        except Exception as e:
+            pass # pid file not found
 
     def shutdown(self):
         self.shutting_down = True
