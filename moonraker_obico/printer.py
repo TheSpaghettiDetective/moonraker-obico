@@ -198,10 +198,10 @@ class PrinterState:
                     'user': None,
                 },
                 'progress': {
-                    'completion': completion * 100,
+                    'completion': completion * 100 if completion is not None else None,
                     'filepos': virtual_sdcard.get('file_position', 0),
-                    'printTime': print_time,
-                    'printTimeLeft': print_time_left,
+                    'printTime': print_time if print_time is not None else None,
+                    'printTimeLeft': print_time_left if print_time_left is not None else None,
                     'filamentUsed': print_stats.get('filament_used')
                 },
                 'temperatures': temps,
