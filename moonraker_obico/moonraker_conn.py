@@ -157,6 +157,9 @@ class MoonrakerConn:
         data = self.api_get('server/database/item', raise_for_status=False, namespace='mainsail', key='presets') or {}
         for preset in data.get('value', {}).get('presets', {}).values():
             try:
+                if 'gcode' in preset and preset['gcode'].trim():
+                    continue  # We don't support presets using gcode for now to keep things simple
+
                 preset_name = preset['name']
                 extruder_target = float(preset['values']['extruder']['value'])
                 bed_target = float(preset['values']['heater_bed']['value'])
