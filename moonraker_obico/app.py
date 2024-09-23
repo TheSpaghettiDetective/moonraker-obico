@@ -263,7 +263,10 @@ class App(object):
 
         elif event.name == 'status_update':
             # full state update from moonraker
-            self._received_klippy_update(event.data['result'])
+            if 'result' in event.data:
+                self._received_klippy_update(event.data['result'])
+            else:
+                _logger.warning(f'Missing "result" in event data: {event.data}')
 
     def set_current_print(self, printer_state):
 
