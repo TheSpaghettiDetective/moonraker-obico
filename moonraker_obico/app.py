@@ -158,6 +158,8 @@ class App(object):
 
         self.moonrakerconn.set_macro_variables('OBICO_LINK_STATUS', is_linked=True)
 
+        self.server_conn.post_status_update_to_server(with_settings=True) # We should have already collected all printer settings such as heaters and presets by this time
+
         self.nozzlecam = NozzleCam(self.model, self.server_conn, self.moonrakerconn)
         run_in_thread(self.nozzlecam.start)
 
