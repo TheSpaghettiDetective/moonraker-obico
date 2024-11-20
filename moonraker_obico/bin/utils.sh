@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 
 debian_release() {
   cat /etc/debian_version | cut -d '.' -f1
