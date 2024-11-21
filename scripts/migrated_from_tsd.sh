@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 KLIPPER_CONF_DIR="$1"
 OBICO_ENV="$2"
