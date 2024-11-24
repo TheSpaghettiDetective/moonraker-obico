@@ -161,6 +161,8 @@ class MoonrakerConn:
                     continue  # We don't support presets using gcode for now to keep things simple
 
                 preset_name = preset['name']
+                # TODO: we assume "extruder" and "heater_bed" are always present in the preset, which is not true for some cases.
+                # https://sentry.obico.io/organizations/sentry/issues/18133
                 extruder_target = float(preset['values']['extruder']['value'])
                 bed_target = float(preset['values']['heater_bed']['value'])
                 presets.append(dict(name=preset_name, heater_bed=bed_target, extruder=extruder_target))
