@@ -266,7 +266,8 @@ class PrinterState:
                 current_layer = min(total_layers, current_layer) # Apparently the previous calculation can result in current_layer > total_layers in some cases...
                 current_layer = max(current_layer, 0) # Apparently the previous calculation can result in negative number in some cases...
 
-        if max_z and current_z > max_z: current_z = 0 # prevent buggy looking flicker on print start
+        if max_z is not None and current_z is not None and current_z > max_z:
+            current_z = 0  # prevent buggy looking flicker on print start
         if current_layer is None or total_layers is None or is_not_busy or not has_print_duration: # edge case handling - if either are not available we show nothing / show nothing if paused state, transient, etc / show nothing if no print duration (prevents tracking z height during preheat & start bytes)
             current_layer = None
             total_layers = None
