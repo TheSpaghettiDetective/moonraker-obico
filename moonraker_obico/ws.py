@@ -85,7 +85,8 @@ class WebSocketClient:
 
     def connected(self):
         with self._mutex:
-            return self.ws.sock and self.ws.sock.connected
+            sock = self.ws.sock
+            return sock is not None and sock.connected
 
     def close(self):
         with self._mutex:
