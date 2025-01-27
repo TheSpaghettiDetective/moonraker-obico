@@ -22,7 +22,7 @@ from .version import VERSION
 
 
 _logger = logging.getLogger('obico.moonraker_conn')
-_ignore_pattern=re.compile(r'"method": "notify_proc_stat_update"')
+_ignore_pattern=re.compile(r'method.*notify_proc_stat_update')
 
 class MoonrakerConn:
     """
