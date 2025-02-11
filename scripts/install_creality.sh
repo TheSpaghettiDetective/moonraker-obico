@@ -68,6 +68,11 @@ recreate_service() {
     cp "${OBICO_DIR}"/scripts/openwrt_init.d/S99moonraker_obico /etc/init.d/
   elif [ $CREALITY_VARIANT = "k2" ]; then
     cp "${OBICO_DIR}"/scripts/openwrt_init.d/k2_moonraker_obico_service /etc/init.d/moonraker_obico_service
+    PARENT_DIR=$(readlink -f $(dirname "$0")/../..)
+    sed --in-place \
+      --expression "s,ROOT_HOME_DIR,${HOME},g" \
+      --expression "s,PARENT_DIR,${PARENT_DIR},g" \
+      /etc/init.d/moonraker_obico_service
     # register the start/stop scripts
     /etc/init.d/moonraker_obico_service enable
   fi
