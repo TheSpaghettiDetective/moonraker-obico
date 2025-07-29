@@ -324,7 +324,7 @@ class WebcamStreamer:
         except subprocess.TimeoutExpired:
            pass
 
-        def monitor_ffmpeg_process(ffmpeg_proc, retry_after_quit=False):
+        def monitor_ffmpeg_process(ffmpeg_proc, retry_after_quit):
             # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
             ring_buffer = deque(maxlen=50)
             ffmpeg_backoff = ExpoBackoff(3)
