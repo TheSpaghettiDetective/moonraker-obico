@@ -297,7 +297,7 @@ class WebcamStreamer:
                 bitrate = int(bitrate/2)
 
             rtp_port = webcam.runtime['videoport']
-            self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=webcam.streaming_params.get('h264_encoder')))
+            self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -pix_fmt yuv420p -s {img_w}x{img_h} {encoder}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoder=webcam.streaming_params.get('h264_encoder')), retry_after_quit=True)
         except Exception:
             self.sentry.captureException()
 
@@ -327,7 +327,7 @@ class WebcamStreamer:
         def monitor_ffmpeg_process(ffmpeg_proc, retry_after_quit):
             # It seems important to drain the stderr output of ffmpeg, otherwise the whole process will get clogged
             ring_buffer = deque(maxlen=50)
-            ffmpeg_backoff = ExpoBackoff(3)
+            ffmpeg_backoff = ExpoBackoff(3, max_attempts=10)
             while True:
                 line = to_unicode(ffmpeg_proc.stderr.readline(), errors='replace')
                 if not line:  # line == None means the process quits
