@@ -123,6 +123,7 @@ h264-{stream_id}: {{
         videopt = 96
         videortpmap = "H264/90000"
         videofmtp = "profile-level-id=42e01f;packetization-mode=1"
+        videobufferkf = true
         data = true
         dataport = {dataport}
         datatype = "binary"
@@ -148,6 +149,7 @@ h264-{stream_id}: {{
         videopt = 96
         videortpmap = "H264/90000"
         videofmtp = "profile-level-id=42e01f;packetization-mode=1"
+        videobufferkf = true
         data = true
         dataport = {dataport}
         datatype = "binary"
