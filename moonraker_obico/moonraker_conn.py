@@ -56,7 +56,7 @@ class MoonrakerConn:
 
         self._identify_as_obico()
         self._register_klipper_remote_methods()
-        self.available_printer_objects = self.api_get('printer.objects.list', raise_for_status=False).get('objects', [])
+        self.available_printer_objects = (self.api_get('printer.objects.list', raise_for_status=False) or {}).get('objects', [])
         self._request_subscribe(self.available_printer_objects)
         self.app_config.update_moonraker_objects(self)
 
