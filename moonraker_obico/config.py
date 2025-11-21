@@ -111,10 +111,12 @@ class WebcamConfig:
         fps = 25
 
         if self.moonraker_webcam_config:
-            fps = int(self.moonraker_webcam_config.get('target_fps', 15))
+            target_fps = self.moonraker_webcam_config.get('target_fps', 15)
+            fps = int(target_fps if target_fps is not None else 15)
 
         if self.webcam_config_section:
-            fps = int(self.webcam_config_section.get('target_fps', 25))
+            target_fps = self.webcam_config_section.get('target_fps', 25)
+            fps = int(target_fps if target_fps is not None else 25)
 
         return min(fps, 30)
 

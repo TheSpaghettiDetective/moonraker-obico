@@ -273,7 +273,8 @@ class App(object):
         def find_current_print_ts():
             cur_job = self.moonrakerconn.find_most_recent_job()
             if cur_job:
-                return int(cur_job.get('start_time', '0'))
+                start_time = cur_job.get('start_time', '0')
+                return int(start_time if start_time is not None else '0')
             else:
                 _logger.warning(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
                 return None

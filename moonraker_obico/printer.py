@@ -154,8 +154,9 @@ class PrinterState:
             for heater in self.app_config.all_mr_heaters():
                 data = self.status.get(heater, {})
 
+                temp = data.get('temperature')
                 temps[self.app_config.get_mapped_server_heater_name(heater)] = {
-                    'actual': round(data.get('temperature', 0.), 2),
+                    'actual': round(temp if temp is not None else 0., 2),
                     'offset': 0,
                     'target': data.get('target'), # "target = null" indicates this is a sensor, not a heater, and hence temperature can't be set
                 }
@@ -230,7 +231,8 @@ class PrinterState:
         print_info = print_stats.get('info') or dict()
         file_metadata = self.current_file_metadata
         is_not_busy = self.is_busy() is False or self.transient_state is not None
-        has_print_duration = print_stats.get('print_duration', 0) > 0
+        print_duration = print_stats.get('print_duration', 0)
+        has_print_duration = (print_duration if print_duration is not None else 0) > 0
 
         current_z = None
         max_z = None
@@ -239,8 +241,9 @@ class PrinterState:
 
         if not current_layer:
             first_layer_macro_status = self.status.get('gcode_macro _OBICO_LAYER_CHANGE', {})
-            if first_layer_macro_status.get('current_layer', -1) > 0: # current_layer > 0 means macros is embedded in gcode
-                current_layer = first_layer_macro_status['current_layer']
+            macro_current_layer = first_layer_macro_status.get('current_layer', -1)
+            if macro_current_layer is not None and macro_current_layer > 0: # current_layer > 0 means macros is embedded in gcode
+                current_layer = macro_current_layer
 
         gcode_position = self.status.get('gcode_move', {}).get('gcode_position', [])
         current_z = gcode_position[2] if len(gcode_position) > 2 else None

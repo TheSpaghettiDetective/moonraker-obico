@@ -432,7 +432,7 @@ class WebcamStreamer:
                 is_nozzle_camera=webcam.is_nozzle_camera,
                 stream_mode=webcam.streaming_params.get('mode'),
                 stream_id=webcam.runtime.get('stream_id'),
-                data_channel_available=webcam.runtime.get('dataport', -1) > 0,
+                data_channel_available=(webcam.runtime.get('dataport') if webcam.runtime.get('dataport') is not None else -1) > 0,
                 flipV=webcam.flip_v,
                 flipH=webcam.flip_h,
                 rotation=webcam.rotation,
