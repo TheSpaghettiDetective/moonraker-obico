@@ -27,5 +27,5 @@ COPY --chown=obico:obico . moonraker-obico
 USER obico
 ENV PYTHONPATH=/opt/moonraker-obico
 VOLUME ["/opt/printer_data/config", "/opt/printer_data/logs"]
-ENTRYPOINT ["/opt/venv/bin/python", "-m", "moonraker_obico.app"]
+ENTRYPOINT ["/opt/moonraker-obico/scripts/docker-entrypoint.sh"]
 CMD ["-c", "/opt/printer_data/config/moonraker-obico.cfg"]
