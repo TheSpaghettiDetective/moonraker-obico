@@ -131,7 +131,7 @@ class WebcamStreamer:
 
             if not self.wait_for_janus():
                 for webcam in self.webcams:
-                    webcam.setdefault('error', 'Janus failed to start')
+                    raise Exception('Janus failed to start')
 
             for webcam in self.webcams:
                 if webcam.streaming_params['mode'] == 'h264_rtsp':
