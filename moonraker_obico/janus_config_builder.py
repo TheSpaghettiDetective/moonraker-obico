@@ -5,6 +5,10 @@ import os
 import distro
 import subprocess
 import re
+import hmac
+import hashlib
+import time
+import base64
 
 from .utils import os_bit, pi_version, board_id
 
@@ -19,6 +23,20 @@ if distro_id == 'raspbian' and pi_version(): # On some Raspbian/RPi OS versions,
 PRECOMPILED_DIR = '{root_dir}/precomplied/{board_id}.{os_id}.{os_version}.{os_bit}'.format(root_dir=JANUS_ROOT_DIR, board_id=board_id(), os_id=distro_id, os_version=distro.major_version(), os_bit=os_bit())
 
 _logger = logging.getLogger('obico.janus_config_builder')
+
+def generate_coturn_credentials(username, secret):
+    """
+    Generates time-limited credentials for Coturn's REST API auth mode (use-auth-secret).
+    """
+    # Create a timestamp valid for 24 hours (86400 seconds)
+    expiry_time = int(time.time()) + 86400 
+    user_combined = "{}:{}".format(expiry_time, username)
+    
+    # Generate HMAC-SHA1 signature using the secret
+    hashed = hmac.new(secret.encode(), user_combined.encode(), hashlib.sha1)
+    password = base64.b64encode(hashed.digest()).decode()
+    
+    return user_combined, password
 
 def janus_jcfg_folders_section(lib_dir):
     return """
@@ -55,7 +73,7 @@ def find_system_janus_paths():
     return (janus_path, janus_lib_path)
 
 
-def build_janus_jcfg(auth_token):
+def build_janus_jcfg(auth_token, turn_config=None):
     janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
 
     ld_lib_path = None
@@ -74,6 +92,41 @@ def build_janus_jcfg(auth_token):
     if not janus_bin_path or not folder_section:
         return (None, None)
 
+    # --- TURN CONFIGURATION LOGIC ---
+    
+    # Defaults (Obico Cloud)
+    turn_server = "turn.obico.io"
+    turn_port = 80
+    turn_type = "tcp"
+    turn_user = auth_token
+    turn_pwd = auth_token
+
+    # Check if custom TURN config exists and has a server address
+    if turn_config and turn_config.host:
+        turn_server = turn_config.host
+        turn_port = turn_config.port
+        turn_type = "udp" # Standard TURN servers usually prefer UDP
+        
+        if turn_config.secret:
+            # Case 1: Auth Secret (REST API) - Time Limited Credentials
+            # Used when 'use-auth-secret' is enabled on Coturn
+            # We default to 'obico' as the username base
+            base_username = turn_config.username if turn_config.username else "obico"
+            turn_user, turn_pwd = generate_coturn_credentials(base_username, turn_config.secret)
+            _logger.info(f"Using Custom TURN (REST API Auth): {turn_server}:{turn_port}")
+            
+        elif turn_config.username and turn_config.password:
+            # Case 2: Long-Term Credential (lt-cred-mech) - Static Credentials
+            turn_user = turn_config.username
+            turn_pwd = turn_config.password
+            _logger.info(f"Using Custom TURN (Static Auth): {turn_server}:{turn_port}")
+            
+        else:
+             _logger.warning("Custom TURN server specified but no secret or password provided. Connection may fail.")
+
+    else:
+        _logger.info("Using Default Obico TURN Server")
+
     with open(janus_jcfg_path, 'w') as f:
         f.write("""
 general: {
@@ -85,12 +138,18 @@ general: {
         admin_secret = "janusoverlord"  # String that all Janus requests must contain
 }}
 nat: {{
-        turn_server = "turn.obico.io"
-        turn_port = 80
-        turn_type = "tcp"
-        turn_user = "{auth_token}"
-        turn_pwd = "{auth_token}"
-""".format(auth_token=auth_token))
+        turn_server = "{turn_server}"
+        turn_port = {turn_port}
+        turn_type = "{turn_type}"
+        turn_user = "{turn_user}"
+        turn_pwd = "{turn_pwd}"
+""".format(
+    turn_server=turn_server,
+    turn_port=turn_port,
+    turn_type=turn_type,
+    turn_user=turn_user,
+    turn_pwd=turn_pwd
+))
 
         f.write("""
         ice_ignore_list = "vmnet"
@@ -275,11 +334,11 @@ certificates: {{
 """.format(ws_port=ws_port, admin_ws_port=admin_ws_port))
 
 
-def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
+def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port, turn_config=None):
     if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
         os.makedirs(RUNTIME_JANUS_ETC_DIR)
 
-    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
+    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token, turn_config)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
     build_janus_plugin_streaming_jcfg(webcams)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
