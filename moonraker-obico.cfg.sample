@@ -33,3 +33,16 @@ level = INFO
 # dest_host = 127.0.0.1
 # dest_port = 80
 # dest_is_ssl = False
+
+# [turn]
+# Enable only if you have own TURN server (eg coturn)
+# server = turn.example.com #your turn server
+# port = 3478 #your turn server listing port
+
+# if your turn server uses use-auth-secret (REST-API Secret Key)
+# secret = secret # your turn server auth secret 
+# username = obico  # <-- Optional for secret, defaults to "obico" if not set
+
+# if your turn server uses lt-cred-mech (Long term credential)
+# username = yourusername # your turn server username 
+# password = yourpassword # your turn server password
