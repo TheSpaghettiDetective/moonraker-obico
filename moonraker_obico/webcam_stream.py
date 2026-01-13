@@ -122,7 +122,14 @@ class WebcamStreamer:
                 data_channel.runtime = dict(stream_id=389, dataport=JANUS_WS_PORT+389) # A random stream_id and port that is unlikely to conflict
                 webcams_to_build_janus_config.append(data_channel)
 
-            (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
+            (janus_bin_path, ld_lib_path) = build_janus_config(
+                webcams_to_build_janus_config,
+                self.app_config.server.auth_token,
+                JANUS_WS_PORT,
+                JANUS_ADMIN_WS_PORT,
+                self.app_config.turn # Pass the TURN configuration object
+            )
+            
             if not janus_bin_path:
                 raise JanusNotFoundException('Janus not found or not configured correctly. Click the link for troubleshooting guide.')
 
