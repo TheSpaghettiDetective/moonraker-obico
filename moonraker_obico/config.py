@@ -66,10 +66,9 @@ class TunnelConfig:
 @dataclasses.dataclass
 class TurnConfig:
     host: Optional[str] = None
-    port: int = 3478
+    port: int = 80
     username: Optional[str] = None
     password: Optional[str] = None
-    # Secret removed here
 
 
 @dataclasses.dataclass
@@ -284,7 +283,6 @@ class Config:
             port=config.getint('turn', 'port', fallback=3478),
             username=config.get('turn', 'username', fallback=None),
             password=config.get('turn', 'password', fallback=None),
-            # Secret removed
         )
 
         self.webcams = []
