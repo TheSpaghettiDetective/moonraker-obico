@@ -5,8 +5,6 @@ import os
 import distro
 import subprocess
 import re
-import hmac
-import hashlib
 import time
 import base64
 
@@ -24,19 +22,6 @@ PRECOMPILED_DIR = '{root_dir}/precomplied/{board_id}.{os_id}.{os_version}.{os_bi
 
 _logger = logging.getLogger('obico.janus_config_builder')
 
-def generate_coturn_credentials(username, secret):
-    """
-    Generates time-limited credentials for Coturn's REST API auth mode (use-auth-secret).
-    """
-    # Create a timestamp valid for 24 hours (86400 seconds)
-    expiry_time = int(time.time()) + 86400 
-    user_combined = "{}:{}".format(expiry_time, username)
-    
-    # Generate HMAC-SHA1 signature using the secret
-    hashed = hmac.new(secret.encode(), user_combined.encode(), hashlib.sha1)
-    password = base64.b64encode(hashed.digest()).decode()
-    
-    return user_combined, password
 
 def janus_jcfg_folders_section(lib_dir):
     return """
@@ -107,22 +92,13 @@ def build_janus_jcfg(auth_token, turn_config=None):
         turn_port = turn_config.port
         turn_type = "udp" # Standard TURN servers usually prefer UDP
         
-        if turn_config.secret:
-            # Case 1: Auth Secret (REST API) - Time Limited Credentials
-            # Used when 'use-auth-secret' is enabled on Coturn
-            # We default to 'obico' as the username base
-            base_username = turn_config.username if turn_config.username else "obico"
-            turn_user, turn_pwd = generate_coturn_credentials(base_username, turn_config.secret)
-            _logger.info(f"Using Custom TURN (REST API Auth): {turn_server}:{turn_port}")
-            
-        elif turn_config.username and turn_config.password:
-            # Case 2: Long-Term Credential (lt-cred-mech) - Static Credentials
+        # Static Authentication (lt-cred-mech) ONLY
+        if turn_config.username and turn_config.password:
             turn_user = turn_config.username
             turn_pwd = turn_config.password
             _logger.info(f"Using Custom TURN (Static Auth): {turn_server}:{turn_port}")
-            
         else:
-             _logger.warning("Custom TURN server specified but no secret or password provided. Connection may fail.")
+             _logger.warning("Custom TURN server specified but no username/password provided. Connection may fail.")
 
     else:
         _logger.info("Using Default Obico TURN Server")
