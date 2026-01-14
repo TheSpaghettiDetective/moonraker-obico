@@ -69,7 +69,7 @@ class TurnConfig:
     port: int = 3478
     username: Optional[str] = None
     password: Optional[str] = None
-    secret: Optional[str] = None
+    # Secret removed here
 
 
 @dataclasses.dataclass
@@ -284,7 +284,7 @@ class Config:
             port=config.getint('turn', 'port', fallback=3478),
             username=config.get('turn', 'username', fallback=None),
             password=config.get('turn', 'password', fallback=None),
-            secret=config.get('turn', 'secret', fallback=None),
+            # Secret removed
         )
 
         self.webcams = []
