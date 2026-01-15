@@ -33,3 +33,11 @@ level = INFO
 # dest_host = 127.0.0.1
 # dest_port = 80
 # dest_is_ssl = False
+
+# [turn]
+# Enable only if you have own TURN server (eg coturn) and know what you are doing
+# moonraker-obico only support lt-cred-mech authentication method
+# server = turn.example.com
+# port = 80
+# username = yourusername
+# password = yourpassword

@@ -64,6 +64,14 @@ class TunnelConfig:
 
 
 @dataclasses.dataclass
+class TurnConfig:
+    host: Optional[str] = None
+    port: int = 80
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+@dataclasses.dataclass
 class WebcamConfig:
 
     def __init__(self, webcam_config_section, is_primary_camera):
@@ -270,6 +278,13 @@ class Config:
             url_blacklist=[],
         )
 
+        self.turn = TurnConfig(
+            host=config.get('turn', 'server', fallback=config.get('turn', 'host', fallback=None)),
+            port=config.getint('turn', 'port', fallback=80),
+            username=config.get('turn', 'username', fallback=None),
+            password=config.get('turn', 'password', fallback=None),
+        )
+
         self.webcams = []
         webcam_sections = [section for section in config.sections() if section.startswith("webcam")]
         if len(webcam_sections) == 0:
@@ -444,4 +459,3 @@ class Config:
             name_split = sensor.split(' ')
             if len(name_split) > 1 and name_split[0] == 'temperature_sensor' and not name_split[1].startswith('_'):
                 self.moonraker_objects['heater_mapping'][sensor] = name_split[1]
-
