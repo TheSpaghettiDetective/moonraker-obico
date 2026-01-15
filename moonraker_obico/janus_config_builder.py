@@ -5,8 +5,6 @@ import os
 import distro
 import subprocess
 import re
-import time
-import base64
 
 from .utils import os_bit, pi_version, board_id
 
