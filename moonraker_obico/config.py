@@ -280,7 +280,7 @@ class Config:
 
         self.turn = TurnConfig(
             host=config.get('turn', 'server', fallback=config.get('turn', 'host', fallback=None)),
-            port=config.getint('turn', 'port', fallback=3478),
+            port=config.getint('turn', 'port', fallback=80),
             username=config.get('turn', 'username', fallback=None),
             password=config.get('turn', 'password', fallback=None),
         )
