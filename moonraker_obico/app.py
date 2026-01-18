@@ -346,7 +346,10 @@ class App(object):
 
         if cur_state == PrinterState.STATE_PRINTING:
             if prev_state == PrinterState.STATE_PAUSED:
-                self.post_print_event(PrinterState.EVENT_RESUMED)
+                # Suppress resume notification if the pause was from timelapse
+                if not printer_state.was_last_pause_timelapse():
+                    self.post_print_event(PrinterState.EVENT_RESUMED)
+                printer_state.set_last_pause_was_timelapse(False)
                 return
             if prev_state == PrinterState.STATE_OPERATIONAL:
                 self.set_current_print(printer_state)
@@ -354,7 +357,11 @@ class App(object):
                 return
 
         if cur_state == PrinterState.STATE_PAUSED and prev_state == PrinterState.STATE_PRINTING:
-            self.post_print_event(PrinterState.EVENT_PAUSED)
+            # Suppress pause notification if this is a timelapse frame capture
+            is_timelapse = printer_state.is_timelapse_paused()
+            printer_state.set_last_pause_was_timelapse(is_timelapse)
+            if not is_timelapse:
+                self.post_print_event(PrinterState.EVENT_PAUSED)
             return
 
         if cur_state == PrinterState.STATE_OPERATIONAL and prev_state in PrinterState.ACTIVE_STATES:

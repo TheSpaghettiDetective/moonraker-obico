@@ -325,6 +325,7 @@ class MoonrakerConn:
             'gcode_move': ('speed_factor', 'extrude_factor'),
             'history': None,
             'gcode_macro _OBICO_LAYER_CHANGE': None,
+            'gcode_macro TIMELAPSE_TAKE_FRAME': ('is_paused',),  # For suppressing pause notifications during timelapse
             'fan': ('speed'),
         }
         subscribed_objects = {
@@ -354,6 +355,7 @@ class MoonrakerConn:
                 "extruder": None,
                 "gcode_move": None,
                 'gcode_macro _OBICO_LAYER_CHANGE': None,
+                'gcode_macro TIMELAPSE_TAKE_FRAME': None,
                 "fan": None,
             }
 

@@ -39,6 +39,7 @@ class PrinterState:
         self.current_file_metadata = None
         self.webcams = None
         self.data_channel_id = None
+        self._last_pause_was_timelapse = False  # Track if last pause was from timelapse
 
     def has_active_job(self) -> bool:
         return PrinterState.get_state_from_status(self.status) in PrinterState.ACTIVE_STATES
@@ -50,6 +51,22 @@ class PrinterState:
     def is_printing(self) -> bool:
         with self._mutex:
             return self.status.get('print_stats', {}).get('state') == 'printing'
+
+    def is_timelapse_paused(self) -> bool:
+        """Check if the printer is paused due to moonraker-timelapse taking a frame.
+        When timelapse parks the toolhead for a photo, the print state becomes 'paused',
+        but we should not send pause notifications in this case."""
+        with self._mutex:
+            timelapse_macro = self.status.get('gcode_macro TIMELAPSE_TAKE_FRAME', {})
+            return timelapse_macro.get('is_paused', False)
+
+    def set_last_pause_was_timelapse(self, value: bool):
+        with self._mutex:
+            self._last_pause_was_timelapse = value
+
+    def was_last_pause_timelapse(self) -> bool:
+        with self._mutex:
+            return self._last_pause_was_timelapse
 
     # Return: The old status.
     def update_status(self, new_status: Dict) -> Dict:
