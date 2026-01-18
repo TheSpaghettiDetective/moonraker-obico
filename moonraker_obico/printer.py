@@ -7,7 +7,6 @@ import pathlib
 
 from .config import Config
 from .version import VERSION
-from .utils import sanitize_filename
 
 class PrinterState:
     STATE_OFFLINE = 'Offline'
@@ -163,7 +162,6 @@ class PrinterState:
 
             filepath = print_stats.get('filename')
             filename = pathlib.Path(filepath).name if filepath else None
-            file_display_name = sanitize_filename(filename) if filename else None
 
             if state == PrinterState.STATE_OFFLINE:
                 return {}
@@ -192,7 +190,7 @@ class PrinterState:
                     'file': {
                         'name': filename,
                         'path': filepath,
-                        'display': file_display_name,
+                        'display': filename,
                         'obico_g_code_file_id': self.get_obico_g_code_file_id(),
                     },
                     'estimatedPrintTime': None,
