@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import platform
@@ -39,6 +40,17 @@ POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
 HANDSHAKE_PORT = 46793
+
+
+def create_handshake_app():
+    # Explicit paths avoid Flask 2.2 calling pkgutil.get_loader (removed in Python 3.14).
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    return flask.Flask(
+        'handshake',
+        root_path=module_dir,
+        instance_path=module_dir,
+    )
+
 
 class StubMoonrakerConn:
     """
@@ -188,7 +200,7 @@ class PrinterDiscovery(object):
         return info
 
     def listen_to_handshake(self):
-        handshake_app = flask.Flask('handshake')
+        handshake_app = create_handshake_app()
 
         @handshake_app.route('/plugin/obico/grab-discovery-secret')
         def grab_discovery_secret():
