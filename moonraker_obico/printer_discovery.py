@@ -43,6 +43,7 @@ HANDSHAKE_PORT = 46793
 
 
 def create_handshake_app():
+    # https://sentry.obico.io/organizations/sentry/issues/1115
     # Explicit paths avoid Flask 2.2 calling pkgutil.get_loader (removed in Python 3.14).
     module_dir = os.path.dirname(os.path.abspath(__file__))
     return flask.Flask(
