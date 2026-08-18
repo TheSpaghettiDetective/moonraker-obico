@@ -1,5 +1,6 @@
 import sys
 import logging
+import time
 import json
 import os
 import distro
@@ -98,7 +99,80 @@ def find_system_janus_paths():
     return (janus_path, janus_lib_path)
 
 
-def build_janus_jcfg(auth_token):
+DEFAULT_TURN = dict(server='turn.obico.io', port=80, transport='tcp')  # Obico Cloud. Authenticates with the printer's auth token.
+
+
+def turn_settings(auth_token, turn=None):
+    """
+    (server, port, transport, username, credential) for the Janus nat section.
+
+    `turn` is the TURN configuration the server sent as part of the linked printer info. When the server
+    didn't send one, or it isn't usable, fall back to the Obico Cloud TURN server.
+    """
+    if turn:
+        try:
+            server = str(turn['server']).strip()
+            username = str(turn['username'])
+            credential = str(turn['credential'])
+            port = int(turn.get('port') or 3478)
+            transports = [str(t).strip().lower() for t in (turn.get('transports') or [])]
+            transport = transports[0] if transports else 'udp'
+            usable = (
+                server and username and credential
+                and 0 < port < 65536
+                and transport in ('udp', 'tcp')
+                and not any(c in v for v in (server, username, credential) for c in '"\r\n')
+            )
+        except (KeyError, TypeError, ValueError, AttributeError):
+            usable = False
+
+        if usable:
+            return (server, port, transport, username, credential)
+        _logger.warning('Ignoring unusable TURN config from the server. Using the default TURN server.')
+
+    return (DEFAULT_TURN['server'], DEFAULT_TURN['port'], DEFAULT_TURN['transport'], auth_token, auth_token)
+
+
+def printer_info_for_log(linked_printer):
+    """linked_printer with the TURN credential masked, for logging."""
+    turn = (linked_printer or {}).get('turn')
+    if isinstance(turn, dict) and turn.get('credential'):
+        return dict(linked_printer, turn=dict(turn, credential='<redacted>'))
+    return linked_printer
+
+
+TURN_EXPIRY_WARNING_SECONDS = 30 * 24 * 3600
+TURN_DOCS_URL = 'https://www.obico.io/docs/server-guides/advanced/webcam-turn-server/'
+
+
+def turn_credential_expiry_warning(turn, agent_name):
+    """
+    (title, text) of a warning when the TURN credential from the server expires soon or has expired. None otherwise.
+
+    The credential is fetched at startup and can't be renewed while running, so the fix is always a restart.
+    """
+    try:
+        expires_at = int((turn or {}).get('expires_at') or 0)
+    except (TypeError, ValueError):
+        return None
+    if not expires_at:
+        return None
+
+    remaining = expires_at - time.time()
+    if remaining > TURN_EXPIRY_WARNING_SECONDS:
+        return None
+    if remaining > 0:
+        return (
+            'Webcam streaming credential expires soon',
+            'The TURN credential for webcam streaming expires in {} days. Restart {} to get a new one.'.format(int(remaining // 86400), agent_name),
+        )
+    return (
+        'Webcam streaming credential expired',
+        'The TURN credential for webcam streaming has expired. Webcam streaming from outside your network will fail until you restart {}.'.format(agent_name),
+    )
+
+
+def build_janus_jcfg(auth_token, turn=None):
     janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
 
     ld_lib_path = None
@@ -117,6 +191,9 @@ def build_janus_jcfg(auth_token):
     if not janus_bin_path or not folder_section:
         return (None, None)
 
+    (turn_server, turn_port, turn_type, turn_user, turn_pwd) = turn_settings(auth_token, turn)
+    _logger.info('Janus TURN server: {}:{} ({})'.format(turn_server, turn_port, turn_type))
+
     with open(janus_jcfg_path, 'w') as f:
         f.write("""
 general: {
@@ -128,12 +205,12 @@ general: {
         admin_secret = "janusoverlord"  # String that all Janus requests must contain
 }}
 nat: {{
-        turn_server = "turn.obico.io"
-        turn_port = 80
-        turn_type = "tcp"
-        turn_user = "{auth_token}"
-        turn_pwd = "{auth_token}"
-""".format(auth_token=auth_token))
+        turn_server = "{turn_server}"
+        turn_port = {turn_port}
+        turn_type = "{turn_type}"
+        turn_user = "{turn_user}"
+        turn_pwd = "{turn_pwd}"
+""".format(turn_server=turn_server, turn_port=turn_port, turn_type=turn_type, turn_user=turn_user, turn_pwd=turn_pwd))
 
         f.write("""
         ice_ignore_list = "vmnet"
@@ -318,7 +395,7 @@ certificates: {{
 """.format(ws_port=ws_port, admin_ws_port=admin_ws_port))
 
 
-def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
+def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port, turn=None):
     if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
         os.makedirs(RUNTIME_JANUS_ETC_DIR)
 
@@ -330,7 +407,7 @@ def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
         except Exception:
             pass
 
-    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
+    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token, turn)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
     build_janus_plugin_streaming_jcfg(webcams)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
