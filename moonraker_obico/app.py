@@ -20,6 +20,7 @@ from .version import VERSION
 from .utils import SentryWrapper, run_in_thread
 from .webcam_capture import JpegPoster
 from .webcam_stream import WebcamStreamer
+from .janus_config_builder import turn_credential_expiry_warning, printer_info_for_log, TURN_DOCS_URL
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
@@ -110,7 +111,7 @@ class App(object):
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         linked_printer = self.wait_for_auth_token(config)
-        _logger.info('Linked printer: {}'.format(linked_printer))
+        _logger.info('Linked printer: {}'.format(printer_info_for_log(linked_printer)))
 
         self.model = App.Model(
             config=config,
@@ -165,6 +166,7 @@ class App(object):
 
         run_in_thread(self.jpeg_poster.pic_post_loop)
         run_in_thread(self.status_update_to_client_loop)
+        run_in_thread(self.turn_credential_expiry_loop)
 
         even_loop_thread = run_in_thread(self.event_loop)
 
@@ -437,6 +439,21 @@ class App(object):
         else:
             _logger.warning('Not linked or not connected to server. Ignoring re-linking request.')
 
+
+    def turn_credential_expiry_loop(self):
+        warned = set()
+        while self.shutdown is False:
+            try:
+                warning = turn_credential_expiry_warning(self.model.linked_printer.get('turn'), 'Obico for Klipper')
+                if warning:
+                    (title, text) = warning
+                    _logger.warning(text)
+                    if title not in warned:
+                        warned.add(title)
+                        self.server_conn.post_printer_event_to_server(title, text, event_class='WARNING', info_url=TURN_DOCS_URL)
+            except Exception:
+                self.sentry.captureException()
+            time.sleep(3600)
 
     def status_update_to_client_loop(self):
         while self.shutdown is False:
