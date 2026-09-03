@@ -37,6 +37,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
+          context: git
           images: ghcr.io/${{ github.repository }}
           flavor: latest=false
           tags: |
@@ -46,6 +47,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
+          context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
