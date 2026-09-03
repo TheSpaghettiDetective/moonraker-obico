@@ -28,6 +28,9 @@ FFMPEG = os.path.join(FFMPEG_DIR, 'run.sh')
 JANUS_WS_PORT = 17730   # Janus needs to use 17730 up to 17750. Hard-coded for now. may need to make it dynamic if the problem of port conflict is too much
 JANUS_ADMIN_WS_PORT = JANUS_WS_PORT + 1
 
+STREAMING_FAILED_EVENT_TEXT = 'Follow the webcam troubleshooting guide to resolve the issue.'
+STREAMING_FAILED_INFO_URL = 'https://obico.io/docs/user-guides/webcam-feed-is-not-showing/#webcam-streaming-failed'
+
 PI_CAM_RESOLUTIONS = {
     'low': ((320, 240), (480, 270)),  # resolution for 4:3 and 16:9
     'medium': ((640, 480), (960, 540)),
@@ -155,15 +158,14 @@ class WebcamStreamer:
         except JanusNotFoundException as e:
             streaming_error = redact_text(e)
             _logger.warning('{} Webcam is now streaming in 0.1FPS.'.format(redact_text(e)))
-            self.send_streaming_failed_event(streaming_error, info_url='https://obico.io/docs/user-guides/webcam-install-janus/')
+            self.send_streaming_failed_event(info_url='https://obico.io/docs/user-guides/webcam-install-janus/')
             self.shutdown()
             # When Janus is not found, we will stream the primary camera in 0.1FPS. This provides a better user experience, and is compatible with old mobile app versions
             normalized_webcams = [self.normalized_webcam_dict(webcam) for webcam in self.webcams if webcam.is_primary_camera]
 
         except Exception as e:
             streaming_error = redact_text(e)
-            self.sentry.captureException()
-            self.send_streaming_failed_event()
+            self.report_streaming_failure()
             self.shutdown()
 
         finally:
@@ -177,13 +179,17 @@ class WebcamStreamer:
         self.close_all_mjpeg_socks()
         return ('ok', None)  # return value expected for a passthru target
 
-    def send_streaming_failed_event(self, error=None, info_url='https://obico.io/docs/user-guides/moonraker-obico/webcam/'):
+    def send_streaming_failed_event(self, info_url=STREAMING_FAILED_INFO_URL):
         self.server_conn.post_printer_event_to_server(
             'moonraker-obico: Webcam Streaming Failed',
-            error if error else f'Make sure the webcam is properly configured in moonraker-obico.cfg.',
+            STREAMING_FAILED_EVENT_TEXT,
             event_class='WARNING',
             info_url=info_url
         )
+
+    def report_streaming_failure(self):
+        _logger.exception('Webcam streaming failed')
+        self.send_streaming_failed_event()
 
     def find_streaming_params(self):
         ffmpeg_h264_encoder = find_ffmpeg_h264_encoder()
@@ -257,7 +263,7 @@ class WebcamStreamer:
             # There seems to be a bug in camera-streamer that causes to close .mp4 connection after a random period of time. In that case, we rerun ffmpeg
             self.start_ffmpeg(webcam.runtime['videoport'], f'-re -i {webcam.h264_http_url} -c:v copy', retry_after_quit=True)
         except Exception:
-            self.sentry.captureException()
+            self.report_streaming_failure()
 
 
     def h264_device(self, webcam):
@@ -271,7 +277,7 @@ class WebcamStreamer:
 
             self.start_ffmpeg(rtp_port, f'-f v4l2 -framerate {webcam.target_fps} -s {img_w}x{img_h} -input_format h264 -i {webcam.h264_device_path} -c:v copy -flags:v +global_header')
         except Exception:
-            self.sentry.captureException()
+            self.report_streaming_failure()
 
 
     def h264_transcode(self, webcam):
@@ -307,7 +313,7 @@ class WebcamStreamer:
                 encoding_params = '-pix_fmt yuv420p -c:v {}'.format(encoder)
             self.start_ffmpeg(rtp_port, '-re -i {stream_url} -filter:v fps={fps} -b:v {bitrate} -s {img_w}x{img_h} {encoding_params} -g {fps}'.format(stream_url=stream_url, fps=fps, bitrate=bitrate, img_w=img_w, img_h=img_h, encoding_params=encoding_params), retry_after_quit=True)
         except Exception:
-            self.sentry.captureException()
+            self.report_streaming_failure()
 
 
     @backoff.on_exception(backoff.expo, Exception, base=3, jitter=None, max_tries=5) # Apparently crowsnest would return invalid mjpeg data right after start and hence throw off ffmpeg. We should retry in this case
