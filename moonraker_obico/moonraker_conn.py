@@ -19,6 +19,7 @@ import os
 from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
 from .version import VERSION
+from .redaction import redact_sensitive_data, redact_text, redact_url
 
 
 _logger = logging.getLogger('obico.moonraker_conn')
@@ -98,7 +99,7 @@ class MoonrakerConn:
 
     def api_get(self, mr_method, timeout=5, raise_for_status=True, **params):
         url = f'{self.app_config.moonraker.http_address()}/{mr_method.replace(".", "/")}'
-        _logger.debug(f'GET {url}')
+        _logger.debug('GET {}'.format(redact_url(url)))
 
         headers = {'X-Api-Key': self.app_config.moonraker.api_key} if self.app_config.moonraker.api_key else {}
         resp = requests.get(
@@ -115,7 +116,7 @@ class MoonrakerConn:
 
     def api_post(self, mr_method, timeout=None, multipart_filename=None, multipart_fileobj=None, **post_params):
         url = f'{self.app_config.moonraker.http_address()}/{mr_method.replace(".", "/")}'
-        _logger.debug(f'POST {url}')
+        _logger.debug('POST {}'.format(redact_url(url)))
 
         headers = {'X-Api-Key': self.app_config.moonraker.api_key} if self.app_config.moonraker.api_key else {}
         files={'file': (multipart_filename, multipart_fileobj, 'application/octet-stream')} if multipart_filename and multipart_fileobj else None
@@ -196,7 +197,10 @@ class MoonrakerConn:
 
         for var_name, var_value in kwargs.items():
             script = f'SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}'
-            _logger.debug(script)
+            safe_var_value = redact_sensitive_data({var_name: var_value}).get(var_name)
+            safe_script = 'SET_GCODE_VARIABLE MACRO={} VARIABLE={} VALUE={}'.format(
+                macro_name, var_name, safe_var_value)
+            _logger.debug(safe_script)
             try:
                 resp = self.api_post(
                     'printer/gcode/script',
@@ -205,7 +209,7 @@ class MoonrakerConn:
                 )
                 self._last_set_macro_variables_call = current_call
             except:
-                _logger.warning(f'set_macro_variable failed! - SET_GCODE_VARIABLE MACRO={macro_name} VARIABLE={var_name} VALUE={var_value}')
+                _logger.warning('set_macro_variable failed! - {}'.format(safe_script))
 
 
     ## WebSocket part
@@ -243,7 +247,7 @@ class MoonrakerConn:
                 callback(data)
                 return
 
-            _logger.debug(f'Received from Moonraker: {data}')
+            _logger.debug('Received from Moonraker: {}'.format(redact_sensitive_data(data)))
             if  data.get('method', '') == 'obico_remote_event':
                 event_name = data.get('params', {}).get('event_name')
                 handler = self.remote_event_handlers.get(event_name)
@@ -278,9 +282,9 @@ class MoonrakerConn:
 
                 self.conn.send(json.dumps(data, default=str))
             except WebSocketConnectionException as e:
-                _logger.warning(e)
+                _logger.warning(redact_text(e))
             except Exception as e:
-                _logger.warning(e)
+                _logger.warning(redact_text(e))
                 self.sentry.captureException()
 
     def push_event(self, event):
@@ -312,7 +316,7 @@ class MoonrakerConn:
 
         try:
             if log_for_debug:
-                _logger.debug(f'Sending to Moonraker: {payload}')
+                _logger.debug('Sending to Moonraker: {}'.format(redact_sensitive_data(payload)))
             self.ws_message_queue_to_moonraker.put_nowait(payload)
         except queue.Full:
             _logger.warning("Moonraker message queue is full, msg dropped")

@@ -10,6 +10,7 @@ import pathlib
 
 from .utils import sanitize_filename
 from .state_transition import call_func_with_state_transition
+from .redaction import redact_sensitive_data, redact_text, redact_url
 
 _logger = logging.getLogger('obico.passthru')
 
@@ -26,7 +27,7 @@ class PassthruExecutor:
         self.seen_refs = collections.deque(maxlen=100)
 
     def run(self, passthru_msg):
-        _logger.debug(f'Received passthru from server: {passthru_msg}')
+        _logger.debug('Received passthru from server: {}'.format(redact_sensitive_data(passthru_msg)))
 
         passthru = passthru_msg['passthru']
         ack_ref = passthru.get('ref')
@@ -72,7 +73,7 @@ class FileDownloader:
         def _download_and_print():
             try:
                 _logger.info(
-                    f'downloading from {g_code_file["url"]}')
+                    'downloading from {}'.format(redact_url(g_code_file['url'])))
 
                 safe_filename = sanitize_filename(g_code_file['safe_filename'])
                 r = requests.get(
@@ -89,7 +90,7 @@ class FileDownloader:
                     multipart_fileobj=r.content,
                     path=self.model.config.server.upload_dir,
                 )
-                _logger.debug(f'upload response: {resp_data}')
+                _logger.debug('upload response: {}'.format(redact_sensitive_data(resp_data)))
 
                 filepath_on_mr = resp_data['item']['path']
                 file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filepath_on_mr)
@@ -206,7 +207,12 @@ class MoonrakerApi:
                 except requests.exceptions.RequestException as exc:
                     if self.func == "machine/device_power/devices" and verb == "get" and hasattr(exc, 'response') and exc.response is not None and exc.response.status_code == 404:
                         return {'devices': []}, None  # User has no power devices configured
-                    _logger.warning('Moonraker API error on "%s" ("%s"): %s', self.func, verb, exc)
+                    _logger.warning(
+                        'Moonraker API error on "%s" ("%s"): %s',
+                        self.func,
+                        verb,
+                        redact_text(exc),
+                    )
                     return None, str(exc)
             except Exception as ex:
                 error = 'Error in calling "{}" - "{}"'.format(self.func, verb)

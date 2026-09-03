@@ -9,6 +9,7 @@ import socket
 from .utils import pi_version, to_unicode, is_port_open, wait_for_port, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
 from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
+from .redaction import redact_sensitive_data, redact_text
 
 _logger = logging.getLogger('obico.janus')
 
@@ -39,7 +40,7 @@ class JanusConn:
                 env = {}
                 if ld_lib_path:
                     env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
-                _logger.debug('Popen: {} {}'.format(env, janus_cmd))
+                _logger.debug('Popen: {} {}'.format(redact_sensitive_data(env), redact_text(janus_cmd)))
                 janus_proc = subprocess.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
                 with open(self.janus_pid_file_path(), 'w') as pid_file:
@@ -48,7 +49,7 @@ class JanusConn:
                 while True:
                     line = to_unicode(janus_proc.stdout.readline(), errors='replace')
                     if line:
-                        _logger.debug('JANUS: ' + line.rstrip())
+                        _logger.debug('JANUS: ' + redact_text(line.rstrip()))
                     else:  # line == None means the process quits
                         _logger.warn('Janus quit with exit code {}'.format(janus_proc.wait()))
                         return
@@ -116,13 +117,13 @@ class JanusConn:
 
             if to_plugin:
                 _logger.debug('Processing WebRTC data channel msg from client:')
-                _logger.debug(msg)
+                _logger.debug(redact_sensitive_data(msg))
                 # TODO: make data channel work again
                 # self.plugin.client_conn.on_message_to_plugin(to_plugin)
                 return
 
             _logger.debug('Relaying Janus msg')
-            _logger.debug(msg)
+            _logger.debug(redact_sensitive_data(msg))
             self.server_conn.send_ws_msg_to_server(dict(janus=raw_msg))
         except:
             self.sentry.captureException()

@@ -69,7 +69,7 @@ class Panel(ScreenPanel):
             response = requests.get(url)
             response.raise_for_status()
             data = response.json()
-            logging.info(data)
+            logging.info('OBICO_LINK_STATUS response received')
 
             is_linked = data.get('result', {}).get('status', {}).get('gcode_macro OBICO_LINK_STATUS', {}).get('is_linked')
             one_time_passcode = data.get('result', {}).get('status', {}).get('gcode_macro OBICO_LINK_STATUS', {}).get('one_time_passcode')

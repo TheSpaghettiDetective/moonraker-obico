@@ -29,6 +29,7 @@ from .tunnel import LocalTunnel
 from .printer_discovery import PrinterDiscovery, StubMoonrakerConn
 from .client_conn import ClientConn
 from .passthru_targets import PassthruExecutor, FileDownloader, Printer, MoonrakerApi, FileOperations
+from .redaction import redact_sensitive_data, redact_text
 
 
 _logger = logging.getLogger('obico.app')
@@ -64,14 +65,14 @@ class App(object):
 
     def push_event(self, event):
         if self.shutdown:
-            _logger.debug(f'is shutdown, dropping event {event}')
+            _logger.debug('is shutdown, dropping event {}'.format(redact_sensitive_data(vars(event))))
             return False
 
         try:
             self.q.put_nowait(event)
             return True
         except queue.Full:
-            _logger.warning(f'event queue is full, dropping event {event}')
+            _logger.warning('event queue is full, dropping event {}'.format(redact_sensitive_data(vars(event))))
             return False
 
     @backoff.on_exception(backoff.expo, Exception, max_value=120)
@@ -92,7 +93,7 @@ class App(object):
         setup_logging(config.logging, log_path=args.log_path, debug=args.debug)
 
         config_dict = {section: dict(config._config.items(section)) for section in config._config.sections()}
-        _logger.info(f'moonraker-obico config:\n{config_dict}')
+        _logger.info('moonraker-obico config:\n{}'.format(redact_sensitive_data(config_dict)))
 
         if args.dev_mode:
             self.moonrakerconn = StubMoonrakerConn()
@@ -110,7 +111,7 @@ class App(object):
 
         # Blocking call. When continued, server is guaranteed to be properly configured, self.model.linked_printer existed.
         linked_printer = self.wait_for_auth_token(config)
-        _logger.info('Linked printer: {}'.format(linked_printer))
+        _logger.info('Linked printer: {}'.format(redact_sensitive_data(linked_printer)))
 
         self.model = App.Model(
             config=config,
@@ -120,7 +121,8 @@ class App(object):
         )
 
         _cfg = self.model.config._config
-        _logger.debug(f'moonraker-obico configurations: { {section: dict(_cfg[section]) for section in _cfg.sections()} }')
+        all_config = {section: dict(_cfg[section]) for section in _cfg.sections()}
+        _logger.debug('moonraker-obico configurations: {}'.format(redact_sensitive_data(all_config)))
 
         self.server_conn = ServerConn(self.model.config, self.model.printer_state, self.process_server_msg, self.sentry)
         self.jpeg_poster = JpegPoster(self.model, self.server_conn, self.sentry)
@@ -177,7 +179,7 @@ class App(object):
 
     def stop(self, cause=None):
         if cause:
-            _logger.info(f'shutdown ({cause})')
+            _logger.info('shutdown ({})'.format(redact_text(cause)))
         else:
             _logger.info('shutdown')
 
@@ -232,7 +234,7 @@ class App(object):
 
         elif event.name == 'message':
             if 'error' in event.data:
-                _logger.warning(f'error response from moonraker, {event}')
+                _logger.warning('error response from moonraker, {}'.format(redact_sensitive_data(vars(event))))
 
             elif event.data.get('method', '') in ('notify_klippy_disconnected', 'notify_klippy_shutdown'):
                 # Click "Restart Klipper" or "Firmware restart" (same result) -> notify_klippy_disconnected
@@ -266,7 +268,7 @@ class App(object):
             if 'result' in event.data:
                 self._received_klippy_update(event.data['result'])
             else:
-                _logger.warning(f'Missing "result" in event data: {event.data}')
+                _logger.warning('Missing "result" in event data: {}'.format(redact_sensitive_data(event.data)))
 
     def set_current_print(self, printer_state):
 
@@ -276,7 +278,12 @@ class App(object):
                 start_time = cur_job.get('start_time', '0')
                 return int(start_time if start_time is not None else '0')
             else:
-                _logger.warning(f'Active job indicate in print_stats: {printer_state.status}, but not in job history: {cur_job}')
+                _logger.warning(
+                    'Active job indicate in print_stats: {}, but not in job history: {}'.format(
+                        redact_sensitive_data(printer_state.status),
+                        redact_sensitive_data(cur_job),
+                    )
+                )
                 return None
 
         printer_state.set_current_print_ts(find_current_print_ts())
@@ -397,7 +404,7 @@ class App(object):
                 self.jpeg_poster.need_viewing_boost.set()
 
         if 'commands' in msg:
-            _logger.debug(f'Received commands from server: {msg}')
+            _logger.debug('Received commands from server: {}'.format(redact_sensitive_data(msg)))
 
             for command in msg['commands']:
                 if command['cmd'] == 'pause':
@@ -413,7 +420,7 @@ class App(object):
             passthru_thread.start()
 
         if msg.get('janus') and self.webcam_streamer and self.webcam_streamer.janus:
-            _logger.debug(f'Received janus from server: {msg}')
+            _logger.debug('Received janus from server: {}'.format(redact_sensitive_data(msg)))
             self.webcam_streamer.janus.pass_to_janus(msg.get('janus'))
 
         if msg.get('http.tunnelv2') and self.local_tunnel:

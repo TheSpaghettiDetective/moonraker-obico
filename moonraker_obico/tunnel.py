@@ -9,6 +9,7 @@ import json
 from urllib.parse import urljoin
 
 from .ws import WebSocketClient
+from .redaction import redact_url
 
 COMPRESS_THRESHOLD = 1000
 
@@ -86,7 +87,7 @@ class LocalTunnel(object):
         url = urljoin(self.base_url, path)
         headers['Accept-Encoding'] = 'identity'
 
-        _logger.debug('Tunneling (v2) "{}"'.format(url))
+        _logger.debug('Tunneling (v2) "{}"'.format(redact_url(url)))
 
         resp_data = None
         if any([ (u in url) for u in self.config.url_blacklist]):

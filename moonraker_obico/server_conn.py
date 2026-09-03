@@ -14,7 +14,7 @@ from .ws import WebSocketClient, WebSocketConnectionException
 from .config import Config
 from .printer import PrinterState
 from .webcam_capture import capture_jpeg
-from .lib import curlify
+from .redaction import format_http_request, redact_sensitive_data, redact_text, redact_url
 
 NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 30
 if DEBUG:
@@ -79,12 +79,12 @@ class ServerConn:
                 if as_binary:
                     raw = bson.dumps(data)
                 else:
-                    _logger.debug("Sending to server: \n{}".format(data))
+                    _logger.debug("Sending to server: \n{}".format(redact_sensitive_data(data)))
                     raw = json.dumps(data, default=str)
                 self.ss.send(raw, as_binary=as_binary)
                 server_ws_backoff.reset()
             except WebSocketConnectionException as e:
-                _logger.warning(e)
+                _logger.warning(redact_text(e))
                 server_ws_backoff.more(e)
             except Exception as e:
                 self.sentry.captureException()
@@ -129,7 +129,7 @@ class ServerConn:
             try:
                 files = {'snapshot': capture_jpeg(self.config.primary_webcam_config)}
             except Exception as e:
-                _logger.warn('Failed to capture jpeg - ' + str(e))
+                _logger.warn('Failed to capture jpeg - ' + redact_text(e))
                 pass
         resp = self.send_http_request('POST', '/api/v1/octo/printer_events/', timeout=60, raise_exception=True, files=files, data=event_data)
 
@@ -150,7 +150,7 @@ class ServerConn:
             resp = self.send_http_request('POST', '/api/v1/octo/pic/', timeout=60, files=files, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('Jpeg posted to server - camera name: {} - viewing_boost: {} - {}'.format(webcam_config.name, viewing_boost, resp))
         except (URLError, HTTPError, requests.exceptions.RequestException, ValueError) as e:
-            _logger.warn('Failed to capture jpeg - ' + str(e))
+            _logger.warn('Failed to capture jpeg - ' + redact_text(e))
             return
 
     def send_http_request(self, method, uri, timeout=10, raise_exception=True, skip_debug_logging=False, **kwargs):
@@ -166,10 +166,15 @@ class ServerConn:
         try:
             resp = requests.request(
                 method, endpoint, timeout=timeout, headers=headers, **_kwargs)
-            _logger.debug(f'{resp.request.method} {resp.url} - {resp.status_code}')
+            _logger.debug('{} {} -> {}'.format(
+                resp.request.method,
+                redact_url(resp.url),
+                resp.status_code,
+            ))
 
             if not skip_debug_logging:
-                _logger.debug(curlify.to_curl(resp.request))
+                # Request bodies are deliberately omitted even when debug logging is enabled.
+                _logger.debug(format_http_request(resp.request))
         except Exception:
             if raise_exception:
                 raise

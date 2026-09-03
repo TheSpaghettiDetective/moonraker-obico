@@ -3,6 +3,7 @@ import re
 import time
 from urllib.parse import urlparse
 from moonraker_obico.webcam_capture import capture_jpeg
+from moonraker_obico.redaction import redact_sensitive_data, redacted_traceback
 _logger = logging.getLogger('obico.nozzlecam')
 
 
@@ -55,7 +56,10 @@ class NozzleCam:
             try:
                 self.send_nozzlecam_jpeg(capture_jpeg(nozzlecam_config), first_layer_scanning)
             except Exception:
-                _logger.warning('Failed to capture and send nozzle cam jpeg', exc_info=True)
+                _logger.warning(
+                    'Failed to capture and send nozzle cam jpeg:\n%s',
+                    redacted_traceback(),
+                )
 
     def should_capture(self):
         if not self.model.printer_state.is_busy():
@@ -96,7 +100,7 @@ class NozzleCam:
             self.server_conn.send_http_request('POST', '/ent/api/nozzle_cam/first_layer_done/', timeout=60, data=data, raise_exception=True, skip_debug_logging=True)
             _logger.debug('server notified 1st layer is done')
         except Exception:
-            _logger.warning('Failed to send images', exc_info=True)
+            _logger.warning('Failed to send images:\n%s', redacted_traceback())
 
     def notify_server_nozzlecam_complete_once(self, current_print_ts):
         if current_print_ts in (None, -1):
@@ -129,7 +133,7 @@ class NozzleCam:
                 nozzle_cam_config = next((webcam for webcam in self.model.config.webcams if webcam.is_nozzle_camera), None)
 
             if nozzle_cam_config:
-                _logger.info(f'Nozzle camera found: {nozzle_cam_config}')
+                _logger.info('Nozzle camera found: {}'.format(redact_sensitive_data(nozzle_cam_config)))
                 return nozzle_cam_config
 
             # For Celestrius alpha testers

@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import logging
 
 from .utils import SentryWrapper
+from .redaction import redact_sensitive_data
 
 _logger = logging.getLogger('obico.config')
 
@@ -349,7 +350,7 @@ class Config:
             # Check for the webcam API in the newer Moonraker versions
             result = moonraker_conn.api_get('server.webcams.list', raise_for_status=False)
             if result and len(result.get('webcams', [])) > 0:  # Apparently some Moonraker versions support this endpoint but mistakenly returns an empty list even when webcams are present
-                _logger.debug(f'Found config in Moonraker webcams API: {result}')
+                _logger.debug('Found config in Moonraker webcams API: {}'.format(redact_sensitive_data(result)))
                 webcam_configs = [ dict(
                             name = cfg.get('name', None),
                             snapshot_url = cfg.get('snapshot_url', None),
@@ -378,7 +379,7 @@ class Config:
             # Check for the standard namespace for webcams
             result = moonraker_conn.api_get('server.database.item', raise_for_status=False, namespace='webcams')
             if result:
-                _logger.debug(f'Found config in Moonraker webcams namespace: {result}')
+                _logger.debug('Found config in Moonraker webcams namespace: {}'.format(redact_sensitive_data(result)))
                 return [ dict(
                             name = cfg.get('name', None),
                             snapshot_url = cfg.get('urlSnapshot', None),
@@ -392,7 +393,7 @@ class Config:
             # webcam configs not found in the standard location. Try fluidd's flavor
             result = moonraker_conn.api_get('server.database.item', raise_for_status=False, namespace='fluidd', key='cameras')
             if result:
-                _logger.debug(f'Found config in Moonraker fluidd/cameras namespace: {result}')
+                _logger.debug('Found config in Moonraker fluidd/cameras namespace: {}'.format(redact_sensitive_data(result)))
                 return [ dict(
                             name = cfg.get('name', None),
                             stream_url = cfg.get('url', None),
@@ -412,13 +413,13 @@ class Config:
 
         if len(self.webcams) == 1 and self.webcams[0].name == '':   # Only default webcam config is present
              if len(mr_webcam_config) > 0:
-                _logger.debug(f'Retrieved webcam config from Moonraker: {mr_webcam_config[0]}')
+                _logger.debug('Retrieved webcam config from Moonraker: {}'.format(redact_sensitive_data(mr_webcam_config[0])))
                 self.webcams[0].moonraker_webcam_config = mr_webcam_config[0]
         else:
             for webcam in self.webcams:
                 for cfg in mr_webcam_config:
                     if cfg.get('name', None) == webcam.name:
-                        _logger.debug(f'Found a matching webcam config from Moonraker: {cfg}')
+                        _logger.debug('Found a matching webcam config from Moonraker: {}'.format(redact_sensitive_data(cfg)))
                         webcam.moonraker_webcam_config = cfg
 
 
@@ -444,4 +445,3 @@ class Config:
             name_split = sensor.split(' ')
             if len(name_split) > 1 and name_split[0] == 'temperature_sensor' and not name_split[1].startswith('_'):
                 self.moonraker_objects['heater_mapping'][sensor] = name_split[1]
-

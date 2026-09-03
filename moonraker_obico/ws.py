@@ -7,6 +7,9 @@ import threading
 import inspect
 import sys
 
+from .redaction import REDACTED, redact_text, redact_url
+from .logger import install_redacting_filter
+
 _logger = logging.getLogger('obico.ws')
 
 class WebSocketConnectionException(Exception):
@@ -18,7 +21,7 @@ class WebSocketClient:
         self._mutex = threading.RLock()
 
         def on_error(ws, error):
-            _logger.warning('Server WS ERROR: {}'.format(error))
+            _logger.warning('Server WS ERROR: {}'.format(redact_text(error)))
 
             def run(*args):
                 self.close()
@@ -31,7 +34,7 @@ class WebSocketClient:
                 on_ws_msg(ws, msg)
 
         def on_close(ws, close_status_code, close_msg):
-            _logger.warning(f'WS Closed - {close_status_code} - {close_msg}')
+            _logger.warning('WS Closed - {} - {}'.format(close_status_code, redact_text(close_msg)))
             if on_ws_close:
                 on_ws_close(ws, close_status_code=close_status_code)
 
@@ -45,7 +48,7 @@ class WebSocketClient:
             # https://websocket-client.readthedocs.io/en/latest/threading.html
             threading.Thread(target=run).start()
 
-        _logger.debug('Connecting to websocket: {}'.format(url))
+        _logger.debug('Connecting to websocket: {}'.format(redact_url(url)))
         self.ws = websocket.WebSocketApp(
             url,
             on_message=on_message,
@@ -98,7 +101,7 @@ if __name__ == "__main__":
     import sys
 
     def on_msg(ws, msg):
-        print(msg)
+        print(redact_text(msg))
 
     def on_close(ws):
         print('Closed')
@@ -108,8 +111,9 @@ if __name__ == "__main__":
 
     url = config.get('endpoint_prefix', 'https://app.obico.io').replace('http', 'ws') + '/ws/dev/'
     token = config.get('auth_token')
-    print('Connecting to:\n{}\nwith token:\n{}\n'.format(url, token))
+    print('Connecting to:\n{}\nwith token:\n{}\n'.format(redact_url(url), REDACTED if token else None))
     websocket.enableTrace(True)
+    install_redacting_filter(logging.getLogger('websocket'))
     header = ["authorization: bearer " + token] if token else None
     ws = WebSocketClient(url, header=header, on_ws_msg=on_msg, on_ws_close=on_close)
     time.sleep(1)

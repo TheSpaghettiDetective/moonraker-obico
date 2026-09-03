@@ -10,8 +10,11 @@ import select
 from .utils import raise_for_status, run_in_thread, verify_link_code, SentryWrapper
 from .config import Config
 from .printer_discovery import PrinterDiscovery
+from .redaction import REDACTED, redact_text, redact_url
+from .logger import install_redacting_filter
 
 logging.basicConfig()
+install_redacting_filter()
 
 
 CYAN='\033[0;96m'
@@ -152,7 +155,10 @@ If you need help, head to https://www.obico.io/docs/user-guides/klipper-setup
 
         try:
             if debug:
-                print(f'## DEBUG: Verifying code "{code.strip()}" at server URL: "{config.server.canonical_endpoint_prefix()}"')
+                print('## DEBUG: Verifying code "{}" at server URL: "{}"'.format(
+                    REDACTED,
+                    redact_url(config.server.canonical_endpoint_prefix()),
+                ))
 
             resp = verify_link_code(config, code)
 
@@ -164,7 +170,7 @@ If you need help, head to https://www.obico.io/docs/user-guides/klipper-setup
             break
         except Exception as e:
             if debug:
-                print('## DEBUG: Server API error: ', str(e))
+                print('## DEBUG: Server API error: ', redact_text(e))
 
             print(RED + '\n==== Failed to link. Did you enter an expired code? ====\n' + NC)
             print('If you keep getting this error, press ctrl-c to abort it and then run the following command to debug:')

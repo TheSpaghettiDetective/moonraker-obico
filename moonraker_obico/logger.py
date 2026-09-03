@@ -2,6 +2,15 @@ import logging
 import logging.handlers
 import sys
 
+from .redaction import RedactingFilter
+
+
+def install_redacting_filter(logger=None):
+    target_logger = logger or logging.getLogger()
+    for handler in target_logger.handlers:
+        if not any(isinstance(item, RedactingFilter) for item in handler.filters):
+            handler.addFilter(RedactingFilter())
+
 def setup_logging(logging_config, log_path=None, debug=False):
     if log_path:
         logging_config.path = log_path
@@ -46,3 +55,5 @@ def setup_logging(logging_config, log_path=None, debug=False):
 
     for hdlr in handlers:
         logger.addHandler(hdlr)
+
+    install_redacting_filter(logger)

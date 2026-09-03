@@ -23,6 +23,7 @@ from sentry_sdk.integrations.threading import ThreadingIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from .version import VERSION
+from .redaction import redact_sensitive_data, redact_text, redacted_traceback
 
 _logger = logging.getLogger('obico.utils')
 
@@ -42,7 +43,7 @@ class ExpoBackoff:
     def more(self, e):
         self.attempts += 1
         if self.max_attempts > 0 and self.attempts > self.max_attempts:
-            _logger.warning('Giving up after %d attempts on error: %s' % (self.attempts, e))
+            _logger.warning('Giving up after %d attempts on error: %s' % (self.attempts, redact_text(e)))
             if isinstance(e, BaseException):
                 raise e
             else:
@@ -52,7 +53,7 @@ class ExpoBackoff:
             if delay > self.max_seconds:
                 delay = self.max_seconds
             delay *= 0.5 + random.random()
-            _logger.info('Attempt %d - backing off %f seconds: %s' % (self.attempts, delay, e))
+            _logger.info('Attempt %d - backing off %f seconds: %s' % (self.attempts, delay, redact_text(e)))
 
             time.sleep(delay)
 
@@ -108,7 +109,7 @@ class SentryWrapper:
                 sentry_sdk.set_tag(k, v)
 
     def captureException(self, *args, **kwargs) -> None:
-        _logger.exception('')
+        _logger.error('Exception:\n%s', redacted_traceback())
         if self.enabled():
             sentry_sdk.capture_exception(*args, **kwargs)
 
@@ -219,7 +220,7 @@ def get_image_info(data):
 
 
 def is_port_open(host, port):
-    _logger.debug(f'Testing TCP port {port} on {host}')
+    _logger.debug('Testing TCP port {} on {}'.format(port, redact_text(host)))
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         return sock.connect_ex((host, port)) == 0
 
@@ -359,11 +360,15 @@ def verify_link_code(config, code):
     endpoint_prefix = config.server.canonical_endpoint_prefix()
     url = f'{endpoint_prefix}/api/v1/octo/verify/'
     resp = requests.post(url, params={'code': code.strip()})
-    _logger.debug(f'/api/v1/octo/verify/ responded: {resp}')
+    _logger.debug('/api/v1/octo/verify/ responded: {}'.format(redact_sensitive_data(resp)))
 
     if resp and resp.ok:
         data = resp.json()
-        _logger.debug(f'/api/v1/octo/verify/ response payload: {data}. Updating the auth_token in the config file')
+        _logger.debug(
+            '/api/v1/octo/verify/ response payload: {}. Updating the auth_token in the config file'.format(
+                redact_sensitive_data(data)
+            )
+        )
         auth_token = data['printer']['auth_token']
         config.update_server_auth_token(auth_token)
 
