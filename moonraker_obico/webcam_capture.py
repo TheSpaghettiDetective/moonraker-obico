@@ -22,6 +22,32 @@ if DEBUG:
 _logger = logging.getLogger('obico.webcam_capture')
 
 
+_thread_local = threading.local()
+
+
+def _snapshot_session():
+    # Reuse one keep-alive connection per thread. Each webcam gets its own
+    # capture thread, so this yields one persistent connection per camera and
+    # avoids a fresh TCP (and, for https snapshot_urls, TLS) handshake on
+    # every single frame.
+    session = getattr(_thread_local, 'snapshot_session', None)
+    if session is None:
+        session = requests.Session()
+        session.verify = False
+        _thread_local.snapshot_session = session
+    return session
+
+
+def _reset_snapshot_session():
+    session = getattr(_thread_local, 'snapshot_session', None)
+    if session is not None:
+        try:
+            session.close()
+        except Exception:
+            pass
+        _thread_local.snapshot_session = None
+
+
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 @backoff.on_predicate(backoff.expo, max_tries=3)
 def capture_jpeg(webcam_config, force_stream_url=False):
@@ -29,19 +55,26 @@ def capture_jpeg(webcam_config, force_stream_url=False):
 
     snapshot_url = webcam_config.snapshot_url
     if snapshot_url and not force_stream_url:
-        r = requests.get(snapshot_url, stream=True, timeout=5, verify=False)
-        r.raise_for_status()
+        try:
+            r = _snapshot_session().get(snapshot_url, stream=True, timeout=5)
+            r.raise_for_status()
 
-        response_content = b''
-        start_time = time.monotonic()
-        for chunk in r.iter_content(chunk_size=1024):
-            response_content += chunk
-            if len(response_content) > MAX_JPEG_SIZE:
-                r.close()
-                raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
+            chunks = []
+            total_size = 0
+            for chunk in r.iter_content(chunk_size=65536):
+                chunks.append(chunk)
+                total_size += len(chunk)
+                if total_size > MAX_JPEG_SIZE:
+                    r.close()
+                    raise Exception('Payload returned from the snapshot_url is too large. Did you configure stream_url as snapshot_url?')
 
-        r.close()
-        return response_content
+            r.close()
+            return b''.join(chunks)
+        except Exception:
+            # Drop the pooled connection so a half-open socket is not reused
+            # by the backoff retry.
+            _reset_snapshot_session()
+            raise
 
     else:
         stream_url = webcam_config.stream_url
