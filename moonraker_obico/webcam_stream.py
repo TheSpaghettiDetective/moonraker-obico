@@ -113,7 +113,13 @@ class WebcamStreamer:
         self.shutdown_subprocesses()
         self.close_all_mjpeg_socks()
 
-        self.webcams = webcam_configs
+        disabled_webcams = [webcam for webcam in webcam_configs if webcam.disable_video_streaming]
+        if disabled_webcams:
+            _logger.info('Video streaming disabled in config for webcam(s): {}'.format(
+                ', '.join(webcam.name or 'default' for webcam in disabled_webcams)))
+
+        self.webcams = [webcam for webcam in webcam_configs if not webcam.disable_video_streaming]
+
         self.find_streaming_params()
         self.assign_janus_params()
         normalized_webcams = []
