@@ -291,7 +291,7 @@ class Config:
             ),
             level=config.get(
                 'logging', 'level',
-                fallback=''
+                fallback='INFO'
             ),
             log_network=config.getboolean(
                 'logging', 'log_network',
