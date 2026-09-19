@@ -67,7 +67,8 @@ class ServerConn:
             try:
                 (data, as_binary) = self.message_queue_to_server.get()
 
-                if not self.ss or not self.ss.connected():
+                ss = self.ss
+                if not ss or not ss.connected():
                     header = ["authorization: bearer " + self.config.server.auth_token]
                     self.ss = WebSocketClient(
                         self.config.server.ws_url(),
@@ -75,13 +76,14 @@ class ServerConn:
                         on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
                         on_ws_close=on_server_ws_close,)
+                    ss = self.ss
 
                 if as_binary:
                     raw = bson.dumps(data)
                 else:
                     _logger.debug("Sending to server: \n{}".format(redact_sensitive_data(data)))
                     raw = json.dumps(data, default=str)
-                self.ss.send(raw, as_binary=as_binary)
+                ss.send(raw, as_binary=as_binary)
                 server_ws_backoff.reset()
             except WebSocketConnectionException as e:
                 _logger.warning(redact_text(e))

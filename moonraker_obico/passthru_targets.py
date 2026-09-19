@@ -75,7 +75,7 @@ class FileDownloader:
                 _logger.info(
                     'downloading from {}'.format(redact_url(g_code_file['url'])))
 
-                safe_filename = sanitize_filename(g_code_file['safe_filename'])
+                safe_filename = sanitize_filename(os.path.basename(g_code_file['safe_filename'].replace('\\', '/')))
                 r = requests.get(
                     g_code_file['url'],
                     allow_redirects=True,
