@@ -13,9 +13,8 @@ import bson
 import websocket
 from random import randrange
 from collections import OrderedDict
-import subprocess
-import os
 import sys
+from pathlib import Path
 
 from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -430,14 +429,27 @@ class MoonrakerConn:
             _logger.warning('Aborted ensuring include_cfgs because moonraker printer/info call failed')
             return
 
-        ensure_include_cfgs_sh = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts', 'ensure_include_cfgs.sh')
-        FNULL = open(os.devnull, 'w')
-        cmd = f'{ensure_include_cfgs_sh} {printer_cfg}'
-        _logger.debug('Popen: {}'.format(cmd))
-        proc = subprocess.Popen(cmd.split(' '), stdout=FNULL, stderr=FNULL)
-        proc_exit_code = proc.wait()
-        if proc_exit_code != 0:
-            _logger.warning(f'{cmd} exited with {proc_exit_code}')
+        config_path = Path(printer_cfg)
+        macro_cfg = Path(__file__).resolve().parent.parent / 'include_cfgs' / 'moonraker_obico_macros.cfg'
+        if not macro_cfg.is_file():
+            _logger.warning('Cannot install Obico macros: %s is missing', macro_cfg)
+            return
+
+        macro_link = config_path.parent / macro_cfg.name
+        if not macro_link.exists():
+            if macro_link.is_symlink():
+                macro_link.unlink()
+            macro_link.symlink_to(macro_cfg)
+
+        include_line = '[include moonraker_obico_macros.cfg]'
+        contents = config_path.read_text()
+        if include_line not in contents:
+            lines = contents.splitlines(keepends=True)
+            save_config_index = next((i for i, line in enumerate(lines) if '-- SAVE_CONFIG --' in line), len(lines))
+            if save_config_index > 0 and not lines[save_config_index - 1].endswith('\n'):
+                lines[save_config_index - 1] += '\n'
+            lines.insert(save_config_index, include_line + '\n')
+            config_path.write_text(''.join(lines))
 
 @dataclasses.dataclass
 class Event:
