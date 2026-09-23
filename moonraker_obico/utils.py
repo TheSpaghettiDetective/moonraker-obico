@@ -310,8 +310,20 @@ def sanitize_filename(name, really_universal=False):
     if "/" in name or "\\" in name:
         raise ValueError("name must not contain / or \\")
 
-    from pathvalidate import sanitize_filename as sfn
-    result = sfn(name)
+    try:
+        from pathvalidate import sanitize_filename as sfn
+    except ModuleNotFoundError as exc:
+        if exc.name != "pathvalidate":
+            raise
+        # Older or partially installed agents may lack this optional runtime
+        # dependency. Keep status updates and file downloads working with the
+        # same basic cross-platform filename restrictions.
+        result = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]', '', name).rstrip(' .')
+        stem, separator, extension = result.partition('.')
+        if stem.upper() in {'CON', 'PRN', 'AUX', 'NUL'} or re.fullmatch(r'(?:COM|LPT)[1-9]', stem.upper()):
+            result = stem + '_' + separator + extension
+    else:
+        result = sfn(name)
     return result.lstrip(".")
 
 
