@@ -42,7 +42,8 @@ class ServerConn:
     def start(self):
 
         def on_server_ws_close(ws, close_status_code):
-            if self.ss and self.ss.ws and self.ss.ws == ws:
+            ss = self.ss
+            if ss and ss.ws and ss.ws == ws:
                 self.ss = None
 
             if close_status_code == 4321:
@@ -67,16 +68,17 @@ class ServerConn:
             try:
                 (data, as_binary) = self.message_queue_to_server.get()
 
+                # on_server_ws_close() runs on the websocket thread and sets self.ss to None at any moment,
+                # including right after the assignment below. Use only the local reference from here on.
                 ss = self.ss
                 if not ss or not ss.connected():
                     header = ["authorization: bearer " + self.config.server.auth_token]
-                    self.ss = WebSocketClient(
+                    ss = self.ss = WebSocketClient(
                         self.config.server.ws_url(),
                         header=header,
                         on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
                         on_ws_close=on_server_ws_close,)
-                    ss = self.ss
 
                 if as_binary:
                     raw = bson.dumps(data)
