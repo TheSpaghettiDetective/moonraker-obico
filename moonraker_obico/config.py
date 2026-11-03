@@ -1,4 +1,7 @@
 import dataclasses
+import os
+import stat
+import tempfile
 from typing import Optional
 import re
 from functools import reduce
@@ -215,6 +218,15 @@ class Config:
         config = ConfigParser()
         config.read([self._config_path, ])
 
+        if not config.sections():
+            if hasattr(self, '_config') and self._config.sections():
+                _logger.warning(
+                    'Ignoring an empty config reload from %s and keeping the last valid config.',
+                    self._config_path,
+                )
+                return
+            raise ValueError(f'No config sections found in {self._config_path}')
+
         self._config = config
 
         self.moonraker = MoonrakerConfig(
@@ -291,7 +303,7 @@ class Config:
             ),
             level=config.get(
                 'logging', 'level',
-                fallback=''
+                fallback='INFO'
             ),
             log_network=config.getboolean(
                 'logging', 'log_network',
@@ -312,8 +324,31 @@ class Config:
             return {}
 
     def write(self) -> None:
-        with open(self._config_path, 'w') as f:
-            self._config.write(f)
+        config_dir = os.path.dirname(os.path.abspath(self._config_path))
+        config_name = os.path.basename(self._config_path)
+        try:
+            config_mode = stat.S_IMODE(os.stat(self._config_path).st_mode)
+        except FileNotFoundError:
+            config_mode = None
+
+        fd, temp_path = tempfile.mkstemp(
+            dir=config_dir,
+            prefix=f'.{config_name}.',
+        )
+        try:
+            with os.fdopen(fd, 'w') as f:
+                if config_mode is not None:
+                    os.fchmod(f.fileno(), config_mode)
+                self._config.write(f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self._config_path)
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+            raise
 
     @property
     def primary_webcam_config(self):

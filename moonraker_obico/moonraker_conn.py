@@ -15,6 +15,7 @@ from random import randrange
 from collections import OrderedDict
 import subprocess
 import os
+import sys
 
 from .utils import DEBUG, run_in_thread
 from .ws import WebSocketClient, WebSocketConnectionException
@@ -24,6 +25,16 @@ from .redaction import redact_sensitive_data, redact_text, redact_url
 
 _logger = logging.getLogger('obico.moonraker_conn')
 _ignore_pattern=re.compile(r'method.*notify_proc_stat_update')
+
+
+def _log_server_info_failure(details):
+    exc = sys.exc_info()[1]  # backoff 1.x doesn't pass the exception in details, but calls this handler inside its except block
+    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+    if status in (401, 403):
+        _logger.warning('Moonraker rejected the API key (HTTP %s). Check api_key under [moonraker] in moonraker-obico.cfg, and [authorization] in moonraker.conf. Retrying in %.1fs', status, details['wait'])
+    else:
+        _logger.warning('Failed to get Moonraker server info (%s). Retrying in %.1fs', redact_text(str(exc)), details['wait'])
+
 
 class MoonrakerConn:
     """
@@ -136,7 +147,7 @@ class MoonrakerConn:
             _logger.warning('api key is unset, trying to fetch one')
             self.app_config.moonraker.api_key = self.api_get('access/api_key', raise_for_status=True)
 
-    @backoff.on_exception(backoff.expo, Exception, max_value=60)
+    @backoff.on_exception(backoff.expo, Exception, max_value=60, on_backoff=_log_server_info_failure)
     def get_server_info(self):
         return self.api_get('server/info')
 
