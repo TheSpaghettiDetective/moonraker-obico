@@ -145,7 +145,7 @@ def turn_credential_expiry_warning(turn, agent_name):
     """
     try:
         expires_at = int((turn or {}).get('expires_at') or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, AttributeError):
         return None
     if not expires_at:
         return None
