@@ -120,7 +120,7 @@ def turn_settings(auth_token, turn=None):
             usable = (
                 server and username and credential
                 and 0 < port < 65536
-                and transport in ('udp', 'tcp')
+                and transport in ('udp', 'tcp', 'tls')
                 and not any(c in v for v in (server, username, credential) for c in '"\r\n')
             )
         except (KeyError, TypeError, ValueError, AttributeError):

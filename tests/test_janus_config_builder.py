@@ -93,6 +93,21 @@ class TurnSettingsTestCase(unittest.TestCase):
             (jcb.DEFAULT_TURN['server'], jcb.DEFAULT_TURN['port'], jcb.DEFAULT_TURN['transport'], 'authtok', 'authtok'),
         )
 
+    def test_tls_transport_passthrough(self):
+        server, port, transport, _, _ = jcb.turn_settings(
+            'authtok',
+            {
+                'server': 'turn.example.com',
+                'port': 443,
+                'transports': ['tls'],
+                'username': '1700003600:printer-1',
+                'credential': 'secret123',
+            },
+        )
+        self.assertEqual(server, 'turn.example.com')
+        self.assertEqual(port, 443)
+        self.assertEqual(transport, 'tls')
+
 
 if __name__ == '__main__':
     unittest.main()
