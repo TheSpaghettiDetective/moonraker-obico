@@ -9,8 +9,12 @@ import re
 from .utils import os_bit, pi_version, board_id
 
 JANUS_ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'janus')
-RUNTIME_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'runtime', 'etc', 'janus')
 TPL_JANUS_ETC_DIR = os.path.join(JANUS_ROOT_DIR, 'templates', 'etc', 'janus')
+
+
+def runtime_janus_etc_dir(ws_port):
+    # Isolating runtime config dirs by ws_port keeps concurrent instances from overwriting each other's janus configs.
+    return os.path.join(JANUS_ROOT_DIR, 'runtime', 'etc', 'janus-{}'.format(ws_port))
 
 distro_id = distro.id()
 if distro_id == 'raspbian' and pi_version(): # On some Raspbian/RPi OS versions, distro.id() returns 'debian'. On others, it returns 'raspbian'.
@@ -98,8 +102,8 @@ def find_system_janus_paths():
     return (janus_path, janus_lib_path)
 
 
-def build_janus_jcfg(auth_token):
-    janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
+def build_janus_jcfg(auth_token, ws_port):
+    janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=runtime_janus_etc_dir(ws_port))
 
     ld_lib_path = None
     janus_bin_path = None
@@ -235,8 +239,8 @@ mjpeg-{stream_id}: {{
 """.format(stream_id=stream_id, mjpeg_dataport=mjpeg_dataport))
 
 
-def build_janus_plugin_streaming_jcfg(webcams):
-    streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=RUNTIME_JANUS_ETC_DIR)
+def build_janus_plugin_streaming_jcfg(webcams, ws_port):
+    streaming_jcfg_path = '{etc_dir}/janus.plugin.streaming.jcfg'.format(etc_dir=runtime_janus_etc_dir(ws_port))
     with open(streaming_jcfg_path, 'w') as f:
         for webcam in webcams:
             if webcam.streaming_params['mode'] == 'h264_rtsp':
@@ -268,7 +272,7 @@ def build_janus_plugin_streaming_jcfg(webcams):
 
 
 def build_janus_transport_websocket_jcfg(ws_port, admin_ws_port):
-    target_path = "{etc_dir}/janus.transport.websockets.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
+    target_path = "{etc_dir}/janus.transport.websockets.jcfg".format(etc_dir=runtime_janus_etc_dir(ws_port))
     with open(target_path, 'w') as f:
         f.write("""
 # WebSockets stuff: whether they should be enabled, which ports they
@@ -319,8 +323,9 @@ certificates: {{
 
 
 def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
-    if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
-        os.makedirs(RUNTIME_JANUS_ETC_DIR)
+    etc_dir = runtime_janus_etc_dir(ws_port)
+    if not os.path.exists(etc_dir):
+        os.makedirs(etc_dir)
 
     if CHOSEN_PRECOMPILED_VARIANT and CHOSEN_PRECOMPILED_VARIANT != REQUESTED_PRECOMPILED_VARIANT:
         try:
@@ -330,9 +335,9 @@ def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
         except Exception:
             pass
 
-    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
+    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token, ws_port)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
-    build_janus_plugin_streaming_jcfg(webcams)
+    build_janus_plugin_streaming_jcfg(webcams, ws_port)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)
 
     return (janus_bin_path, ld_lib_path)

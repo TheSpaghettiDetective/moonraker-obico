@@ -8,12 +8,16 @@ import socket
 
 from .utils import pi_version, to_unicode, is_port_open, wait_for_port, wait_for_port_to_close, run_in_thread
 from .ws import WebSocketClient
-from .janus_config_builder import RUNTIME_JANUS_ETC_DIR
+from .janus_config_builder import runtime_janus_etc_dir
 from .redaction import redact_sensitive_data, redact_text
 
 _logger = logging.getLogger('obico.janus')
 
 JANUS_SERVER = os.getenv('JANUS_SERVER', '127.0.0.1')
+
+
+def janus_pid_file_path(janus_port):
+    return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=janus_port)
 
 
 class JanusConn:
@@ -36,14 +40,14 @@ class JanusConn:
 
         def run_janus_forever():
             try:
-                janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=RUNTIME_JANUS_ETC_DIR)
+                janus_cmd = '{janus_bin_path} --stun-server=stun.l.google.com:19302 --configs-folder {config_folder}'.format(janus_bin_path=janus_bin_path, config_folder=runtime_janus_etc_dir(self.janus_port))
                 env = {}
                 if ld_lib_path:
                     env={'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
                 _logger.debug('Popen: {} {}'.format(redact_sensitive_data(env), redact_text(janus_cmd)))
                 janus_proc = subprocess.Popen(janus_cmd.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-                with open(self.janus_pid_file_path(), 'w') as pid_file:
+                with open(janus_pid_file_path(self.janus_port), 'w') as pid_file:
                     pid_file.write(str(janus_proc.pid))
 
                 while True:
@@ -84,18 +88,20 @@ class JanusConn:
             subprotocols=['janus-protocol'],
             waitsecs=30)
 
-    def janus_pid_file_path(self):
-        return '/tmp/obico-janus-{janus_port}.pid'.format(janus_port=self.janus_port)
-
     def kill_janus_if_running(self):
         # It is possible that orphaned janus process is running (maybe previous python process was killed -9?).
         # Ensure the process is killed before launching a new one
         try:
-            with open(self.janus_pid_file_path(), 'r') as pid_file:
+            with open(janus_pid_file_path(self.janus_port), 'r') as pid_file:
                 subprocess.run(['kill', pid_file.read()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             wait_for_port_to_close(JANUS_SERVER, self.janus_port)
         except Exception as e:
             pass # pid file not found
+
+        try:
+            os.remove(janus_pid_file_path(self.janus_port))
+        except Exception:
+            pass
 
     def shutdown(self):
         self.shutting_down = True
