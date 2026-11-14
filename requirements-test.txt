@@ -1,0 +1,10 @@
+# Test-only dependencies. These are NOT installed on printers: install.sh and
+# scripts/install_creality.sh install requirements.txt only.
+#
+# To run the test suite:
+#   pip install -r requirements.txt -r requirements-test.txt
+#   python -m unittest discover -s tests
+
+# Provides the websocket server that tests/test_ws_dead_peer.py runs its
+# client against.
+websockets>=10.0

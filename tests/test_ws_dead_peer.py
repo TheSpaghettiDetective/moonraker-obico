@@ -4,6 +4,10 @@ A firewall reboot or NAT state flush drops the TCP connection without sending a 
 to the agent. Without websocket pings the client socket keeps reporting `connected` and
 the agent never reconnects. These tests put a proxy between the client and a real
 websocket server, make the proxy swallow traffic, and check the client notices.
+
+The `websockets` package provides that test server. It is declared in
+requirements-test.txt, not requirements.txt, so it is not installed on printers:
+    pip install -r requirements.txt -r requirements-test.txt
 """
 import asyncio
 import socket
