@@ -17,6 +17,11 @@ from .webcam_capture import capture_jpeg
 from .redaction import format_http_request, redact_sensitive_data, redact_text, redact_url
 
 NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 30
+
+# Ping the server so a connection that died silently (firewall reboot, NAT state flush) is closed
+# and re-established. Worst case the agent notices within SERVER_WS_PING_INTERVAL + SERVER_WS_PING_TIMEOUT.
+SERVER_WS_PING_INTERVAL_SECONDS = 30
+SERVER_WS_PING_TIMEOUT_SECONDS = 15
 if DEBUG:
     NON_CRITICAL_UPDATE_INTERVAL_SECONDS = 5
 
@@ -78,7 +83,9 @@ class ServerConn:
                         header=header,
                         on_ws_msg=on_message,
                         on_ws_open=on_server_ws_open,
-                        on_ws_close=on_server_ws_close,)
+                        on_ws_close=on_server_ws_close,
+                        ping_interval=SERVER_WS_PING_INTERVAL_SECONDS,
+                        ping_timeout=SERVER_WS_PING_TIMEOUT_SECONDS,)
 
                 if as_binary:
                     raw = bson.dumps(data)
