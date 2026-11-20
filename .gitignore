@@ -11,3 +11,4 @@ test_cfgs
 venv
 core
 core.*
+.venv/
