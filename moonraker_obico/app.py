@@ -451,7 +451,13 @@ class App(object):
             self.post_printer_status_to_client()
 
     def post_printer_status_to_client(self):
-        self.client_conn.send_msg_to_client({'status': self.model.printer_state.to_status()})
+        # Send the page the same status the server gets. While Klipper is offline the server gets none
+        # (print status unknown) and the page shows the plugin as offline; an empty status sent here
+        # would make the page flip to "not connected at the serial port" every 2 seconds.
+        status = self.model.printer_state.to_dict().get('status')
+        if status is None:
+            return
+        self.client_conn.send_msg_to_client({'status': status})
 
 
 if __name__ == '__main__':
