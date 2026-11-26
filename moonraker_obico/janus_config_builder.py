@@ -98,7 +98,37 @@ def find_system_janus_paths():
     return (janus_path, janus_lib_path)
 
 
-def build_janus_jcfg(auth_token):
+# The server sends the printer's video relay as WebRTC ice servers (the
+# linked printer's `relay`), with a credential that expires at
+# relay['expires_at']. Janus takes one relay, and reads it only at startup.
+TURN_URL = re.compile(r'^turn:([^:?]+):(\d+)(?:\?transport=(udp|tcp))?$')
+RELAY_RENEW_BEFORE_SECONDS = 24 * 3600
+
+
+def janus_relay_lines(relay):
+    server = next((s for s in (relay or {}).get('ice_servers', []) if s.get('username')), None)
+    if not server:
+        return ''  # No relay from the server: Janus runs without one.
+
+    url = server['urls'][0]
+    m = TURN_URL.match(url)
+    if not m:
+        raise ValueError('Janus cannot use the relay URL {}'.format(url))
+    (host, port, transport) = m.groups()
+    return """        turn_server = "{host}"
+        turn_port = {port}
+        turn_type = "{transport}"
+        turn_user = "{user}"
+        turn_pwd = "{pwd}"
+""".format(host=host, port=port, transport=transport or 'udp', user=server['username'], pwd=server['credential'])
+
+
+def relay_renewal_due(relay, now):
+    expires_at = (relay or {}).get('expires_at')
+    return bool(expires_at) and now >= expires_at - RELAY_RENEW_BEFORE_SECONDS
+
+
+def build_janus_jcfg(relay):
     janus_jcfg_path = "{etc_dir}/janus.jcfg".format(etc_dir=RUNTIME_JANUS_ETC_DIR)
 
     ld_lib_path = None
@@ -126,14 +156,10 @@ general: {
 
         f.write("""
         admin_secret = "janusoverlord"  # String that all Janus requests must contain
-}}
-nat: {{
-        turn_server = "turn.obico.io"
-        turn_port = 80
-        turn_type = "tcp"
-        turn_user = "{auth_token}"
-        turn_pwd = "{auth_token}"
-""".format(auth_token=auth_token))
+}
+nat: {
+""")
+        f.write(janus_relay_lines(relay))
 
         f.write("""
         ice_ignore_list = "vmnet"
@@ -318,7 +344,7 @@ certificates: {{
 """.format(ws_port=ws_port, admin_ws_port=admin_ws_port))
 
 
-def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
+def build_janus_config(webcams, relay, ws_port, admin_ws_port):
     if not os.path.exists(RUNTIME_JANUS_ETC_DIR):
         os.makedirs(RUNTIME_JANUS_ETC_DIR)
 
@@ -330,7 +356,7 @@ def build_janus_config(webcams, printer_auth_token, ws_port, admin_ws_port):
         except Exception:
             pass
 
-    (janus_bin_path, ld_lib_path) = build_janus_jcfg(printer_auth_token)
+    (janus_bin_path, ld_lib_path) = build_janus_jcfg(relay)
     _logger.info('janus_bin_path: {janus_bin_path} - ld_lib_path: {ld_lib_path}'.format(janus_bin_path=janus_bin_path, ld_lib_path=ld_lib_path))
     build_janus_plugin_streaming_jcfg(webcams)
     build_janus_transport_websocket_jcfg(ws_port, admin_ws_port)

@@ -20,6 +20,7 @@ from .version import VERSION
 from .utils import SentryWrapper, run_in_thread
 from .webcam_capture import JpegPoster
 from .webcam_stream import WebcamStreamer
+from .janus_config_builder import relay_renewal_due
 from .logger import setup_logging
 from .printer import PrinterState
 from .config import MoonrakerConfig, ServerConfig, Config
@@ -37,6 +38,7 @@ _default_int_handler = None
 _default_term_handler = None
 
 ACKREF_EXPIRE_SECS = 300
+RELAY_RENEWAL_CHECK_SECONDS = 3600
 
 
 class App(object):
@@ -148,6 +150,7 @@ class App(object):
 
         run_in_thread(self.server_conn.start)
         run_in_thread(self.webcam_streamer.start, self.model.config.webcams)
+        run_in_thread(self.relay_renewal_loop)
 
         while not (self.server_conn.ss and self.server_conn.ss.connected()):
             _logger.warning('Connections not ready. Trying again in 1s...')
@@ -206,6 +209,20 @@ class App(object):
             signal.signal(signal.SIGTERM, _default_term_handler)
             _default_term_handler = None
 
+
+    def relay_renewal_loop(self):
+        # Janus reads its relay credential only at startup, and the credential
+        # from the server expires. A day before it does, fetch the printer again
+        # and restart video with the fresh one.
+        while self.shutdown is False:
+            time.sleep(RELAY_RENEWAL_CHECK_SECONDS)
+            if not relay_renewal_due(self.model.linked_printer.get('relay'), time.time()):
+                continue
+            try:
+                self.model.linked_printer = self.server_conn.get_linked_printer()
+                self.webcam_streamer.start(self.model.config.webcams)
+            except Exception:
+                self.sentry.captureException()
 
     def event_loop(self):
         # processes app events

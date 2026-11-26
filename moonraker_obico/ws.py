@@ -5,6 +5,7 @@ import websocket
 import logging
 import threading
 import inspect
+import socket
 import sys
 
 from .redaction import REDACTED, redact_text, redact_url
@@ -17,7 +18,16 @@ class WebSocketConnectionException(Exception):
 
 class WebSocketClient:
 
-    def __init__(self, url, header=None, on_ws_msg=None, on_ws_close=None, on_ws_open=None, subprotocols=None, waitsecs=120):
+    def __init__(self, url, header=None, on_ws_msg=None, on_ws_close=None, on_ws_open=None, subprotocols=None, waitsecs=120,
+                 ping_interval=0, ping_timeout=None):
+        """ping_interval/ping_timeout (seconds): when ping_interval > 0, send a websocket ping that often and
+        close the connection if no pong arrives within ping_timeout. This is what detects a connection that died
+        without a FIN or RST (firewall reboot, NAT state flush, Wi-Fi roam). Without it the socket keeps reporting
+        connected() and the caller never reconnects. Off by default to keep existing behavior for local connections.
+        """
+        if ping_interval and (not ping_timeout or ping_timeout >= ping_interval):
+            raise ValueError('ping_timeout must be > 0 and less than ping_interval')
+
         self._mutex = threading.RLock()
 
         def on_error(ws, error):
@@ -67,6 +77,15 @@ class WebSocketClient:
         else:
             run_forever_kwargs = {'reconnect': 0} if 'reconnect' in inspect.getargspec(websocket.WebSocketApp.run_forever) else {}
 
+        if ping_interval:
+            run_forever_kwargs.update(
+                ping_interval=ping_interval,
+                ping_timeout=ping_timeout,
+                # Bound how long a write can sit unacknowledged on a dead link (Linux only), so a blocked
+                # send() fails instead of hanging for the ~15 min kernel retransmission default.
+                sockopt=self._dead_peer_sockopts(ping_interval + ping_timeout),
+            )
+
         wst = threading.Thread(target=self.ws.run_forever, kwargs=run_forever_kwargs)
         wst.daemon = True
         wst.start()
@@ -77,6 +96,13 @@ class WebSocketClient:
             time.sleep(0.1)
         self.ws.close()
         raise WebSocketConnectionException('Not connected to websocket server after {}s'.format(waitsecs))
+
+    @staticmethod
+    def _dead_peer_sockopts(timeout_secs):
+        opts = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
+        if hasattr(socket, 'TCP_USER_TIMEOUT'):
+            opts.append((socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, int(timeout_secs * 1000)))
+        return tuple(opts)
 
     def send(self, data, as_binary=False):
         with self._mutex:

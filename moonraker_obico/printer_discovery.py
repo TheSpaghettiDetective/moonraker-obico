@@ -1,5 +1,6 @@
 import os
 import time
+import hashlib
 import logging
 import platform
 import uuid
@@ -132,6 +133,8 @@ class PrinterDiscovery(object):
             rpi_model=sbc_model,
             plugin_version=VERSION,
             agent='moonraker_obico',
+            # Lets the server tell this device apart from others that announce its device_id
+            device_secret_hash=hashlib.sha256(self.device_secret.encode()).hexdigest(),
         )
 
         printer_meta_data = self.config.get_meta_as_dict()

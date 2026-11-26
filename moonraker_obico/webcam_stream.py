@@ -97,6 +97,7 @@ class WebcamStreamer:
         self.moonrakerconn = moonrakerconn
         self.client_conn = client_conn
         self.printer_state = app_model.printer_state
+        self.app_model = app_model
         self.app_config = app_model.config
         self.is_pro = app_model.linked_printer.get('is_pro')
         self.sentry = sentry
@@ -113,7 +114,13 @@ class WebcamStreamer:
         self.shutdown_subprocesses()
         self.close_all_mjpeg_socks()
 
-        self.webcams = webcam_configs
+        disabled_webcams = [webcam for webcam in webcam_configs if webcam.disable_video_streaming]
+        if disabled_webcams:
+            _logger.info('Video streaming disabled in config for webcam(s): {}'.format(
+                ', '.join(webcam.name or 'default' for webcam in disabled_webcams)))
+
+        self.webcams = [webcam for webcam in webcam_configs if not webcam.disable_video_streaming]
+
         self.find_streaming_params()
         self.assign_janus_params()
         normalized_webcams = []
@@ -128,7 +135,7 @@ class WebcamStreamer:
                 data_channel.runtime = dict(stream_id=389, dataport=JANUS_WS_PORT+389) # A random stream_id and port that is unlikely to conflict
                 webcams_to_build_janus_config.append(data_channel)
 
-            (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_config.server.auth_token, JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
+            (janus_bin_path, ld_lib_path) = build_janus_config(webcams_to_build_janus_config, self.app_model.linked_printer.get('relay'), JANUS_WS_PORT, JANUS_ADMIN_WS_PORT)
             if not janus_bin_path:
                 raise JanusNotFoundException('Janus not found or not configured correctly. Click the link for troubleshooting guide.')
 

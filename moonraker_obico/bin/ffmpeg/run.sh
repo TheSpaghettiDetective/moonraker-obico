@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 set -e
 
-FFMPEG_ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+FFMPEG_ROOT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 
 . "${FFMPEG_ROOT_DIR}/../utils.sh"
 
