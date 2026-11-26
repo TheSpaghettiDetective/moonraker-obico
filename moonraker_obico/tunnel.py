@@ -109,7 +109,10 @@ class LocalTunnel(object):
 
                 cookies = resp.raw._original_response.msg.get_all('Set-Cookie')
 
-                resp_content = self.post_process_response_content(path, resp.content)
+                resp_content = resp.content
+                # Only a 200 with a body carries a config to rewrite. A 304 has no body: pass it, and every other answer, through unchanged.
+                if resp.status_code == 200 and resp_content:
+                    resp_content = self.post_process_response_content(path, resp_content)
                 compress = len(resp_content) >= COMPRESS_THRESHOLD
                 resp_data = {
                     'status': resp.status_code,
