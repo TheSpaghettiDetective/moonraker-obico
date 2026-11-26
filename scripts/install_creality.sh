@@ -35,6 +35,16 @@ ensure_deps() {
     pip3 install -q --no-cache-dir virtualenv
   elif [ $CREALITY_VARIANT = "k1" ]; then
     /opt/bin/opkg install ${PKGLIST}
+    # webcam streaming on the K1/K1 Max runs on the precompiled janus variant under
+    # moonraker_obico/bin/janus/precomplied/NA.buildroot.2020.32-bit. It is built
+    # against the Entware toolchain, so it needs these Entware packages installed.
+    # libnice and usrsctp are not in the Entware feed and ship with the variant.
+    # These are installed in their own call and a failure is only a warning: the
+    # agent checks whether the variant can run and falls back to the snapshot webcam.
+    JANUS_PKGLIST="glib2 jansson libconfig libffi libpcre2 zlib libopenssl libsrtp2 libwebsockets-openssl libatomic libstdcpp libcap"
+    if ! /opt/bin/opkg install ${JANUS_PKGLIST}; then
+      echo "Warning: could not install the janus dependencies. Webcam streaming will fall back to snapshots."
+    fi
     pip3 install -q --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir virtualenv
   fi
   ensure_venv

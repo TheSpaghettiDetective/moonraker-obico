@@ -98,6 +98,34 @@ def find_system_janus_paths():
     return (janus_path, janus_lib_path)
 
 
+def precompiled_janus_check(precompiled_dir):
+    """Return None if the precompiled janus can start on this machine, else a reason string.
+
+    `janus --version` is run with the variant's lib dir on LD_LIBRARY_PATH, in the
+    same minimal environment that JanusConn.start uses. It fails when the binary is
+    built for a different CPU (exec format error), when its shared libraries are
+    missing, or when the variant cannot start for any other reason. A failure is
+    treated like "no janus at all" so the webcam keeps the 0.1 FPS fallback instead
+    of ending up with a Janus that is present but can't run.
+    """
+    janus_bin = os.path.join(precompiled_dir, 'bin', 'janus')
+    ld_lib_path = os.path.join(precompiled_dir, 'lib')
+    env = {'LD_LIBRARY_PATH': ld_lib_path + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
+    try:
+        proc = subprocess.run([janus_bin, '--version'], env=env, timeout=15,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True)
+    except subprocess.TimeoutExpired:
+        return 'janus --version timed out'
+    except OSError as e:
+        return 'cannot exec janus: {}'.format(getattr(e, 'strerror', None) or e)
+    if proc.returncode != 0:
+        output = (proc.stdout or '').strip().splitlines()
+        reason = output[-1] if output else 'no output'
+        return 'janus --version exited with {}: {}'.format(proc.returncode, reason)
+    return None
+
+
 # The server sends the printer's video relay as WebRTC ice servers (the
 # linked printer's `relay`), with a credential that expires at
 # relay['expires_at']. Janus takes one relay, and reads it only at startup.
@@ -142,6 +170,11 @@ def build_janus_jcfg(relay):
         janus_bin_path = os.path.join(PRECOMPILED_DIR, 'bin', 'janus')
         ld_lib_path = os.path.join(PRECOMPILED_DIR, 'lib')
         if os.path.exists(janus_bin_path) and os.path.exists(ld_lib_path) and os.path.isdir(ld_lib_path):
+            reason = precompiled_janus_check(PRECOMPILED_DIR)
+            if reason:
+                _logger.warning('Precompiled janus variant {} cannot run on this machine ({}). Treating it as not found.'.format(
+                    CHOSEN_PRECOMPILED_VARIANT or REQUESTED_PRECOMPILED_VARIANT, reason))
+                return (None, None)
             folder_section = janus_jcfg_folders_section(ld_lib_path)
 
     if not janus_bin_path or not folder_section:
